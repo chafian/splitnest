@@ -11,11 +11,13 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { squirrelVersion } from './squirrel-version.mjs';
 
 const [dirArg, version] = process.argv.slice(2);
 if (!dirArg || !version) throw new Error('usage: verify-assets.mjs <assets dir> <version>');
 const dir = path.resolve(dirArg);
-const nupkg = `splitnest-${version}-full.nupkg`;
+const sqVersion = squirrelVersion(version);
+const nupkg = `splitnest-${sqVersion}-full.nupkg`;
 const required = ['SplitNest-win32-x64-Setup.exe', 'SplitNest-win32-x64-portable.zip', 'RELEASES', nupkg, 'SHA256SUMS.txt', 'BINARIES.md'];
 const problems = [];
 const present = readdirSync(dir);
@@ -48,7 +50,7 @@ if (present.includes('RELEASES') && present.includes(nupkg)) {
     const script = `Add-Type -AssemblyName System.IO.Compression.FileSystem; $z = [IO.Compression.ZipFile]::OpenRead($env:TW_NUPKG); try { $e = $z.GetEntry('splitnest.nuspec'); $r = New-Object IO.StreamReader($e.Open()); $r.ReadToEnd() } finally { $z.Dispose() }`;
     const nuspec = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', env: { ...process.env, TW_NUPKG: path.join(dir, nupkg) } });
     const v = /<version>([^<]+)<\/version>/.exec(nuspec)?.[1];
-    if (v !== version) problems.push(`package version ${v}, expected ${version}`);
+    if (v !== sqVersion) problems.push(`package version ${v}, expected ${sqVersion}`);
   } catch {
     problems.push('could not read the package manifest (splitnest.nuspec)');
   }

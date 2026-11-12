@@ -7,12 +7,14 @@
 //   SplitNest-win32-x64-Setup.exe     installer (Squirrel.Windows)
 //   SplitNest-win32-x64-portable.zip  portable build (no installer, no automatic updates)
 //   RELEASES, splitnest-<version>-full.nupkg   the update feed Squirrel reads (names as Squirrel
-//                                     writes them; RELEASES refers to the package by name)
+//                                     writes them, see squirrel-version.mjs; RELEASES refers to the
+//                                     package by name)
 //   SHA256SUMS.txt, BINARIES.md       checksums and the binary inventory
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { squirrelVersion } from './squirrel-version.mjs';
 
 const [outArg, assetsArg] = process.argv.slice(2);
 if (!outArg || !assetsArg) throw new Error('usage: collect-assets.mjs <out dir> <assets dir>');
@@ -28,7 +30,7 @@ const need = (p) => {
   if (!existsSync(p)) throw new Error(`missing build output: ${p}`);
   return p;
 };
-const nupkg = `${pkg.name}-${pkg.version}-full.nupkg`;
+const nupkg = `${pkg.name}-${squirrelVersion(pkg.version)}-full.nupkg`;
 const zips = existsSync(zipDir) ? readdirSync(zipDir).filter((f) => f.endsWith('.zip')) : [];
 if (zips.length !== 1) throw new Error(`expected one portable ZIP in ${zipDir}, found ${zips.length}`);
 const files = [

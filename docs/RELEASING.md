@@ -34,6 +34,10 @@ nothing.
 | `SHA256SUMS.txt` | SHA-256 of every file above and of `BINARIES.md` |
 | `BINARIES.md` | Every Windows binary shipped, ours or upstream, with hash, version info and signature |
 
+For a prerelease, Squirrel drops the dots after the hyphen: `0.2.0-beta.1` gives
+`splitnest-0.2.0-beta1-full.nupkg` (and installs to `app-0.2.0-beta1`); the scripts follow this rule
+([`squirrel-version.mjs`](../scripts/release/squirrel-version.mjs)).
+
 The names of the installer and the ZIP never change, so the website's
 `releases/latest/download/<name>` links always fetch the newest stable release.
 

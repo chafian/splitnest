@@ -16,6 +16,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { squirrelVersion } from '../../scripts/release/squirrel-version.mjs';
 
 const require = createRequire(path.join(process.cwd(), 'package.json'));
 const { chromium } = require('playwright-core');
@@ -43,7 +44,7 @@ const check = (name, ok, detail) => {
 };
 const installDir = path.join(process.env.LOCALAPPDATA, 'splitnest');
 const updateExe = path.join(installDir, 'Update.exe');
-const appExe = (v) => path.join(installDir, `app-${v}`, 'splitnest.exe');
+const appExe = (v) => path.join(installDir, `app-${squirrelVersion(v)}`, 'splitnest.exe');
 const procPaths = () => (ps(`Get-CimInstance Win32_Process -Filter "Name='splitnest.exe'" | ForEach-Object { $_.ExecutablePath }`) || '').split(/\r?\n/).filter(Boolean);
 const killApp = async () => {
   ps('Stop-Process -Name splitnest -Force');
@@ -131,9 +132,9 @@ try {
 
   // 6. A corrupted update package is refused; the installed version keeps working.
   const bad = mkdtempSync(path.join(tmpdir(), 'tw-bad-'));
-  const pk = readdirSync(path.join(installDir, 'packages')).find((f) => f.endsWith(`${newVersion}-full.nupkg`));
+  const pk = readdirSync(path.join(installDir, 'packages')).find((f) => f.endsWith(`${squirrelVersion(newVersion)}-full.nupkg`));
   if (pk) {
-    const fake = pk.replace(newVersion, '9.9.9');
+    const fake = pk.replace(squirrelVersion(newVersion), '9.9.9');
     copyFileSync(path.join(installDir, 'packages', pk), path.join(bad, fake));
     const releases = readFileSync(path.join(installDir, 'packages', 'RELEASES'), 'utf8').replace(/^﻿/, '').trim().split(/\r?\n/).find((l) => l.includes(pk));
     const buf = readFileSync(path.join(bad, fake));

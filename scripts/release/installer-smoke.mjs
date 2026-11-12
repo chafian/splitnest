@@ -8,9 +8,11 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { squirrelVersion } from './squirrel-version.mjs';
 
 const [setup, version, resultsFile] = process.argv.slice(2);
 if (!setup || !version) throw new Error('usage: installer-smoke.mjs <Setup.exe> <version> [results.json]');
+const sqVersion = squirrelVersion(version);
 if (!process.env.GITHUB_ACTIONS && !process.argv.includes('--i-know-this-installs')) {
   console.error('This installs SplitNest for the current Windows user. It is meant for CI runners only.');
   process.exit(2);
@@ -49,8 +51,8 @@ try {
   const t0 = Date.now();
   const inst = spawnSync(path.resolve(setup), ['--silent'], { timeout: 300_000 });
   check('installer exits cleanly', inst.status === 0, { exit: inst.status, seconds: Math.round((Date.now() - t0) / 1000) });
-  const appDir = path.join(installDir, `app-${version}`);
-  check(`installed per user in %LOCALAPPDATA%\\splitnest\\app-${version}`, existsSync(path.join(appDir, 'splitnest.exe')));
+  const appDir = path.join(installDir, `app-${sqVersion}`);
+  check(`installed per user in %LOCALAPPDATA%\\splitnest\\app-${sqVersion}`, existsSync(path.join(appDir, 'splitnest.exe')));
 
   // A silent install does not start the app; start it as the Start menu entry does (Squirrel's
   // launcher, which runs the newest installed version) and watch it before anyone answers the notice.
@@ -77,7 +79,7 @@ try {
   const sc = shortcut();
   check('one Start menu entry, SplitNest.lnk, with the installed App User Model ID', sc && sc.aumid === 'com.squirrel.splitnest.splitnest' && /splitnest\\splitnest\.exe$/i.test(sc.target), sc);
   const key = uninstallKey();
-  check('listed in installed apps as SplitNest, publisher SplitNest, this version', key && key.DisplayName === 'SplitNest' && key.Publisher === 'SplitNest' && key.DisplayVersion === version, key);
+  check('listed in installed apps as SplitNest, publisher SplitNest, this version', key && key.DisplayName === 'SplitNest' && key.Publisher === 'SplitNest' && key.DisplayVersion === sqVersion, key);
 
   const work = mkdtempSync(path.join(tmpdir(), 'tw-smoke-'));
   const out = path.join(work, 'st.json');
