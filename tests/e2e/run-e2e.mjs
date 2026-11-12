@@ -217,7 +217,11 @@ async function main() {
   await step('typing, multiline output, unicode and ANSI colours', async () => {
     await typeIn(page, ps, 'Write-Host "Hello from $((Get-Location).Path)" -ForegroundColor Cyan; 1..3 | ForEach-Object { "row $_" }');
     await waitText(page, ps, 'row 3');
-    await typeIn(page, ps, 'Write-Host " OK " -BackgroundColor DarkGreen -NoNewline; Write-Host " ünïcödé ⚡ 中文 build passed" -ForegroundColor Green');
+    // Unicode output, typed as ASCII (character codes): on GitHub's en-US runner non-ASCII
+    // keyboard input never reached the prompt in the PTY tests. Typed non-ASCII is covered by the
+    // path-insertion step below.
+    const uni = [0xfc, 0x6e, 0xef, 0x63, 0xf6, 0x64, 0xe9, 0x20, 0x26a1, 0x20, 0x4e2d, 0x6587].map((c) => `[char]0x${c.toString(16)}`).join(',');
+    await typeIn(page, ps, `Write-Host " OK " -BackgroundColor DarkGreen -NoNewline; Write-Host (' ' + (-join @(${uni})) + ' build passed') -ForegroundColor Green`);
     await waitText(page, ps, 'ünïcödé ⚡ 中文 build passed');
   });
 

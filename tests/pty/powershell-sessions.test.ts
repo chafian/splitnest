@@ -101,7 +101,10 @@ describe.skipIf(!IS_WINDOWS)('PowerShell sessions (real ConPTY)', () => {
     h = new Harness();
     h.spawn('s1');
     await ready(h, 's1');
-    h.manager.write('s1', 'Write-Host "ünïcödé ⚡ 中文 ok" -ForegroundColor Green\r');
+    // The text is built from character codes so the typed command is plain ASCII: on GitHub's
+    // en-US runner, non-ASCII keyboard input never reached the prompt. What is tested is output.
+    const chars = [0xfc, 0x6e, 0xef, 0x63, 0xf6, 0x64, 0xe9, 0x20, 0x26a1, 0x20, 0x4e2d, 0x6587].map((c) => `[char]0x${c.toString(16)}`).join(',');
+    h.manager.write('s1', `Write-Host ((-join @(${chars})) + ' ok') -ForegroundColor Green\r`);
     await h.waitForOutput('s1', 'ünïcödé ⚡ 中文 ok');
     const raw = h.events
       .filter((e) => e.type === 'data' && e.sessionId === 's1')
