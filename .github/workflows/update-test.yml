@@ -1,0 +1,54 @@
+# The Windows update lifecycle against this repository's own releases (tests/windows/update-lifecycle.mjs).
+# For a TEST repository with at least two releases made by release.yml. It installs software on the
+# runner and publishes its results as assets of a prerelease named "update-test-results".
+# Run it from Actions > Update lifecycle test, or by pushing a branch named update-test/<old tag>/<new version>.
+name: Update lifecycle test
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: 'Older release tag to install (e.g. v0.1.3)'
+        required: true
+      to:
+        description: 'Newer version it should update to (e.g. 0.1.4)'
+        required: true
+  push:
+    branches: ['update-test/**']
+
+permissions: {}
+
+jobs:
+  lifecycle:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.5
+          cache: npm
+      - run: npm ci
+      - name: Which versions
+        id: v
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "from=${{ inputs.from }}" >> "$GITHUB_OUTPUT"; echo "to=${{ inputs.to }}" >> "$GITHUB_OUTPUT"
+          else
+            IFS=/ read -r _ from to <<< "${{ github.ref_name }}"
+            echo "from=$from" >> "$GITHUB_OUTPUT"; echo "to=$to" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install, update, restart, notify, recover, uninstall
+        run: node tests/windows/update-lifecycle.mjs ${{ github.repository }} ${{ steps.v.outputs.from }} ${{ steps.v.outputs.to }} results/update-lifecycle.json
+      - name: Publish the results
+        if: always()
+        shell: bash
+        run: |
+          gh release view update-test-results >/dev/null 2>&1 || gh release create update-test-results --prerelease --title "update test results" --notes "machine-readable results of update-test.yml"
+          if [ -f results/update-lifecycle.json ]; then gh release upload update-test-results results/update-lifecycle.json --clobber; fi
