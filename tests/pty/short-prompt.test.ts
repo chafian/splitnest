@@ -1,10 +1,9 @@
 // Real PowerShell: the short-prompt option replaces only the built-in prompt.
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildLaunch, SHORT_PROMPT_POWERSHELL } from '../../src/main/shells';
-import { Harness, IS_WINDOWS, waitFor, WINDOWS_POWERSHELL } from './helpers';
+import { Harness, IS_WINDOWS, longTempDir, waitFor, WINDOWS_POWERSHELL } from './helpers';
 
 describe.skipIf(!IS_WINDOWS)('short prompt paths (Windows PowerShell)', () => {
   let base: string;
@@ -12,7 +11,8 @@ describe.skipIf(!IS_WINDOWS)('short prompt paths (Windows PowerShell)', () => {
   const h = new Harness();
 
   beforeAll(() => {
-    base = mkdtempSync(path.join(tmpdir(), 'tw-prompt-'));
+    // The long form: PowerShell shows it (the temp folder can be an 8.3 short path).
+    base = longTempDir('tw-prompt-');
     deep = path.join(base, 'some', 'very long', 'nested folder', 'car-rental');
     mkdirSync(deep, { recursive: true });
   });

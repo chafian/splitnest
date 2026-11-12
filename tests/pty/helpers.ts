@@ -1,4 +1,7 @@
 import { execFile } from 'node:child_process';
+import { mkdtempSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import * as nodePty from 'node-pty';
 import { createRequire } from 'node:module';
 import { SessionManager } from '../../src/pty-host/session-manager';
@@ -126,9 +129,37 @@ export function consoleHostPids(): Promise<number[]> {
   });
 }
 
-/** Waits for the PowerShell prompt so input is not typed before PSReadLine is ready. */
+/**
+ * Waits until the shell takes input: the prompt is up, and a typed command really runs. On a slow
+ * machine (GitHub's Windows runner) keys typed right after the first prompt can be lost or redrawn
+ * while PSReadLine is still loading, so a harmless probe is typed until its output appears.
+ */
 export async function ready(h: Harness, sessionId: string): Promise<void> {
   await h.waitForOutput(sessionId, /PS [A-Z]:\\.*>/);
+  await whenTyped(h, sessionId, 'Write-Output ("RE" + "ADY-" + "OK")', 'READY-OK');
+}
+
+/** Types `command` (again every few seconds) until `expected` appears in the output. */
+export async function whenTyped(h: Harness, sessionId: string, command: string, expected: string, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const mark = h.output(sessionId).length;
+    h.manager.write(sessionId, `${command}\r`);
+    const seen = await waitFor(() => h.output(sessionId).slice(mark).includes(expected), 5000, '')
+      .then(() => true)
+      .catch(() => false);
+    if (seen) return;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${expected} in ${sessionId}. Last output: ${h.output(sessionId).slice(-400)}`);
+    h.manager.write(sessionId, '\x1b'); // clear whatever is half-typed before trying again
+  }
+}
+
+/**
+ * A temporary folder by its long path. Windows may hand out the 8.3 short form of the temp folder
+ * (C:\Users\RUNNER~1\... on GitHub's runners), while PowerShell prints the long form.
+ */
+export function longTempDir(prefix: string): string {
+  return realpathSync.native(mkdtempSync(path.join(tmpdir(), prefix)));
 }
 
 export const IS_WINDOWS = process.platform === 'win32';

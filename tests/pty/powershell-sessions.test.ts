@@ -1,10 +1,9 @@
 // Real PowerShell sessions through real node-pty (ConPTY). No mocks.
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FLOW } from '../../src/shared/pty-protocol';
-import { childPids, consoleHostPids, Harness, IS_WINDOWS, isAlive, ready, refusedForks, waitFor } from './helpers';
+import { childPids, consoleHostPids, Harness, IS_WINDOWS, isAlive, ready, refusedForks, waitFor, longTempDir, whenTyped } from './helpers';
 
 let h: Harness;
 afterEach(() => h?.dispose());
@@ -76,12 +75,12 @@ describe.skipIf(!IS_WINDOWS)('PowerShell sessions (real ConPTY)', () => {
     expect(Date.now() - started).toBeLessThan(5000);
     await waitFor(() => children.every((pid) => !isAlive(pid)), 5000, 'ping to stop');
     expect(h.exit('s1')).toBeUndefined();
-    h.manager.write('s1', 'Write-Output ("STILL-" + "ALIVE")\r');
-    await h.waitForOutput('s1', 'STILL-ALIVE');
+    // The prompt can take a moment to come back after the interrupt on a slow machine.
+    await whenTyped(h, 's1', 'Write-Output ("STILL-" + "ALIVE")', 'STILL-ALIVE');
   });
 
   it('starts in folders with spaces, unicode, apostrophes and shell metacharacters', async () => {
-    const base = mkdtempSync(path.join(tmpdir(), 'tw-pty-'));
+    const base = longTempDir('tw-pty-');
     const weird = path.join(base, "dir with space 'quote' $HOME;&`echo x`(1)!%PATH%^ ünï⚡");
     mkdirSync(weird);
     try {
@@ -93,7 +92,8 @@ describe.skipIf(!IS_WINDOWS)('PowerShell sessions (real ConPTY)', () => {
       h.manager.write('s1', 'exit\r');
       await h.waitForExit('s1');
     } finally {
-      rmSync(base, { recursive: true, force: true });
+      // The ended shell's console can hold its folder for a moment.
+      rmSync(base, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
     }
   });
 
