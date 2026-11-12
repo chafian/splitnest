@@ -326,9 +326,10 @@ async function main() {
     await page.keyboard.press('Control+Shift+P');
     await page.keyboard.type('split left/right wsl');
     const item = page.locator('.palette__item:not(.palette__item--disabled)', { hasText: 'Split left/right (new pane on the right): WSL' }).first();
-    if (!(await item.count())) {
+    // TW_E2E_SKIP_WSL=1 runs the suite as on a machine without WSL (like GitHub's runners).
+    if (process.env.TW_E2E_SKIP_WSL === '1' || !(await item.count())) {
       await page.keyboard.press('Escape');
-      return { skipped: 'no WSL distribution' };
+      return { skipped: process.env.TW_E2E_SKIP_WSL === '1' ? 'TW_E2E_SKIP_WSL=1' : 'no WSL distribution' };
     }
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelectorAll('.workspace:not([hidden]) [data-pane-id]').length === 2);
@@ -444,8 +445,18 @@ async function main() {
     // The default shell is PowerShell 7 where it is installed (GitHub's runners), else Windows PowerShell.
     if (parts.sep !== '·' || !['PowerShell', 'PowerShell 7'].includes(parts.shell)) throw new Error(`label parts: ${JSON.stringify(parts)}`);
     if (!parts.aria.startsWith(`${long}, ${parts.shell} terminal`) || parts.title !== `${long} · ${parts.shell}`) throw new Error(`label text: ${JSON.stringify(parts)}`);
-    // Without a custom name the shell is not repeated.
-    if (await page.$(`[data-tab-id="${(await tabsIn(page, wsl ?? ps))[0]}"][role="tab"] .tab__sep`)) throw new Error('separator without a custom name');
+    // Without a custom name the shell is not repeated. Both PowerShell tabs have names by now, so
+    // without WSL (e.g. GitHub's runners) the Logs tab is reset with a blank name, checked, and
+    // named again for the later steps.
+    if (wsl) {
+      if (await page.$(`[data-tab-id="${(await tabsIn(page, wsl))[0]}"][role="tab"] .tab__sep`)) throw new Error('separator without a custom name');
+    } else {
+      await renameViaKeyboard(page, logs, '');
+      if ((await tabText(page, logs)) === 'Logs') throw new Error('blank did not reset the name');
+      if (await page.$(`[data-tab-id="${logs}"][role="tab"] .tab__sep`)) throw new Error('separator without a custom name');
+      await renameViaKeyboard(page, logs, 'Logs');
+      if ((await tabText(page, logs)) !== 'Logs') throw new Error(`rename back failed: ${await tabText(page, logs)}`);
+    }
     if (wsl) {
       // Blank input resets to the shell's own label.
       const [wslTab] = await tabsIn(page, wsl);
