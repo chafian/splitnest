@@ -5,12 +5,14 @@
 #   build    npm run make on a GitHub-hosted Windows runner; release files under fixed names;
 #            SHA256SUMS.txt and BINARIES.md (fails on wrong file metadata); feed consistency;
 #            installer smoke test (install, no update request before the first-run notice,
-#            self-test, uninstall); build provenance attestation; uploaded as a workflow artifact
+#            self-test, uninstall); uploaded as a workflow artifact. Read-only token: this job runs
+#            npm packages' install scripts, so it gets no write or signing permission at all.
 #   sign     OFF unless the repository variable SIGNPATH_ENABLED is 'true' (only after the SignPath
 #            Foundation has approved the project and the secrets exist; see CODE_SIGNING.md). While
 #            the signing steps are not configured it fails on purpose, so a release that is meant
 #            to be signed is never published unsigned.
-#   publish  only for a pushed tag: creates a DRAFT release with every file, downloads them back
+#   publish  only for a pushed tag (installs no packages): build provenance attestation, then a
+#            DRAFT release with every file, downloads them back
 #            and verifies them, then publishes it (and rebuilds the website). Any failure leaves the
 #            release a draft (or absent); nothing partial is ever visible as "latest".
 #
@@ -41,16 +43,18 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     env:
       # Installed builds update from this repository's releases (vite.main.config.ts).
       TW_UPDATE_REPO: ${{ github.repository }}
+      REF_TYPE: ${{ github.ref_type }}
+      REF_NAME: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20.19.5
@@ -60,8 +64,8 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            node scripts/release/check-version.mjs "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          if [ "$REF_TYPE" = "tag" ]; then
+            node scripts/release/check-version.mjs "$REF_NAME" >> "$GITHUB_OUTPUT"
           else
             v=$(node -p "require('./package.json').version")
             echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -75,13 +79,6 @@ jobs:
         run: node scripts/release/verify-assets.mjs release/assets ${{ steps.version.outputs.version }}
       - name: Installer smoke test (install, privacy, self-test, uninstall)
         run: node scripts/release/installer-smoke.mjs release/assets/SplitNest-win32-x64-Setup.exe ${{ steps.version.outputs.version }} release/installer-check.json
-      - name: Build provenance attestation
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: |
-            release/assets/SplitNest-win32-x64-Setup.exe
-            release/assets/SplitNest-win32-x64-portable.zip
-            release/assets/splitnest-*-full.nupkg
       - name: Upload release files (unsigned)
         uses: actions/upload-artifact@v4
         with:
@@ -127,20 +124,32 @@ jobs:
     permissions:
       contents: write
       actions: write
+      id-token: write
+      attestations: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
       VERSION: ${{ needs.build.outputs.version }}
       PRERELEASE: ${{ needs.build.outputs.prerelease }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: release-files
           path: release
       - name: Verify the files once more
         run: node scripts/release/verify-assets.mjs release/assets ${{ env.VERSION }}
+      - name: Build provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/assets/SplitNest-win32-x64-Setup.exe
+            release/assets/SplitNest-win32-x64-portable.zip
+            release/assets/splitnest-*-full.nupkg
       - name: Create the release as a draft with every file
         shell: bash
         run: |
@@ -174,4 +183,4 @@ jobs:
       - name: Rebuild the website (download links and changelog)
         shell: bash
         run: |
-          if [ -f .github/workflows/pages.yml ]; then gh workflow run pages.yml --ref "${{ github.event.repository.default_branch }}" || echo "::warning::Could not start the website build."; fi
+          if [ -f .github/workflows/pages.yml ]; then gh workflow run pages.yml --ref "$DEFAULT_BRANCH" || echo "::warning::Could not start the website build."; fi

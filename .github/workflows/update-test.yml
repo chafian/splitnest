@@ -20,6 +20,8 @@ permissions: {}
 
 jobs:
   lifecycle:
+    # Never in the official repository: it installs test releases and creates a results prerelease.
+    if: ${{ github.repository != 'chafian/splitnest' }}
     runs-on: windows-2022
     timeout-minutes: 30
     permissions:
@@ -27,8 +29,14 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      EVENT: ${{ github.event_name }}
+      IN_FROM: ${{ inputs.from }}
+      IN_TO: ${{ inputs.to }}
+      REF_NAME: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20.19.5
@@ -38,12 +46,9 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "from=${{ inputs.from }}" >> "$GITHUB_OUTPUT"; echo "to=${{ inputs.to }}" >> "$GITHUB_OUTPUT"
-          else
-            IFS=/ read -r _ from to <<< "${{ github.ref_name }}"
-            echo "from=$from" >> "$GITHUB_OUTPUT"; echo "to=$to" >> "$GITHUB_OUTPUT"
-          fi
+          if [ "$EVENT" = "workflow_dispatch" ]; then from="$IN_FROM"; to="$IN_TO"; else IFS=/ read -r _ from to <<< "$REF_NAME"; fi
+          [[ "$from" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ && "$to" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "::error::bad versions"; exit 1; }
+          echo "from=$from" >> "$GITHUB_OUTPUT"; echo "to=$to" >> "$GITHUB_OUTPUT"
       - name: Install, update, restart, notify, recover, uninstall
         run: node tests/windows/update-lifecycle.mjs ${{ github.repository }} ${{ steps.v.outputs.from }} ${{ steps.v.outputs.to }} results/update-lifecycle.json
       - name: Publish the results
