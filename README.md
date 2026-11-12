@@ -140,7 +140,7 @@ Details on restoring, cleanup and troubleshooting are in the [user guide](docs/U
 
 SplitNest is an **MVP prototype**. It is not production-ready.
 
-- Windows 11 x64 only; the build is **unsigned**; ZIP only, with no installer and no auto-update.
+- Windows 11 x64 only; builds are **unsigned**. The installer and automatic updates arrive with version 0.2.0 (not released yet); see [CHANGELOG.md](CHANGELOG.md) and [docs/RELEASING.md](docs/RELEASING.md).
 - The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.
 - Full-screen programs work, but ConPTY repaints them itself, so their screens can leave frames in the scrollback.
 - WSL tabs cannot use process detection, so they rely on the agent's own status reports; Resume there opens the agent's own conversation list rather than a specific conversation.
