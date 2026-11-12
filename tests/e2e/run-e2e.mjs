@@ -417,8 +417,9 @@ async function main() {
       aria: e.getAttribute('aria-label'),
       title: e.title.split('\n')[0],
     }));
-    if (parts.sep !== '·' || parts.shell !== 'PowerShell') throw new Error(`label parts: ${JSON.stringify(parts)}`);
-    if (!parts.aria.startsWith(`${long}, PowerShell terminal`) || parts.title !== `${long} · PowerShell`) throw new Error(`label text: ${JSON.stringify(parts)}`);
+    // The default shell is PowerShell 7 where it is installed (GitHub's runners), else Windows PowerShell.
+    if (parts.sep !== '·' || !['PowerShell', 'PowerShell 7'].includes(parts.shell)) throw new Error(`label parts: ${JSON.stringify(parts)}`);
+    if (!parts.aria.startsWith(`${long}, ${parts.shell} terminal`) || parts.title !== `${long} · ${parts.shell}`) throw new Error(`label text: ${JSON.stringify(parts)}`);
     // Without a custom name the shell is not repeated.
     if (await page.$(`[data-tab-id="${(await tabsIn(page, wsl ?? ps))[0]}"][role="tab"] .tab__sep`)) throw new Error('separator without a custom name');
     if (wsl) {
