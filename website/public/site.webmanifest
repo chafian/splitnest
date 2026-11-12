@@ -1,0 +1,10 @@
+{
+  "name": "SplitNest",
+  "short_name": "SplitNest",
+  "description": "The Windows terminal workspace built for AI coding agents",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#0f1113",
+  "theme_color": "#0f1113",
+  "icons": [{ "src": "/icon.png", "sizes": "64x64", "type": "image/png" }]
+}
