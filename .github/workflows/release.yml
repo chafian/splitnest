@@ -119,8 +119,9 @@ jobs:
 
   publish:
     name: Publish (draft, verify, then release)
-    needs: [build, sign]
-    if: ${{ always() && github.event_name == 'push' && github.ref_type == 'tag' && needs.build.result == 'success' && (needs.sign.result == 'success' || needs.sign.result == 'skipped') }}
+    needs: [test, build, sign]
+    # Every gate explicit: always() is only there so a skipped sign job doesn't skip publishing.
+    if: ${{ always() && github.event_name == 'push' && github.ref_type == 'tag' && needs.test.result == 'success' && needs.build.result == 'success' && (needs.sign.result == 'success' || needs.sign.result == 'skipped') }}
     runs-on: windows-2022
     timeout-minutes: 20
     permissions:

@@ -4,7 +4,7 @@
 // no outgoing connection) while its first-run notice is unanswered, then uninstalls and checks
 // that everything is removed except the user's data.
 //   node scripts/release/installer-smoke.mjs <Setup.exe> <version> [results.json]
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,7 +16,14 @@ if (!process.env.GITHUB_ACTIONS && !process.argv.includes('--i-know-this-install
   process.exit(2);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const ps = (cmd) => execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference = 'SilentlyContinue'; ${cmd}`], { encoding: 'utf8', maxBuffer: 16 << 20 }).trim();
+const ps = (cmd) => {
+  try {
+    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference = 'SilentlyContinue'; ${cmd}`], { encoding: 'utf8', maxBuffer: 16 << 20 }).trim();
+  } catch (e) {
+    // A command whose target doesn't exist (no such process, no key) still prints what it found.
+    return String(e?.stdout ?? '').trim();
+  }
+};
 const json = (cmd) => {
   const out = ps(`${cmd} | ConvertTo-Json -Depth 4 -Compress`);
   return out ? JSON.parse(out) : null;
@@ -45,7 +52,11 @@ try {
   const appDir = path.join(installDir, `app-${version}`);
   check(`installed per user in %LOCALAPPDATA%\\splitnest\\app-${version}`, existsSync(path.join(appDir, 'splitnest.exe')));
 
-  // Squirrel starts the app after installing. Watch it, before anyone answers the notice.
+  // A silent install does not start the app; start it as the Start menu entry does (Squirrel's
+  // launcher, which runs the newest installed version) and watch it before anyone answers the notice.
+  spawn(path.join(installDir, 'splitnest.exe'), [], { stdio: 'ignore', detached: true }).unref();
+  for (let i = 0; i < 30 && !splitnestPids().length; i++) await sleep(1000);
+  check('the app starts from the launcher (as from the Start menu)', splitnestPids().length > 0);
   const watchUntil = Date.now() + 45_000;
   let updateExeSeen = false;
   const remote = new Set();
@@ -58,7 +69,7 @@ try {
     }
     await sleep(2000);
   }
-  check('the app started after installing', splitnestPids().length > 0);
+  check('the app is still running after 45 s', splitnestPids().length > 0);
   check('no update request before the first-run notice is answered (no Update.exe update, no outgoing connection) for 45 s', !updateExeSeen && remote.size === 0, { updateExe: updateExeSeen, connections: [...remote] });
   ps(`Stop-Process -Name splitnest -Force`);
   await sleep(2000);
