@@ -1,41 +1,57 @@
+/* Brand tokens, taken from the app's own themes (src/renderer/features/appearance/themes.ts):
+   dark = Graphite (the default), light = Silver Light. Silver is the primary colour (the logo's
+   white ribbon), Nest Blue the focus and link colour (the logo's blue), amber "needs you", mint
+   only "working"/success, exactly as in the app. */
 :root {
   color-scheme: dark;
-  --bg: #0f1113;
-  --bg-soft: #14171a;
-  --surface: #181c20;
-  --surface-2: #1f2428;
-  --border: #2b3137;
-  --text: #e8ebee;
-  --muted: #a6aeb6;
-  --accent: #5fe3b0;
-  --accent-text: #5fe3b0;
-  --accent-ink: #06241a;
-  --amber: #f5b84b;
-  --amber-text: #f5b84b;
-  --link: #7ce9c1;
-  --code-bg: #0b0d0f;
+  --bg: #0c0c0e;
+  --bg-soft: #111113;
+  --surface: #151517;
+  --surface-2: #1d1d21;
+  --border: #26262b;
+  --border-strong: #36363d;
+  --text: #ededf2;
+  --muted: #8e8e99;
+  --accent: #dbddf0;
+  --accent-hover: #ffffff;
+  --accent-ink: #0c0c0e;
+  --accent-text: #7fa6ff;
+  --focus: #2f6bff;
+  --link: #7fa6ff;
+  --link-hover: #a8c3ff;
+  --amber: #f5d06b;
+  --amber-text: #f5d06b;
+  --success: #5ee0a0;
+  --code-bg: #111113;
   --shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.7);
-  --font: system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --mono: ui-monospace, 'Cascadia Code', 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, monospace;
+  --font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --radius: 12px;
   --wrap: 1120px;
 }
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
-    --bg: #f6f7f8;
-    --bg-soft: #eef0f2;
+    --bg: #f3f4f8;
+    --bg-soft: #eceef4;
     --surface: #ffffff;
-    --surface-2: #f1f3f5;
-    --border: #d5dade;
-    --text: #14181c;
-    --muted: #4b555e;
-    --accent: #2ec98f;
-    --accent-text: #0a7a55;
-    --amber-text: #8a5a00;
-    --link: #0a7a55;
-    --code-bg: #eceff1;
-    --shadow: 0 24px 50px -28px rgba(20, 30, 40, 0.35);
+    --surface-2: #e2e6f0;
+    --border: #dde1ea;
+    --border-strong: #c9ced9;
+    --text: #14161c;
+    --muted: #5e6475;
+    --accent: #1b1e26;
+    --accent-hover: #2e3340;
+    --accent-ink: #ffffff;
+    --accent-text: #2456d6;
+    --focus: #2f6bff;
+    --link: #2456d6;
+    --link-hover: #1a43b0;
+    --amber: #9a6b00;
+    --amber-text: #9a6b00;
+    --success: #0f8a55;
+    --code-bg: #eceef4;
+    --shadow: 0 24px 50px -28px rgba(20, 22, 28, 0.3);
   }
 }
 
@@ -53,8 +69,9 @@ body {
 }
 img { max-width: 100%; height: auto; display: block; }
 a { color: var(--link); text-underline-offset: 0.18em; }
+a:hover { color: var(--link-hover); }
 a:hover { text-decoration-thickness: 2px; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
 code, kbd, pre { font-family: var(--mono); font-size: 0.9em; }
 code { background: var(--code-bg); border: 1px solid var(--border); padding: 0.1em 0.38em; border-radius: 6px; }
 pre { background: var(--code-bg) !important; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; overflow-x: auto; line-height: 1.5; }
@@ -91,7 +108,7 @@ li { margin-bottom: 0.35em; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.8rem 1.35rem; border-radius: 10px; font-weight: 650; text-decoration: none; border: 1px solid var(--border); color: var(--text); background: var(--surface); font-size: 1rem; line-height: 1.2; }
 .btn:hover { background: var(--surface-2); }
 .btn-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-.btn-primary:hover { background: var(--accent); filter: brightness(1.07); }
+.btn-primary:hover { background: var(--accent-hover); }
 .btn-lg { padding: 0.95rem 1.6rem; font-size: 1.08rem; }
 .btn small { font-weight: 500; opacity: 0.8; }
 .cta-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
@@ -139,7 +156,7 @@ a.card .more { color: var(--link); font-weight: 600; font-size: 0.95rem; }
 .chips.center { justify-content: center; }
 
 .badge-needs { color: var(--amber-text); font-weight: 650; }
-.badge-ok { color: var(--accent-text); font-weight: 650; }
+.badge-ok { color: var(--success); font-weight: 650; }
 
 /* Steps */
 .steps { counter-reset: s; list-style: none; padding: 0; display: grid; gap: 1.1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
@@ -164,7 +181,7 @@ a.card .more { color: var(--link); font-weight: 600; font-size: 0.95rem; }
 .prose th, .doc th { background: var(--surface-2); }
 .callout { border: 1px solid color-mix(in srgb, var(--amber) 50%, var(--border)); background: color-mix(in srgb, var(--amber) 9%, var(--surface)); border-radius: var(--radius); padding: 1rem 1.2rem; margin: 1.4rem 0; }
 .callout p:last-child { margin-bottom: 0; }
-.callout.ok { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.callout.ok { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); background: color-mix(in srgb, var(--success) 8%, var(--surface)); }
 .related { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
 details.faq { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem 1.2rem; margin-bottom: 0.7rem; }
 details.faq summary { cursor: pointer; font-weight: 650; }

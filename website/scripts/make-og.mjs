@@ -18,14 +18,14 @@ const shot = pathToFileURL(path.resolve(here, '../src/assets/shots/hero.png')).h
 const icon = pathToFileURL(path.resolve(here, '../public/icon.png')).href;
 const html = `<!doctype html><meta charset="utf-8"><style>
 *{box-sizing:border-box;margin:0}
-body{width:1200px;height:630px;overflow:hidden;background:#0f1113;color:#e8ebee;font-family:'Segoe UI',system-ui,sans-serif;position:relative}
-.glow{position:absolute;right:-200px;top:-200px;width:800px;height:800px;background:radial-gradient(closest-side,rgba(95,227,176,.22),transparent)}
+body{width:1200px;height:630px;overflow:hidden;background:#0c0c0e;color:#ededf2;font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;position:relative}
+.glow{position:absolute;right:-200px;top:-200px;width:800px;height:800px;background:radial-gradient(closest-side,rgba(47,107,255,.22),transparent)}
 .brand{position:absolute;left:64px;top:56px;display:flex;align-items:center;gap:16px;font-size:34px;font-weight:700;letter-spacing:-.02em}
 .brand img{width:44px;height:44px}
 h1{position:absolute;left:64px;top:150px;width:520px;font-size:56px;line-height:1.08;letter-spacing:-.03em;font-weight:750}
-h1 span{color:#5fe3b0}
-p{position:absolute;left:64px;bottom:64px;font-size:24px;color:#a6aeb6}
-.shot{position:absolute;left:640px;top:150px;width:720px;border-radius:14px;border:1px solid #2b3137;box-shadow:0 30px 70px rgba(0,0,0,.6)}
+h1 span{color:#7fa6ff}
+p{position:absolute;left:64px;bottom:64px;font-size:24px;color:#8e8e99}
+.shot{position:absolute;left:640px;top:150px;width:720px;border-radius:14px;border:1px solid #26262b;box-shadow:0 30px 70px rgba(0,0,0,.6)}
 </style>
 <div class="glow"></div>
 <div class="brand"><img src="${icon}">SplitNest</div>
