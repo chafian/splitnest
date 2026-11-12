@@ -4,7 +4,7 @@
 // report. Usage: node tests/e2e/run-e2e.mjs [--screenshots test-results/screenshots]
 import { _electron as electron } from 'playwright-core';
 import { createRequire } from 'node:module';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -16,7 +16,9 @@ const shotsArg = process.argv.indexOf('--screenshots');
 const shots = path.resolve(root, shotsArg > 0 ? process.argv[shotsArg + 1] : 'test-results/screenshots');
 mkdirSync(shots, { recursive: true });
 
-const work = mkdtempSync(path.join(tmpdir(), 'tw-e2e-'));
+// The long path: the temp folder can be an 8.3 short path (RUNNER~1 on GitHub's runners), while
+// PowerShell reports the long one.
+const work = realpathSync.native(mkdtempSync(path.join(tmpdir(), 'tw-e2e-')));
 const userData = path.join(work, 'user-data');
 const alpha = path.join(work, 'alpha-service');
 const beta = path.join(work, "beta 'café' & co ⚡");
