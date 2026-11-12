@@ -140,6 +140,10 @@ export interface AppSettings {
   resumeTitles: boolean;
   /** Resume each restored terminal's agent conversation as SplitNest opens (off: a Resume button). */
   resumeAutomatically: boolean;
+  /** Automatic update checks (installed app only; see src/main/updater.ts). On by default. */
+  updateCheck: boolean;
+  /** The first-run notice about update checks was acknowledged; no update request happens before. */
+  updateNoticeSeen: boolean;
   /** Notifications: an agent needs permission, has a question, needs sign-in, or otherwise waits for you. */
   notifyNeedsYou: boolean;
   /** Notifications: an agent reported that it finished. */
@@ -252,6 +256,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showGitStatus: true,
   resumeTitles: true,
   resumeAutomatically: false,
+  updateCheck: true,
+  updateNoticeSeen: false,
   notifyNeedsYou: true,
   notifyFinished: true,
   notifyErrors: true,

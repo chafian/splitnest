@@ -4,6 +4,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { IPC, type AppApi } from '../shared/ipc';
 import type { AgentResume } from '../shared/agent-resume';
 import type { AgentId } from '../shared/agents';
+import type { UpdateStatus } from '../shared/updates';
 import type { NoticeTarget } from '../shared/notifications';
 import type { FileChangedEvent, GitStatus, SessionEvent } from '../shared/types';
 
@@ -33,6 +34,11 @@ ipcRenderer.on(IPC.sessionAgent, (_event, payload: { sessionId: string; agent: A
 const resumeListeners = new Set<(event: { sessionId: string; resume: AgentResume | null }) => void>();
 ipcRenderer.on(IPC.sessionResume, (_event, payload: { sessionId: string; resume: AgentResume | null }) => {
   for (const listener of resumeListeners) listener(payload);
+});
+
+const updateListeners = new Set<(status: UpdateStatus) => void>();
+ipcRenderer.on(IPC.updateChanged, (_event, status: UpdateStatus) => {
+  for (const listener of updateListeners) listener(status);
 });
 
 const gitListeners = new Set<(event: { workspaceId: string; status: GitStatus | null }) => void>();
@@ -136,6 +142,16 @@ const api: AppApi = {
     };
   },
   testNotification: () => ipcRenderer.invoke(IPC.notifyTest),
+  updateStatus: () => ipcRenderer.invoke(IPC.updateStatus),
+  onUpdateStatus: (listener) => {
+    updateListeners.add(listener);
+    return () => {
+      updateListeners.delete(listener);
+    };
+  },
+  setUpdatePrefs: (prefs) => ipcRenderer.send(IPC.updatePrefs, prefs),
+  checkForUpdates: () => ipcRenderer.invoke(IPC.updateCheckNow),
+  restartToUpdate: () => ipcRenderer.invoke(IPC.updateRestart),
   windowFocused: () => windowFocused,
   onWindowFocus: (listener) => {
     focusListeners.add(listener);

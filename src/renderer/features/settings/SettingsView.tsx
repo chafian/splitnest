@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_SETTINGS, LIMITS, type AppInfo, type AppSettings, type DarkThemeId, type ShellDiscovery, type ThemeMode } from '../../../shared/types';
 import { THEMES, themeById, type Theme } from '../appearance/themes';
 import { api } from '../../api';
+import { updateStatusText, type UpdateStatus } from '../../../shared/updates';
+import { PRIVACY_URL } from '../updates/UpdateNotices';
 import { Icon } from '../../components/Icon';
 import { wslGuidance } from '../../components/ProfileMenu';
 
@@ -32,6 +34,8 @@ interface Props {
   effectiveDefault: string | null;
   onChange(patch: Partial<AppSettings>): void;
   onRefreshShells(): void;
+  /** Automatic updates (null until known). */
+  updateStatus: UpdateStatus | null;
 }
 
 const MODES: { id: ThemeMode; label: string }[] = [
@@ -154,10 +158,10 @@ function AppearanceSection({ settings, systemDark, onChange }: Pick<Props, 'sett
 }
 
 /** On/off switch (a checkbox with role="switch", so it stays keyboard and screen reader friendly). */
-function Switch({ checked, onChange, label }: { checked: boolean; onChange(v: boolean): void; label: string }) {
+function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange(v: boolean): void; label: string; disabled?: boolean }) {
   return (
     <label className="switch">
-      <input type="checkbox" role="switch" checked={checked} aria-label={label} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" role="switch" checked={checked} aria-label={label} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span className="switch__track" aria-hidden="true">
         <span className="switch__thumb" />
       </span>
@@ -264,7 +268,7 @@ function NumberSetting(props: { value: number; min: number; max: number; step?: 
   );
 }
 
-export function SettingsView({ active, section, onSection, settings, systemDark, discovery, effectiveDefault, onChange, onRefreshShells }: Props) {
+export function SettingsView({ active, section, onSection, settings, systemDark, discovery, effectiveDefault, onChange, onRefreshShells, updateStatus }: Props) {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -456,6 +460,50 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
 
           {section === 'about' && (
             <section className="settings-group">
+              <Row
+                title="Check for updates automatically"
+                hint={
+                  <>
+                    SplitNest asks GitHub for new releases shortly after starting and then every few hours,
+                    sending only the app version, platform and architecture (plus your IP address, as any web request does). Updates download in the background and
+                    are installed when SplitNest restarts. The portable version never checks.{' '}
+                    <a href={PRIVACY_URL} onClick={(e) => (e.preventDefault(), void api.openExternal(PRIVACY_URL))}>
+                      Privacy policy
+                    </a>
+                  </>
+                }
+                control={
+                  <Switch
+                    label="Check for updates automatically"
+                    checked={settings.updateCheck}
+                    disabled={updateStatus?.phase === 'unavailable'}
+                    onChange={(v) => onChange({ updateCheck: v })}
+                  />
+                }
+              />
+              {updateStatus && updateStatus.phase !== 'unavailable' && (
+                <Row
+                  title="Updates"
+                  hint={<span data-testid="update-status">{updateStatusText(updateStatus)}</span>}
+                  control={
+                    updateStatus.phase === 'ready' ? (
+                      <button type="button" className="button button--small button--primary" onClick={() => void api.restartToUpdate()}>
+                        Restart now
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="button button--small"
+                        data-testid="update-check-now"
+                        disabled={updateStatus.phase === 'checking' || updateStatus.phase === 'downloading'}
+                        onClick={() => void api.checkForUpdates()}
+                      >
+                        Check now
+                      </button>
+                    )
+                  }
+                />
+              )}
               {info && (
                 <>
                   <Row

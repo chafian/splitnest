@@ -28,6 +28,7 @@ import { flushSave, onSaveError, scheduleSave } from './features/workspaces/pers
 import { computeChrome, toggleExplorer, toggleFocusMode, toggleSidebar } from './features/workspaces/chrome';
 import { effectiveMaximized } from './features/workspaces/maximize';
 import { useAgentNotifications } from './features/notifications/useAgentNotifications';
+import { UpdateNotices, useUpdateStatus } from './features/updates/UpdateNotices';
 import { nextInboxItem } from './features/notifications/agent-notifier';
 import type { InboxRow } from './features/notifications/AgentInbox';
 import { noticeBody, noticeTitle } from '../shared/notifications';
@@ -930,6 +931,13 @@ export function App() {
         return true;
     }
   };
+  // Automatic updates: the first-run notice and the Settings switch both end up here.
+  const updateStatus = useUpdateStatus();
+  const chooseUpdates = (updateCheck: boolean) => {
+    dispatch({ type: 'updateSettings', patch: { updateCheck, updateNoticeSeen: true } });
+    api.setUpdatePrefs({ updateCheck, updateNoticeSeen: true });
+  };
+
   const runRef = useRef(runCommand);
   runRef.current = runCommand;
   const showTabRef = useRef(showTab);
@@ -1158,6 +1166,8 @@ export function App() {
         onPalette={() => setPaletteOpen(true)}
       />
       <main className="main">
+        <UpdateNotices status={updateStatus} onChoose={(updateCheck) => chooseUpdates(updateCheck)} />
+        <div className="main__views">
         {settingsShown && (
           <SettingsView
             active={view === 'settings'}
@@ -1167,8 +1177,13 @@ export function App() {
             systemDark={systemDark}
             discovery={discovery}
             effectiveDefault={effectiveDefault}
-            onChange={(patch) => dispatch({ type: 'updateSettings', patch })}
+            onChange={(patch) => {
+              dispatch({ type: 'updateSettings', patch });
+              // Main applies update preferences at once (the saved settings follow a moment later).
+              if ('updateCheck' in patch) chooseUpdates(patch.updateCheck === true);
+            }}
             onRefreshShells={() => void refreshShells()}
+            updateStatus={updateStatus}
           />
         )}
         {loaded && state.workspaces.length === 0 && view === 'workspace' && (
@@ -1251,6 +1266,7 @@ export function App() {
             notify={pushToast}
           />
         ))}
+        </div>
       </main>
       </div>
 

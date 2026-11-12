@@ -20,6 +20,7 @@ import type { OpenFileWatcher } from './file-watch';
 import type { AgentMonitor } from './agent-monitor';
 import type { GitStatusService } from './git-status';
 import type { NotificationService } from './notifications';
+import { parseUpdatePrefs, type UpdatePrefs, type UpdateStatus } from '../shared/updates';
 import { isAbsoluteWindowsPath, isAllowedExternalUrl, isId, parsePersistedState, parseWindowTheme } from '../shared/validation';
 import type { ShellCache } from './launch-resolver';
 import type { Logger } from './logger';
@@ -41,6 +42,14 @@ export interface IpcContext {
   agentMonitor: AgentMonitor;
   gitStatus: GitStatusService;
   notifications: NotificationService;
+  updates: {
+    status(): UpdateStatus;
+    setPrefs(prefs: UpdatePrefs): void;
+    checkNow(): UpdateStatus;
+    restart(): boolean;
+    /** The saved state was (re)loaded: apply its update preferences. */
+    stateLoaded(): void;
+  };
   /** Delivers the renderer's answer to a save-all request sent before quitting. */
   resolveSaveAll(id: number, result: { ok: boolean; failed: number }): void;
   /** Development-only automation hook: `|`-separated folders returned instead of showing the dialog. */
@@ -79,6 +88,9 @@ export function registerIpc(ctx: IpcContext): void {
     const result = await ctx.store.load();
     for (const w of result.state.workspaces) allowedRoots.add(rootKey(w.rootPath));
     ctx.gitStatus.sync();
+    // Update preferences are in the saved settings: before this they are the defaults (notice not
+    // seen, so no request), after it the user's choice applies.
+    ctx.updates.stateLoaded();
     return result;
   });
 
@@ -231,6 +243,15 @@ export function registerIpc(ctx: IpcContext): void {
   handle(IPC.notifyAgent, (_event, notice) => ctx.notifications.notify(notice));
   on(IPC.notifyWithdraw, (_event, tabIds) => ctx.notifications.withdraw(tabIds));
   handle(IPC.notifyTest, () => ctx.notifications.test());
+
+  // Automatic updates (updater.ts): state, preferences, "Check now", "Restart now".
+  handle(IPC.updateStatus, () => ctx.updates.status());
+  on(IPC.updatePrefs, (_event, prefs) => {
+    const p = parseUpdatePrefs(prefs);
+    if (p) ctx.updates.setPrefs(p);
+  });
+  handle(IPC.updateCheckNow, () => ctx.updates.checkNow());
+  handle(IPC.updateRestart, () => ctx.updates.restart());
 
   on(IPC.agentPoke, (event, sessionId) => {
     if (ctx.broker.owns(event.sender.id, sessionId)) ctx.agentMonitor.poke();

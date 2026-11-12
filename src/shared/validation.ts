@@ -184,6 +184,8 @@ export function validateSettings(value: unknown): AppSettings {
     showGitStatus: s.showGitStatus !== false,
     resumeTitles: s.resumeTitles !== false,
     resumeAutomatically: s.resumeAutomatically === true,
+    updateCheck: s.updateCheck !== false,
+    updateNoticeSeen: s.updateNoticeSeen === true,
     notifyNeedsYou: s.notifyNeedsYou !== false,
     notifyFinished: s.notifyFinished !== false,
     notifyErrors: s.notifyErrors !== false,

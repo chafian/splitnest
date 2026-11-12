@@ -1,5 +1,6 @@
 import type { AgentResume } from './agent-resume';
 import type { AgentId } from './agents';
+import type { UpdatePrefs, UpdateStatus } from './updates';
 import type { AgentNotice, NoticeDelivery, NoticeTarget } from './notifications';
 import type {
   AppInfo,
@@ -59,6 +60,11 @@ export const IPC = {
   notifyWithdraw: 'tw:notify:withdraw',
   notifyActivate: 'tw:notify:activate',
   notifyTest: 'tw:notify:test',
+  updateStatus: 'tw:update:status',
+  updateChanged: 'tw:update:changed',
+  updatePrefs: 'tw:update:prefs',
+  updateCheckNow: 'tw:update:check',
+  updateRestart: 'tw:update:restart',
   windowFocus: 'tw:window:focus',
 } as const;
 
@@ -140,4 +146,13 @@ export interface AppApi {
    */
   windowFocused(): boolean;
   onWindowFocus(listener: (focused: boolean) => void): () => void;
+  /** Automatic updates (installed app): the current state. */
+  updateStatus(): Promise<UpdateStatus>;
+  onUpdateStatus(listener: (status: UpdateStatus) => void): () => void;
+  /** The page's update preferences (also saved in settings); main applies them at once. */
+  setUpdatePrefs(prefs: UpdatePrefs): void;
+  /** Settings › About "Check now": the user's explicit request. */
+  checkForUpdates(): Promise<UpdateStatus>;
+  /** "Restart now" for a downloaded update: runs the normal quit flow, then installs and restarts. */
+  restartToUpdate(): Promise<boolean>;
 }

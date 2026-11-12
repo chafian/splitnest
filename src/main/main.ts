@@ -2,8 +2,8 @@
 // shell discovery and session authorization.
 // First: Squirrel's install/update/uninstall launches do their job and exit before anything else runs.
 import { INSTALLED_APP_ID, INSTALLED_TOAST_CLSID, updateExePath } from './squirrel';
-import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, session, webContents } from 'electron';
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { app, autoUpdater, BrowserWindow, dialog, Menu, nativeImage, Notification, session, webContents } from 'electron';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,6 +22,8 @@ import { AgentMonitor } from './agent-monitor';
 import { AgentSessionTracker } from './agent-sessions';
 import { GitStatusService } from './git-status';
 import { NotificationService, notifyIdPrefix, showAgainOnceRegistered, type NativeNotification } from './notifications';
+import { githubFeedUrl, Updater, type AutoUpdaterLike } from './updater';
+import type { UpdatePrefs } from '../shared/updates';
 import { findPaneOfTab } from '../shared/layout';
 import { QuitCoordinator, quitDialogModel, type QuitChoice, type QuitPrompt, type SaveAllResult } from './quit-flow';
 import { SessionBroker } from './session-broker';
@@ -218,6 +220,53 @@ function requestSaveAll(win: BrowserWindow, timeoutMs = 120_000): Promise<SaveAl
 
 const e2eMode = !app.isPackaged && process.env.TW_E2E === '1';
 
+// Automatic updates (updater.ts). Only an installed, packaged Windows build checks; E2E runs can
+// stand in a recording updater (TW_E2E_UPDATER=1) to test the notice and Settings without network.
+const e2eUpdater = e2eMode && process.env.TW_E2E_UPDATER === '1';
+function e2eAutoUpdater(): AutoUpdaterLike {
+  const g = globalThis as unknown as { __twUpdater?: { calls: string[]; emit(event: string, error?: string): void } };
+  const handlers = new Map<string, ((...a: unknown[]) => void)[]>();
+  const rec = { calls: [] as string[], emit: (event: string, error?: string) => (handlers.get(event) ?? []).forEach((h) => h(error === undefined ? undefined : new Error(error))) };
+  g.__twUpdater = rec;
+  // Also written to a file in the profile, so a test can read it after SplitNest has quit.
+  const record = (call: string) => {
+    rec.calls.push(call);
+    try {
+      appendFileSync(path.join(app.getPath('userData'), 'e2e-updater.log'), `${call}\n`);
+    } catch {
+      /* best effort */
+    }
+  };
+  return {
+    setFeedURL: (o) => record(`feed ${o.url}`),
+    checkForUpdates: () => record('check'),
+    // Squirrel would install and start the new version; here the app just quits.
+    quitAndInstall: () => {
+      record('quitAndInstall');
+      app.quit();
+    },
+    on: (event: string, listener: (...a: never[]) => void) => handlers.set(event, [...(handlers.get(event) ?? []), listener as (...a: unknown[]) => void]),
+  };
+}
+/** Preferences the page sent this session (they reach the saved settings a moment later). */
+let updatePrefsNow: UpdatePrefs | null = null;
+const updater = new Updater({
+  installed: e2eUpdater || (app.isPackaged && process.platform === 'win32' && updateExePath(process.execPath) !== null),
+  version: app.getVersion(),
+  feedUrl: githubFeedUrl(__SPLITNEST_UPDATE_REPO__) ?? '',
+  autoUpdater: e2eUpdater ? e2eAutoUpdater() : (autoUpdater as unknown as AutoUpdaterLike),
+  prefs: () => updatePrefsNow ?? { updateCheck: store.state.settings.updateCheck !== false, updateNoticeSeen: store.state.settings.updateNoticeSeen === true },
+  onStatus: (status) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.updateChanged, status);
+  },
+  setTimer: (fn, ms) => setTimeout(fn, ms),
+  clearTimer: (h) => clearTimeout(h as NodeJS.Timeout),
+  now: () => Date.now(),
+  log: (m) => log.info(m),
+});
+/** "Restart now" was chosen: once the quit flow has run, install the update instead of just quitting. */
+let restartForUpdate = false;
+
 /** Taskbar overlay for "an agent needs you": a small amber dot (drawn here, no image file). */
 function needsYouBadge(): Electron.NativeImage {
   const size = 16;
@@ -376,6 +425,20 @@ function createWindow(): BrowserWindow {
     liveSessions: () => broker.liveCount(ownerId),
     unsavedFiles: () => unsavedEditors,
     ask: async (prompt) => {
+      const choice = await askQuit(prompt);
+      if (choice === 'cancel') restartForUpdate = false;
+      return choice;
+    },
+    saveAll: () => requestSaveAll(win),
+    onSaveFailed: (result) => {
+      restartForUpdate = false;
+      onSaveFailed(result);
+    },
+    proceed: () => {
+      if (!win.isDestroyed()) win.close();
+    },
+  });
+  async function askQuit(prompt: QuitPrompt): Promise<QuitChoice> {
       const test = e2eQuitAsk();
       if (test) return test(prompt);
       const model = quitDialogModel(prompt);
@@ -390,17 +453,12 @@ function createWindow(): BrowserWindow {
         noLink: true,
       });
       return model.choices[response] ?? 'cancel';
-    },
-    saveAll: () => requestSaveAll(win),
-    onSaveFailed: (result) => {
-      // The renderer already shows which file failed and why; the window stays open.
-      log.warn(`quit cancelled: ${result.failed} file(s) not saved`);
-      if (!win.isDestroyed()) win.webContents.send(IPC.quitAborted, result);
-    },
-    proceed: () => {
-      if (!win.isDestroyed()) win.close();
-    },
-  });
+  }
+  function onSaveFailed(result: SaveAllResult): void {
+    // The renderer already shows which file failed and why; the window stays open.
+    log.warn(`quit cancelled: ${result.failed} file(s) not saved`);
+    if (!win.isDestroyed()) win.webContents.send(IPC.quitAborted, result);
+  }
   win.on('focus', () => notifications.windowFocused());
   // The page's own focus signals stay "focused" while the window is minimized or behind another
   // program, so main tells it (agent notifications depend on it).
@@ -437,7 +495,10 @@ async function shutdown(): Promise<void> {
   agentMonitor.stop();
   gitStatus.dispose();
   notifications.dispose();
+  updater.dispose();
   readyToQuit = true;
+  // "Restart now" on a downloaded update: Squirrel installs it and starts the new version.
+  if (restartForUpdate && updater.installAndRestart()) return;
   app.quit();
 }
 
@@ -498,6 +559,21 @@ void app.whenReady().then(async () => {
     agentMonitor,
     gitStatus,
     notifications,
+    updates: {
+      status: () => updater.status(),
+      setPrefs: (prefs) => {
+        updatePrefsNow = prefs;
+        updater.evaluate();
+      },
+      checkNow: () => updater.checkNow(),
+      stateLoaded: () => updater.evaluate(),
+      restart: () => {
+        if (!updater.readyToInstall || !mainWindow || mainWindow.isDestroyed()) return false;
+        restartForUpdate = true;
+        mainWindow.close(); // the normal quit flow: running shells and unsaved files are asked about
+        return true;
+      },
+    },
     resolveSaveAll: (id, result) => pendingSaveAll.get(id)?.(result),
     appInfo: () => ({
       productName: PRODUCT.name,
@@ -513,6 +589,8 @@ void app.whenReady().then(async () => {
   agentMonitor.start();
   void shells.get();
   mainWindow = createWindow();
+  // Never makes a request by itself before the first-run notice was acknowledged (updater.ts).
+  updater.evaluate();
   // A click on a notification whose object is gone (or that started SplitNest) still brings the window up.
   if (process.platform === 'win32') {
     Notification.handleActivation(() => {
