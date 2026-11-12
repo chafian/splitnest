@@ -1,0 +1,141 @@
+---
+import '../styles/global.css';
+import { SITE, NAV, LINKS } from '../config/site';
+
+export interface Crumb {
+  name: string;
+  path: string;
+}
+interface Props {
+  title: string;
+  description: string;
+  /** Canonical path, always with a leading and trailing slash. */
+  path: string;
+  /** Home uses the title as is; other pages get " | SplitNest" appended. */
+  rawTitle?: boolean;
+  crumbs?: Crumb[];
+  jsonLd?: object[];
+  noindex?: boolean;
+  ogType?: string;
+}
+const { title, description, path, rawTitle = false, crumbs = [], jsonLd = [], noindex = false, ogType = 'website' } = Astro.props;
+
+const fullTitle = rawTitle ? title : `${title} | ${SITE.name}`;
+const canonical = new URL(path, SITE.url).href;
+const ogImage = new URL('/og.png', SITE.url).href;
+const ogAlt = `${SITE.name}: ${SITE.tagline}`;
+
+const ld: object[] = [...jsonLd];
+if (crumbs.length) {
+  ld.push({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [{ name: 'Home', path: '/' }, ...crumbs].map((c, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: c.name,
+      item: new URL(c.path, SITE.url).href,
+    })),
+  });
+}
+const here = (href: string) => path === href || (href !== '/' && path.startsWith(href));
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0f1113" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f7f8" media="(prefers-color-scheme: light)" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/icon.png" type="image/png" sizes="64x64" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={ogAlt} />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={ogAlt} />
+
+    {ld.map((o) => <script type="application/ld+json" set:html={JSON.stringify(o)} />)}
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="/" aria-label="SplitNest home">
+          <img src="/icon.png" width="28" height="28" alt="" />
+          <span>SplitNest</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          {
+            NAV.map((n) => (
+              <a href={n.href} class={n.label === 'Download' ? 'nav-cta' : undefined} aria-current={here(n.href) ? 'page' : undefined}>
+                {n.label}
+              </a>
+            ))
+          }
+          <a href={LINKS.repo} rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      {
+        crumbs.length > 0 && (
+          <div class="wrap" style="padding-top:1.4rem">
+            <nav class="crumbs" aria-label="Breadcrumb">
+              <ol>
+                <li><a href="/">Home</a></li>
+                {crumbs.map((c, i) => <li>{i === crumbs.length - 1 ? <span aria-current="page">{c.name}</span> : <a href={c.path}>{c.name}</a>}</li>)}
+              </ol>
+            </nav>
+          </div>
+        )
+      }
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <strong style="color:var(--text)">SplitNest</strong>
+            <p style="margin:0.3rem 0 0">{SITE.tagline}.<br />MVP prototype. Windows 11 x64.</p>
+          </div>
+          <ul aria-label="Footer">
+            <li><a href={LINKS.repo} rel="noopener">GitHub</a></li>
+            <li><a href={SITE.licenseUrl} rel="noopener">License: MIT</a></li>
+            <li><a href="/privacy/">Privacy</a></li>
+            <li><a href="/docs/">Docs</a></li>
+            <li><a href="/changelog/">Changelog</a></li>
+            <li><a href="/download/">Download</a></li>
+          </ul>
+        </div>
+        <p class="legal">
+          Agent logos are trademarks of their owners. SplitNest is an independent project and is not affiliated with or endorsed by the makers of the agents it supports.
+          <br />© {SITE.year} {SITE.owner}
+        </p>
+      </div>
+    </footer>
+    <script is:inline>
+      // Only changes which download button is emphasised; everything works without it.
+      if (/Macintosh|Mac OS X/.test(navigator.userAgent) && !/iPhone|iPad/.test(navigator.userAgent)) document.documentElement.dataset.os = 'mac';
+    </script>
+  </body>
+</html>

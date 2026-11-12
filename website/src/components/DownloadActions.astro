@@ -1,0 +1,28 @@
+---
+import { DOWNLOADS, LINKS } from '../config/site';
+import { getReleaseInfo } from '../lib/github';
+
+interface Props {
+  size?: 'lg' | 'md';
+  note?: boolean;
+}
+const { size = 'lg', note = true } = Astro.props;
+const { version } = await getReleaseInfo();
+const cls = size === 'lg' ? 'btn btn-lg' : 'btn';
+---
+
+<div class="cta-row">
+  <a class={`${cls} btn-primary os-win`} href={DOWNLOADS.installer}>
+    Download for Windows{version && <small>&nbsp;v{version}</small>}
+  </a>
+  <a class={`${cls} os-mac`} href={LINKS.repo} rel="noopener" title="Watch the repository on GitHub: Watch, Custom, Releases">
+    macOS: coming soon · Watch on GitHub
+  </a>
+</div>
+{
+  note && (
+    <p class="muted" style="margin:0.9rem 0 0;font-size:0.92rem">
+      Windows 11 x64 · free and open source (MIT) · unsigned MVP build, see <a href="/download/">download notes</a>
+    </p>
+  )
+}

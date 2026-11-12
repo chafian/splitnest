@@ -1,0 +1,49 @@
+---
+import { Picture } from 'astro:assets';
+import hero from '../assets/shots/hero.png';
+import agentInbox from '../assets/shots/agent-inbox.png';
+import notification from '../assets/shots/notification.png';
+import resume from '../assets/shots/resume.png';
+import editor from '../assets/shots/editor.png';
+import lightTheme from '../assets/shots/light-theme.png';
+import palette from '../assets/shots/palette.png';
+
+const shots = {
+  hero: { src: hero, alt: 'SplitNest with three workspaces, split panes, a Claude Code agent waiting for permission and a Codex agent working' },
+  'agent-inbox': { src: agentInbox, alt: 'The agent inbox listing three waiting agents across workspaces, most urgent first' },
+  notification: { src: notification, alt: 'An in-app notice reading that Claude Code finished, with a Show button' },
+  resume: { src: resume, alt: 'A restored terminal reading "Claude Code was running here" with a Resume Claude Code button' },
+  editor: { src: editor, alt: 'The built-in code editor open beside a terminal pane' },
+  'light-theme': { src: lightTheme, alt: 'SplitNest in the Silver Light theme' },
+  palette: { src: palette, alt: 'The command palette filtered to agent commands' },
+} as const;
+
+interface Props {
+  name: keyof typeof shots;
+  /** Above the fold: load eagerly with high priority. */
+  eager?: boolean;
+  caption?: string;
+  sizes?: string;
+}
+const { name, eager = false, caption, sizes = '(min-width: 1152px) 1088px, 100vw' } = Astro.props;
+const s = shots[name];
+---
+
+<figure>
+  <div class="shot">
+    <Picture
+      src={s.src}
+      alt={s.alt}
+      formats={['avif']}
+      fallbackFormat="webp"
+      widths={[480, 800, 1200, 1440]}
+      sizes={sizes}
+      width={1440}
+      height={900}
+      loading={eager ? 'eager' : 'lazy'}
+      decoding={eager ? 'sync' : 'async'}
+      fetchpriority={eager ? 'high' : 'auto'}
+    />
+  </div>
+  {caption && <figcaption class="shot-caption">{caption}</figcaption>}
+</figure>

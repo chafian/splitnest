@@ -1,0 +1,50 @@
+---
+import Base from './Base.astro';
+import { LINKS } from '../config/site';
+
+const { frontmatter, headings = [] } = Astro.props;
+const pages = [
+  { href: '/docs/', label: 'Overview' },
+  { href: '/docs/getting-started/', label: 'Getting started' },
+  { href: '/docs/workspaces/', label: 'Workspaces and terminals' },
+  { href: '/docs/agents/', label: 'AI agents' },
+  { href: '/docs/tools/', label: 'Explorer, editor, Git' },
+  { href: '/docs/settings/', label: 'Settings and themes' },
+  { href: '/docs/shortcuts/', label: 'Keyboard shortcuts' },
+  { href: '/docs/saved-state/', label: 'Saved state' },
+  { href: '/docs/troubleshooting/', label: 'Troubleshooting and limits' },
+];
+const path = frontmatter.path as string;
+const toc = headings.filter((h: { depth: number }) => h.depth === 2);
+---
+
+<Base
+  title={frontmatter.title}
+  description={frontmatter.description}
+  path={path}
+  crumbs={path === '/docs/' ? [{ name: 'Docs', path: '/docs/' }] : [{ name: 'Docs', path: '/docs/' }, { name: frontmatter.title, path }]}
+>
+  <div class="wrap">
+    <div class="doc-layout" style="padding-top:1.5rem">
+      <nav class="doc-nav" aria-label="Documentation">
+        <ul>
+          {pages.map((p) => <li><a href={p.href} aria-current={p.href === path ? 'page' : undefined}>{p.label}</a></li>)}
+          <li><a href={LINKS.architecture} rel="noopener">Architecture (GitHub)</a></li>
+          <li><a href={LINKS.testing} rel="noopener">Testing (GitHub)</a></li>
+        </ul>
+      </nav>
+      <article class="doc">
+        <h1 style="font-size:clamp(1.9rem,3vw + 0.8rem,2.6rem)">{frontmatter.title}</h1>
+        {
+          toc.length > 3 && (
+            <details class="toc">
+              <summary>On this page</summary>
+              <ul>{toc.map((h: { slug: string; text: string }) => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ul>
+            </details>
+          )
+        }
+        <slot />
+      </article>
+    </div>
+  </div>
+</Base>

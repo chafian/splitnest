@@ -1,0 +1,43 @@
+---
+import Base from '../layouts/Base.astro';
+import { DOWNLOADS, LINKS } from '../config/site';
+import { getReleaseInfo, renderNotes } from '../lib/github';
+
+const { releases } = await getReleaseInfo();
+const fmt = (d: string) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+---
+
+<Base
+  title="Changelog"
+  description="Release notes for SplitNest, generated from GitHub Releases each time the site is built."
+  path="/changelog/"
+  crumbs={[{ name: 'Changelog', path: '/changelog/' }]}
+>
+  <div class="narrow page-head">
+    <h1>Changelog</h1>
+    <p class="lead">Release notes, taken from <a href={DOWNLOADS.releases} rel="noopener">GitHub Releases</a> when the site is built.</p>
+  </div>
+  <div class="wrap prose">
+    <div class="narrow">
+      {
+        releases.length === 0 ? (
+          <div class="callout">
+            <p><strong>No releases yet — the first public build is coming soon.</strong></p>
+            <p>Watch the project on <a href={LINKS.repo} rel="noopener">GitHub</a> (Watch → Custom → Releases) to be notified, or see the <a href={DOWNLOADS.releases} rel="noopener">releases page</a>.</p>
+          </div>
+        ) : (
+          releases.map((r) => (
+            <article class="release">
+              <h2>
+                <a href={r.url} rel="noopener">{r.name}</a>
+                {r.prerelease && <span class="tag">pre-release</span>}
+              </h2>
+              {r.date && <time datetime={r.date}>{fmt(r.date)}</time>}
+              <div set:html={r.body ? renderNotes(r.body) : '<p class="muted">No release notes were written for this release.</p>'} />
+            </article>
+          ))
+        )
+      }
+    </div>
+  </div>
+</Base>

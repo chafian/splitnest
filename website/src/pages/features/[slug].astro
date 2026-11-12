@@ -1,0 +1,52 @@
+---
+import Base from '../../layouts/Base.astro';
+import Shot from '../../components/Shot.astro';
+import DownloadActions from '../../components/DownloadActions.astro';
+import { features } from '../../data/features';
+
+export function getStaticPaths() {
+  return features.map((f) => ({ params: { slug: f.slug }, props: { f } }));
+}
+const { f } = Astro.props;
+const related = f.related.map((s) => features.find((x) => x.slug === s)!).filter(Boolean);
+---
+
+<Base
+  title={f.title}
+  description={f.description}
+  path={`/features/${f.slug}/`}
+  crumbs={[{ name: 'Features', path: '/features/' }, { name: f.name, path: `/features/${f.slug}/` }]}
+>
+  <div class="narrow page-head">
+    <p class="eyebrow">Feature</p>
+    <h1>{f.name}</h1>
+    <p class="lead">{f.intro}</p>
+  </div>
+  <div class="wrap prose">
+    {f.shots.map((s, i) => <div class="narrow-shot" style="max-width:1000px;margin-inline:auto"><Shot name={s} eager={i === 0} sizes="(min-width: 1040px) 1000px, 100vw" /></div>)}
+    <div class="narrow" style="margin-top:2rem">
+      {f.blocks.map((b) => (
+        <>
+          <h2>{b.h}</h2>
+          <Fragment set:html={b.html} />
+        </>
+      ))}
+      {f.docs && <p class="mt"><a href={f.docs.href}>{f.docs.label} →</a></p>}
+      <div class="related">
+        <h2 style="font-size:1.3rem">Related features</h2>
+        <div class="grid">
+          {related.map((r) => (
+            <a class="card" href={`/features/${r.slug}/`}>
+              <h3>{r.name}</h3>
+              <p class="muted">{r.summary}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+      <div class="callout ok" style="margin-top:2.5rem">
+        <p><strong>Try it.</strong> SplitNest is free and open source for Windows 11.</p>
+        <DownloadActions size="md" note={false} />
+      </div>
+    </div>
+  </div>
+</Base>

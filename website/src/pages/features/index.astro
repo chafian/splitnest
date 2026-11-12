@@ -1,0 +1,30 @@
+---
+import Base from '../../layouts/Base.astro';
+import { features } from '../../data/features';
+---
+
+<Base
+  title="Features"
+  description="Everything SplitNest does for AI coding agents on Windows: agent-aware tabs, notifications, an agent inbox, resume, split-pane workspaces, an editor, Git status and themes."
+  path="/features/"
+  crumbs={[{ name: 'Features', path: '/features/' }]}
+>
+  <div class="narrow page-head">
+    <h1>Features</h1>
+    <p class="lead">A terminal workspace that understands the agents running in it. Each page below explains one part, including its limits.</p>
+  </div>
+  <div class="wrap prose">
+    <div class="grid">
+      {
+        features.map((f) => (
+          <a class="card" href={`/features/${f.slug}/`}>
+            <h2 style="font-size:1.25rem;margin-top:0">{f.name}</h2>
+            <p class="muted">{f.summary}</p>
+            <span class="more">Read more →</span>
+          </a>
+        ))
+      }
+    </div>
+    <p class="mt">Looking for the full reference? See the <a href="/docs/">documentation</a>, or browse the <a href="/use-cases/">use cases</a>.</p>
+  </div>
+</Base>

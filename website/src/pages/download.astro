@@ -1,0 +1,125 @@
+---
+import Base from '../layouts/Base.astro';
+import DownloadActions from '../components/DownloadActions.astro';
+import { DOWNLOADS, LINKS, SITE } from '../config/site';
+import { getReleaseInfo } from '../lib/github';
+import { softwareLd } from '../lib/seo';
+
+const { version } = await getReleaseInfo();
+
+const faq = [
+  {
+    q: 'Is SplitNest free?',
+    a: 'Yes. SplitNest is free and open source under the MIT license.',
+  },
+  {
+    q: 'Which versions of Windows does it support?',
+    a: 'Windows 11 x64. It was tested on build 26300. Windows 10 1809 or later is likely to work but is untested.',
+  },
+  {
+    q: 'Do I need WSL or Git?',
+    a: 'No. Both are optional. WSL is needed only if you want WSL terminals, and Git for Windows (git.exe on PATH) only for the Git status in the sidebar. Without them the rest works.',
+  },
+  {
+    q: 'Why does Windows say the app is unrecognized?',
+    a: 'The build is not code-signed, so Windows SmartScreen may show an "unrecognized app" prompt. Choose More info, then Run anyway, only if you trust where the download came from. Do not turn off Windows security features to run it.',
+  },
+  {
+    q: 'Is there a macOS or Linux version?',
+    a: 'Not yet. macOS is planned (coming soon); to be told when a release is published, use Watch → Custom → Releases on the GitHub repository. There is no Linux build.',
+  },
+];
+const faqLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faq.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+};
+---
+
+<Base
+  title="Download SplitNest for Windows"
+  description="Download SplitNest for Windows 11 x64: installer or portable ZIP from GitHub Releases, system requirements, SmartScreen guidance and how to verify the SHA-256 checksum."
+  path="/download/"
+  crumbs={[{ name: 'Download', path: '/download/' }]}
+  jsonLd={[softwareLd(version), faqLd]}
+>
+  <div class="narrow page-head">
+    <h1>Download SplitNest</h1>
+    <p class="lead">
+      {version ? `Latest release: v${version}. ` : ''}Free and open source (MIT). Windows 11 x64. This is an MVP prototype and the builds are unsigned.
+    </p>
+  </div>
+  <div class="wrap prose">
+    <div class="narrow">
+      <DownloadActions note={false} />
+
+      <h2>Installer or portable ZIP</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Installer</h3>
+          <p class="muted">Run the setup program. Best if you want SplitNest installed like any other Windows app.</p>
+          <p><a class="btn btn-primary" href={DOWNLOADS.installer}>{DOWNLOADS.installerName}</a></p>
+        </div>
+        <div class="card">
+          <h3>Portable ZIP</h3>
+          <p class="muted">Extract the ZIP anywhere and run <code>splitnest.exe</code>. Node.js is not needed to run it.</p>
+          <p><a class="btn" href={DOWNLOADS.portable}>{DOWNLOADS.portableName}</a></p>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:1rem">
+        {
+          version ? (
+            <>Both files are attached to the <a href={`${DOWNLOADS.releases}/latest`} rel="noopener">latest GitHub release</a>.</>
+          ) : (
+            <>There are no releases yet: the first public build is coming soon, and the buttons above start working once it is published. Until then you can <a href={LINKS.repo} rel="noopener">build it from source</a>.</>
+          )
+        }
+        {" "}See <a href={DOWNLOADS.releases} rel="noopener">all releases</a>.
+      </p>
+
+      <h2>Requirements</h2>
+      <table>
+        <tbody>
+          <tr><th scope="row">OS</th><td>Windows 11 x64 (tested on build 26300). Windows 10 1809+ is likely to work but untested.</td></tr>
+          <tr><th scope="row">Shells</th><td>Windows PowerShell 5.1 (built in). PowerShell 7 (<code>pwsh.exe</code>) is used automatically when installed.</td></tr>
+          <tr><th scope="row">Git (optional)</th><td>Git for Windows (<code>git.exe</code> on PATH) for the sidebar's Git status. Without it the rest works and no Git status is shown.</td></tr>
+          <tr><th scope="row">WSL (optional)</th><td>An installed WSL distribution. The app never installs or configures WSL. To add it yourself, follow Microsoft's WSL documentation (for example <code>wsl --install</code> in an administrator terminal), then use Settings → Refresh shell list.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Windows SmartScreen</h2>
+      <div class="callout">
+        <p>
+          SplitNest builds are <strong>not code-signed</strong>, so Windows SmartScreen may show an "unrecognized app" prompt. Choose <strong>More info → Run anyway</strong> only if you built it yourself or trust where it came from. <strong>Do not turn off Windows security features</strong> to run it.
+        </p>
+      </div>
+      <p>To check that what you downloaded is what was published, verify its checksum, as described next.</p>
+
+      <h2 id="verify-the-sha-256-checksum">Verify the SHA-256 checksum</h2>
+      <ol>
+        <li>Download <a href={DOWNLOADS.checksums}>SHA256SUMS.txt</a> from the same release.</li>
+        <li>Open PowerShell in the folder with your download and run:</li>
+      </ol>
+      <pre><code>Get-FileHash .\{DOWNLOADS.installerName} -Algorithm SHA256</code></pre>
+      <ol start="3">
+        <li>Compare the <code>Hash</code> value with the line for your file in <code>SHA256SUMS.txt</code>. They must be identical (case does not matter). If they differ, do not run the file.</li>
+      </ol>
+      <p class="muted">Use the file name of the one you downloaded, for example <code>{DOWNLOADS.portableName}</code> for the ZIP.</p>
+
+      <h2>macOS: coming soon</h2>
+      <p>There is no macOS build yet. To hear about it, open the <a href={LINKS.repo} rel="noopener">GitHub repository</a> and choose <strong>Watch → Custom → Releases</strong>. GitHub then notifies you when a release is published. SplitNest does not collect email addresses.</p>
+      <p><a class="btn" href={LINKS.repo} rel="noopener">Watch on GitHub</a></p>
+
+      <h2>Questions</h2>
+      {
+        faq.map((f) => (
+          <details class="faq">
+            <summary>{f.q}</summary>
+            <p>{f.a}</p>
+          </details>
+        ))
+      }
+      <p class="mt">Next: <a href="/docs/getting-started/">getting started</a>, and the <a href="/privacy/">privacy page</a>, which explains what the update check sends.</p>
+    </div>
+  </div>
+</Base>

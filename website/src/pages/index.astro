@@ -1,0 +1,220 @@
+---
+import Base from '../layouts/Base.astro';
+import Shot from '../components/Shot.astro';
+import DownloadActions from '../components/DownloadActions.astro';
+import { AGENTS, LINKS, SITE } from '../config/site';
+import { getReleaseInfo } from '../lib/github';
+import { softwareLd } from '../lib/seo';
+
+const { version } = await getReleaseInfo();
+
+const highlights = [
+  { t: 'Agent-aware tabs', d: 'Claude Code, Codex and seven more get their logo and a live state on the tab: Working, Needs you, Done or Error.', h: '/features/agent-aware-tabs/' },
+  { t: 'Never miss a prompt', d: 'In-app notices, Windows notifications and a taskbar flash tell you when an agent needs permission, asks a question, finishes or fails.', h: '/features/notifications/' },
+  { t: 'One inbox for every agent', d: 'A bell in the title bar lists every waiting agent across all workspaces. One shortcut jumps to the next.', h: '/features/agent-inbox/' },
+  { t: 'Pick up where you left off', d: 'After a restart, terminals that ran Claude Code or Codex offer a Resume button for that conversation.', h: '/features/resume-conversations/' },
+  { t: 'Projects, not windows', d: 'Each folder is a workspace with its own layout. Background sessions keep running, and layouts come back after a restart.', h: '/features/workspaces-splits-tabs/' },
+  { t: 'Everything beside the terminal', d: 'File explorer, a built-in CodeMirror editor, per-workspace Git status, five themes and a command palette.', h: '/features/file-explorer-editor/' },
+  { t: 'Private by design', d: 'No telemetry, no terminal output or credentials saved, and agent text stays out of notifications unless you opt in.', h: '/privacy/' },
+];
+---
+
+<Base
+  rawTitle
+  title="SplitNest: the Windows terminal workspace built for AI coding agents"
+  description="SplitNest runs PowerShell and WSL in split panes and shows what Claude Code, Codex and Gemini CLI are doing on every tab. Free, open source (MIT), Windows 11."
+  path="/"
+  jsonLd={[softwareLd(version)]}
+>
+  <section class="hero center">
+    <div class="wrap">
+      <p class="status-pill">MVP prototype · Windows 11 x64 · unsigned builds</p>
+      <h1>The Windows terminal workspace built for AI coding agents</h1>
+      <p class="lead">
+        Open your project folders as workspaces, run real PowerShell and WSL shells in resizable split panes, and see what Claude Code, Codex or Gemini CLI is doing on every tab. SplitNest tells you when an agent needs you and brings the conversation back after a restart.
+      </p>
+      <DownloadActions />
+      <div class="hero-shot">
+        <Shot name="hero" eager />
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="eyebrow">Why SplitNest</p>
+      <h2>Built around how agents actually run in a terminal</h2>
+      <div class="grid" style="margin-top:1.6rem">
+        {
+          highlights.map((h) => (
+            <a class="card" href={h.h}>
+              <h3>{h.t}</h3>
+              <p class="muted">{h.d}</p>
+              <span class="more">Read more →</span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <div class="split">
+        <div>
+          <p class="eyebrow">Notifications</p>
+          <h2>Know the moment an agent needs you</h2>
+          <p>
+            SplitNest tells you the way that fits: nothing for the tab you are looking at, an in-app notice with a <strong>Show</strong> button when another tab is in front, and a Windows notification when SplitNest is minimized or behind another program. For "needs you" the taskbar button also flashes.
+          </p>
+          <p>Clicking a notification shows that exact tab.</p>
+          <p><a class="more-link" href="/features/notifications/">How notifications work →</a></p>
+        </div>
+        <Shot name="notification" sizes="(min-width: 900px) 600px, 100vw" />
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="split flip">
+        <div>
+          <p class="eyebrow">Agent inbox</p>
+          <h2>One list for every waiting agent</h2>
+          <p>
+            The bell in the title bar (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>) lists every agent waiting for you in all workspaces, most urgent first, with the time it has waited. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd> goes to the next waiting agent, wherever it is.
+          </p>
+          <p><a class="more-link" href="/features/agent-inbox/">About the agent inbox →</a></p>
+        </div>
+        <Shot name="agent-inbox" sizes="(min-width: 900px) 650px, 100vw" />
+      </div>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <div class="split">
+        <div>
+          <p class="eyebrow">Resume</p>
+          <h2>Pick up agent conversations after a restart</h2>
+          <p>
+            If Claude Code or Codex was running when SplitNest closed, that terminal says so and offers <strong>Resume Claude Code</strong> (or Codex). The text above the button states exactly what will run, and nothing runs until you click. Only the conversation id, folder and an optional title are saved, never conversation text.
+          </p>
+          <p><a class="more-link" href="/features/resume-conversations/">How resume works →</a></p>
+        </div>
+        <Shot name="resume" sizes="(min-width: 900px) 600px, 100vw" />
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="split flip">
+        <div>
+          <p class="eyebrow">Editor and explorer</p>
+          <h2>Read and fix a file without leaving the workspace</h2>
+          <p>
+            A file explorer sits beside the terminals. Click a file to open it in the built-in editor (CodeMirror 6) with syntax highlighting, find and replace, explicit <kbd>Ctrl</kbd>+<kbd>S</kbd> saving, detection of changes made on disk, and a SHA-256 check before every save so nothing is overwritten silently.
+          </p>
+          <p><a class="more-link" href="/features/file-explorer-editor/">Explorer and editor →</a></p>
+        </div>
+        <Shot name="editor" sizes="(min-width: 900px) 650px, 100vw" />
+      </div>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <div class="split">
+        <div>
+          <p class="eyebrow">Themes and command palette</p>
+          <h2>Five themes, one palette for everything</h2>
+          <p>
+            Graphite (default), Silver Light, Midnight Blue, Ember and Lagoon, or follow Windows light and dark automatically. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> opens a command palette for workspaces, shells, settings and agents.
+          </p>
+          <p><a class="more-link" href="/features/themes-command-palette/">Themes and palette →</a></p>
+        </div>
+        <div style="display:grid;gap:1rem">
+          <Shot name="light-theme" sizes="(min-width: 900px) 600px, 100vw" />
+          <Shot name="palette" sizes="(min-width: 900px) 600px, 100vw" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how-it-works">
+    <div class="wrap">
+      <p class="eyebrow">How it works</p>
+      <h2>How SplitNest knows what an agent is doing</h2>
+      <p class="lead">Three sources, in order of trust. No agent settings or hooks are changed.</p>
+      <ol class="steps" style="margin-top:1.6rem">
+        <li>
+          <h3>The agent reports itself</h3>
+          <p class="muted">The Program Status Protocol (OSC 7501): the agent reports its own state in the terminal stream. SplitNest answers the protocol's feature query, which Claude Code waits for before reporting. Codex reports on its own.</p>
+        </li>
+        <li>
+          <h3>Process detection</h3>
+          <p class="muted">In PowerShell tabs a hidden helper looks for the agent's process under the tab's shell. Command lines never leave the main process and are not logged.</p>
+        </li>
+        <li>
+          <h3>Fallbacks, marked as guesses</h3>
+          <p class="muted">For an identified agent that does not report, a terminal bell means "Needs you?" and a spinner means "Working?". Output alone never makes a program count as an agent.</p>
+        </li>
+      </ol>
+      <p style="margin-top:1.4rem">
+        A reported state is shown solid; a guess is shown dashed with a "?", so you always know which is which.
+        <a href="/features/agent-aware-tabs/">Read the details →</a>
+      </p>
+      <p class="muted">Supported agents:</p>
+      <ul class="chips">{AGENTS.map((a) => <li>{a}</li>)}</ul>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <div class="split" style="align-items:start">
+        <div>
+          <p class="eyebrow">Privacy</p>
+          <h2>Private by design</h2>
+          <p class="lead" style="margin-bottom:0">Your terminal stays yours.</p>
+        </div>
+        <div>
+          <ul>
+            <li>No analytics and no telemetry. Terminal output, command history, environment variables and credentials are never saved.</li>
+            <li>Agent text is off by default in notifications and the inbox, because a session title or message can contain your prompt.</li>
+            <li>Only the conversation id, folder and an optional title are saved for Resume, never conversation text.</li>
+            <li>Starting with version 0.2.0 the app checks for updates by default, which you can turn off in Settings. <a href="/privacy/">See exactly what is sent.</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="split" style="align-items:start">
+        <div>
+          <p class="eyebrow">Open source</p>
+          <h2>MIT licensed, built in the open</h2>
+        </div>
+        <div>
+          <p>
+            SplitNest is free and open source under the MIT license. The code, the architecture notes and the test results are all on GitHub, including the known limitations. It is an MVP prototype: it works for daily use on the machine it was tested on, but it is not production-ready, the build is unsigned, and only Windows 11 x64 has been tested.
+          </p>
+          <p><a class="more-link" href={LINKS.repo} rel="noopener">View the source on GitHub →</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="alt center">
+    <div class="wrap">
+      <h2>Try SplitNest on Windows 11</h2>
+      <p class="lead">Free, open source, and nothing to sign up for.</p>
+      <DownloadActions note={false} />
+      <p class="muted" style="margin-top:1rem">
+        macOS: coming soon. On GitHub choose Watch → Custom → Releases to be notified of new releases.
+      </p>
+    </div>
+  </section>
+</Base>

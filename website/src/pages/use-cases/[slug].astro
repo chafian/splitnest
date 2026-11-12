@@ -1,0 +1,52 @@
+---
+import Base from '../../layouts/Base.astro';
+import Shot from '../../components/Shot.astro';
+import DownloadActions from '../../components/DownloadActions.astro';
+import { useCases } from '../../data/use-cases';
+import { features } from '../../data/features';
+
+export function getStaticPaths() {
+  return useCases.map((u) => ({ params: { slug: u.slug }, props: { u } }));
+}
+const { u } = Astro.props;
+const related = u.related.map((s) => features.find((x) => x.slug === s)!).filter(Boolean);
+---
+
+<Base
+  title={u.title}
+  description={u.description}
+  path={`/use-cases/${u.slug}/`}
+  crumbs={[{ name: 'Use cases', path: '/use-cases/' }, { name: u.name, path: `/use-cases/${u.slug}/` }]}
+>
+  <div class="narrow page-head">
+    <p class="eyebrow">Use case</p>
+    <h1>{u.name}</h1>
+    <p class="lead">{u.intro}</p>
+  </div>
+  <div class="wrap prose">
+    {u.shots.map((s, i) => <div style="max-width:1000px;margin-inline:auto"><Shot name={s} eager={i === 0} sizes="(min-width: 1040px) 1000px, 100vw" /></div>)}
+    <div class="narrow" style="margin-top:2rem">
+      {u.blocks.map((b) => (
+        <>
+          <h2>{b.h}</h2>
+          <Fragment set:html={b.html} />
+        </>
+      ))}
+      <div class="related">
+        <h2 style="font-size:1.3rem">Features used here</h2>
+        <div class="grid">
+          {related.map((r) => (
+            <a class="card" href={`/features/${r.slug}/`}>
+              <h3>{r.name}</h3>
+              <p class="muted">{r.summary}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+      <div class="callout ok" style="margin-top:2.5rem">
+        <p><strong>Try it on Windows 11.</strong> Free and open source (MIT).</p>
+        <DownloadActions size="md" note={false} />
+      </div>
+    </div>
+  </div>
+</Base>

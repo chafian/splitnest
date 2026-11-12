@@ -1,0 +1,71 @@
+---
+import Base from '../layouts/Base.astro';
+import { LINKS } from '../config/site';
+---
+
+<Base
+  title="Privacy"
+  description="What SplitNest stores locally, what its update check sends starting with version 0.2.0, how notifications and Resume titles work, and that this site uses no cookies."
+  path="/privacy/"
+  crumbs={[{ name: 'Privacy', path: '/privacy/' }]}
+>
+  <div class="narrow page-head">
+    <h1>Privacy</h1>
+    <p class="lead">
+      SplitNest is private by design: no analytics, no telemetry, no accounts. This page says exactly what the app stores, what it sends, and what this website does.
+    </p>
+  </div>
+  <div class="wrap prose">
+    <div class="narrow">
+      <h2>Summary</h2>
+      <ul>
+        <li>No telemetry or analytics in the app.</li>
+        <li>Terminal output, command history, environment variables and credentials are never saved.</li>
+        <li>Starting with version 0.2.0 the app checks for updates by default. That request sends only the app version, platform and architecture. You can turn it off.</li>
+        <li>This website uses no cookies, no analytics and no tracking.</li>
+      </ul>
+
+      <h2>Update check (starting with version 0.2.0)</h2>
+      <div class="callout">
+        <p><strong>Starting with version 0.2.0</strong>, SplitNest checks for updates automatically by default, using GitHub Releases and Electron's update service. Earlier versions contain no update-check code.</p>
+      </div>
+      <ul>
+        <li>The requests send only the app version, platform and architecture, plus what any HTTPS request reveals (your IP address and user agent), to <code>update.electronjs.org</code> (operated by the Electron project) and to GitHub.</li>
+        <li>There is no analytics, no identifier and no telemetry.</li>
+        <li>You can turn the update check off in <strong>Settings → About</strong>.</li>
+      </ul>
+
+      <h2>What the app stores on your computer</h2>
+      <p>State file: <code>%APPDATA%\SplitNest\workspace-state.json</code>. Log file: <code>%APPDATA%\SplitNest\logs\splitnest.log</code>. Settings → About can open the state file in Explorer.</p>
+      <h3>Saved</h3>
+      <ul>
+        <li>Workspace names and folders, and the pane layout and split proportions.</li>
+        <li>Each terminal's shell and optional custom name.</li>
+        <li>The agent conversation running in a terminal, for Resume: the agent, the conversation id, the folder, and optionally the conversation title.</li>
+        <li>The active workspace and pane, and appearance settings such as font size, scrollback, sidebar and explorer sizes, theme, default shell and restore behaviour.</li>
+        <li>The workspace-relative paths of files open in the editor.</li>
+      </ul>
+      <h3>Never saved</h3>
+      <ul>
+        <li>Terminal output and command history.</li>
+        <li>Environment variables and credentials.</li>
+        <li>The contents of files open in the editor. They are re-read from disk after a restart.</li>
+        <li>Conversation text. The log records lifecycle events and errors only, never terminal input or output.</li>
+      </ul>
+      <p>Agent process detection runs in the app's main process; command lines never leave it and are not logged. Links in terminal output open in your browser only on Ctrl+click, and only for <code>http</code> and <code>https</code>.</p>
+
+      <h2>Windows notifications</h2>
+      <p>Agent notifications use SplitNest's own words (for example "Claude Code needs permission", plus the workspace and tab name). <strong>Agent text is off by default</strong> in notifications and in the agent inbox, because an agent's session title or message can contain your prompt. It is shown only if you turn on <em>Include what the agent wrote</em>. The notifications are shown by Windows on your computer; SplitNest removes them from Notification Center when it quits.</p>
+
+      <h2>Resume titles</h2>
+      <p>The conversation title shown above the Resume button can contain words from your prompt. It is <strong>on by default</strong>. Turn it off in Settings → Workspaces → <em>Show conversation titles for Resume</em> and the saved titles are removed. Conversation text is never saved either way.</p>
+
+      <h2>This website</h2>
+      <p>This website sets no cookies, runs no analytics and uses no tracking, third-party fonts or third-party scripts. It collects no email addresses. The site is hosted on GitHub Pages, and GitHub may log visitors' IP addresses and other request data as described in the <a href={LINKS.githubPrivacy} rel="noopener">GitHub General Privacy Statement</a>. Downloads are served by GitHub Releases under the same statement.</p>
+      <p>The changelog and version number shown here are read from GitHub by our build process when the site is built, not from your browser.</p>
+
+      <h2>Questions</h2>
+      <p>SplitNest is open source, so you can check any of the above in the <a href={LINKS.repo} rel="noopener">code</a>. For questions, open an <a href={LINKS.issues} rel="noopener">issue on GitHub</a>.</p>
+    </div>
+  </div>
+</Base>

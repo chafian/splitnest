@@ -1,0 +1,29 @@
+---
+import Base from '../../layouts/Base.astro';
+import { useCases } from '../../data/use-cases';
+---
+
+<Base
+  title="Use cases"
+  description="Practical ways to use SplitNest: Claude Code in PowerShell and WSL, several agents in parallel, never missing a prompt, and resuming conversations."
+  path="/use-cases/"
+  crumbs={[{ name: 'Use cases', path: '/use-cases/' }]}
+>
+  <div class="narrow page-head">
+    <h1>Use cases</h1>
+    <p class="lead">How people who run AI coding agents in a Windows terminal can use SplitNest, with the limits spelled out.</p>
+  </div>
+  <div class="wrap prose">
+    <div class="grid">
+      {
+        useCases.map((u) => (
+          <a class="card" href={`/use-cases/${u.slug}/`}>
+            <h2 style="font-size:1.25rem;margin-top:0">{u.name}</h2>
+            <p class="muted">{u.summary}</p>
+            <span class="more">Read more →</span>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</Base>
