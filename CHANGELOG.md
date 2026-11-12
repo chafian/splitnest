@@ -2,7 +2,7 @@
 
 All notable changes to SplitNest. Release notes on GitHub are taken from the section for each version.
 
-## 0.2.0 (not released yet)
+## 0.2.0 (2026-11-12)
 
 First public release with an installer.
 

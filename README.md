@@ -127,7 +127,7 @@ App shortcuts are a fixed table (no user configuration yet). Notes on Ctrl+Shift
 ## Privacy
 
 - **No telemetry.** SplitNest contains no analytics or telemetry. Links in terminal output open in your browser only on Ctrl+click, and only for `http`/`https`.
-- **Update checks (planned for version 0.2.0).** The current code has no update check. Starting with 0.2.0, SplitNest will check for updates by default: the app explains this when it first starts, before any check, and it can be turned off in Settings → About. The check sends the app version, platform and architecture (plus what any HTTPS request reveals, such as your IP address) to GitHub only (this project's GitHub Releases). Details: [privacy policy](https://splitnest.dev/privacy/).
+- **Update checks (since version 0.2.0).** The installed app checks for updates by default: it explains this when it first starts, before any check, and it can be turned off in Settings → About. The portable ZIP never checks. The check sends the app version, platform and architecture (plus what any HTTPS request reveals, such as your IP address) to GitHub only (this project's GitHub Releases). Details: [privacy policy](https://splitnest.dev/privacy/).
 - **Saved** (`%APPDATA%\SplitNest\workspace-state.json`): workspace names and folders, pane layouts, each terminal's shell and optional custom name, the agent conversation running in it (agent, conversation id, folder, and optionally its title), and appearance settings.
 - **Never saved:** terminal output, command history, environment variables, credentials, or the contents of files open in the editor (only their workspace-relative paths). The log records lifecycle events and errors only, never terminal input or output.
 - **Agent text is off by default in notifications and the inbox.** A session title or message can contain your prompt, so it is shown only if you turn on *Include what the agent wrote*.
@@ -140,7 +140,7 @@ Details on restoring, cleanup and troubleshooting are in the [user guide](docs/U
 
 SplitNest is an **MVP prototype**. It is not production-ready.
 
-- Windows 11 x64 only; builds are **unsigned**. The installer and automatic updates arrive with version 0.2.0 (not released yet); see [CHANGELOG.md](CHANGELOG.md) and [docs/RELEASING.md](docs/RELEASING.md).
+- Windows 11 x64 only; builds are **unsigned** (Windows SmartScreen may warn; see the [code signing policy](CODE_SIGNING.md)). Since version 0.2.0 there is an installer with automatic updates; see [CHANGELOG.md](CHANGELOG.md).
 - The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.
 - Full-screen programs work, but ConPTY repaints them itself, so their screens can leave frames in the scrollback.
 - WSL tabs cannot use process detection, so they rely on the agent's own status reports; Resume there opens the agent's own conversation list rather than a specific conversation.
