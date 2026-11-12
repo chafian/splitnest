@@ -26,7 +26,14 @@ if (!process.env.GITHUB_ACTIONS) {
 }
 const oldVersion = oldTag.replace(/^v/, '');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const ps = (cmd) => execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference = 'SilentlyContinue'; ${cmd}`], { encoding: 'utf8', maxBuffer: 16 << 20 }).trim();
+const ps = (cmd) => {
+  try {
+    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference = 'SilentlyContinue'; ${cmd}`], { encoding: 'utf8', maxBuffer: 16 << 20 }).trim();
+  } catch (e) {
+    // A command whose target doesn't exist (no such process, no key) still prints what it found.
+    return String(e?.stdout ?? '').trim();
+  }
+};
 const checks = [];
 const check = (name, ok, detail) => {
   checks.push({ name, ok: !!ok, ...(detail === undefined ? {} : { detail }) });

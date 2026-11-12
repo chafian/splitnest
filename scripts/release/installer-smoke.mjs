@@ -25,7 +25,7 @@ const ps = (cmd) => {
   }
 };
 const json = (cmd) => {
-  const out = ps(`${cmd} | ConvertTo-Json -Depth 4 -Compress`);
+  const out = ps(`$(${cmd}) | ConvertTo-Json -Depth 4 -Compress`);
   return out ? JSON.parse(out) : null;
 };
 const installDir = path.join(process.env.LOCALAPPDATA, 'splitnest');
