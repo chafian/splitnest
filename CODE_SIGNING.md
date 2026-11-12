@@ -22,6 +22,8 @@ repository owner:
 | Reviewer | [Souf CH (@chafian)](https://github.com/chafian) | Reviews and merges every contribution from anyone who is not a committer (pull requests). |
 | Approver | [Souf CH (@chafian)](https://github.com/chafian) | Approves each signing request by hand, after checking that it comes from the release workflow for a tagged version. |
 
+Two-factor authentication is enabled on the maintainer's GitHub account.
+
 Requirements for everyone holding a role: multi-factor authentication on GitHub and on SignPath, and
 no use of signing for anything other than this repository's own release builds. If the team grows,
 this table and the repository's permission settings are updated together.
@@ -61,8 +63,8 @@ product version. The release build checks this and fails if a file differs.
 
 See the [privacy policy](https://splitnest.dev/privacy/). In short: SplitNest has no telemetry or
 analytics. Starting with version 0.2.0 it checks for updates (enabled by default, explained when the
-app first starts, and can be turned off). That check contacts GitHub and Electron's update service
-`update.electronjs.org`; their privacy terms are linked from the privacy policy.
+app first starts, and can be turned off). That check contacts GitHub only (this repository's GitHub
+Releases); GitHub's privacy terms are linked from the privacy policy.
 
 ## Verifying a download
 
