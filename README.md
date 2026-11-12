@@ -10,6 +10,10 @@ Open your project folders as workspaces, run real **PowerShell** and **WSL** she
 
 > **Early release (v0.2).** Windows 11 x64. Free and open source (MIT). The installer is **not code signed yet**, so Windows SmartScreen may warn the first time you run it; see [Getting started](#getting-started) and the [code signing policy](CODE_SIGNING.md). Known limitations are listed in [Status and limitations](#status-and-limitations).
 
+![SplitNest demo: a Claude Code tab turns to "Needs you", an in-app notice opens the tab where Codex finished, and the agent inbox lists every waiting agent](docs/readme/demo.gif)
+
+<sub>Demo projects; agent output simulated for the recording. Full 37-second video with captions: <a href="https://splitnest.dev/#demo">splitnest.dev</a>.</sub>
+
 ![SplitNest with three workspaces, split panes, a Claude Code agent waiting for permission and a Codex agent working](docs/readme/hero.png)
 
 ## Why SplitNest
