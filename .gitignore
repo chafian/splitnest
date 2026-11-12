@@ -9,3 +9,8 @@ test-results/
 docs/screenshots/
 out-next/
 out-*/
+
+# Website
+website/node_modules/
+website/dist/
+website/.astro/

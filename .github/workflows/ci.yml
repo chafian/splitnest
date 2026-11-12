@@ -3,7 +3,9 @@ name: CI
 on:
   push:
     branches: [main, 'feat/**']
+    paths-ignore: ['website/**']
   pull_request:
+    paths-ignore: ['website/**']
   workflow_dispatch:
 
 permissions:

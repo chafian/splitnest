@@ -2,7 +2,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-  { ignores: ['.vite/**', 'out/**', 'node_modules/**', 'coverage/**'] },
+  { ignores: ['.vite/**', 'out/**', 'node_modules/**', 'coverage/**', 'website/**'] },
   ...tseslint.configs.recommended,
   {
     files: ['src/renderer/**/*.{ts,tsx}'],
