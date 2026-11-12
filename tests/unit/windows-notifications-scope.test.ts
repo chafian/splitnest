@@ -42,7 +42,9 @@ ${body}
   return JSON.parse(out.trim());
 }
 
-describe.skipIf(process.platform !== 'win32')('packaged notification check: Windows lookups are scoped to the test run', () => {
+// Each test starts a real PowerShell; a cold start on a CI runner took more than Vitest's default
+// 5 s (GitHub Actions, windows-2022). The PowerShell call itself is limited to 30 s.
+describe.skipIf(process.platform !== 'win32')('packaged notification check: Windows lookups are scoped to the test run', { timeout: 30_000 }, () => {
   it("reads the text of this run's notification only; the unrelated entries' text is never read", () => {
     const r = runPs(`
 $report = @(Get-RunReport $history 'k3f9a2' 'Claude Code needs permission' 'Notification Test · Backend' 'violet-heron-417')
