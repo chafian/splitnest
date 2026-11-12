@@ -1,5 +1,7 @@
 // Electron main process: window lifecycle, security policy, persistence,
 // shell discovery and session authorization.
+// First: Squirrel's install/update/uninstall launches do their job and exit before anything else runs.
+import { INSTALLED_APP_ID, INSTALLED_TOAST_CLSID, updateExePath } from './squirrel';
 import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, session, webContents } from 'electron';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -31,6 +33,13 @@ const startedAt = Date.now() - Math.round(performance.now());
 const TITLE_BAR_HEIGHT = 40;
 
 app.setName(PRODUCT.name);
+// Installed with Squirrel: notifications must carry the App User Model ID and activator CLSID of
+// the Start menu entry that squirrel.ts writes, or Windows treats them as another app's (and
+// Electron would add a second entry).
+if (process.platform === 'win32' && updateExePath(process.execPath)) {
+  app.setAppUserModelId(INSTALLED_APP_ID);
+  app.setToastActivatorCLSID(INSTALLED_TOAST_CLSID);
+}
 const userDataArg = process.argv.find((a) => a.startsWith('--tw-user-data='));
 if (userDataArg) app.setPath('userData', path.resolve(userDataArg.slice('--tw-user-data='.length)));
 const selfTestArg = process.argv.find((a) => a.startsWith('--self-test-output='));

@@ -27,6 +27,7 @@
     "test:e2e": "node tests/e2e/run-e2e.mjs",
     "smoke:packaged": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/packaged-smoke.ps1",
     "licenses": "node scripts/licenses.mjs",
+    "inventory": "node scripts/binary-inventory.mjs",
     "icons": "node scripts/sync-file-icons.mjs"
   },
   "dependencies": {
@@ -51,6 +52,7 @@
     "@codemirror/state": "6.7.6",
     "@codemirror/view": "6.43.15",
     "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
     "@electron-forge/maker-zip": "7.11.2",
     "@electron-forge/plugin-fuses": "7.11.2",
     "@electron-forge/plugin-vite": "7.11.2",

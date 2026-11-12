@@ -1,4 +1,5 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
+import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
@@ -36,10 +37,15 @@ const config: ForgeConfig = {
     appBundleId: PRODUCT.appId,
     asar: { unpack: '**/node_modules/node-pty/**' },
     ignore,
+    // File metadata: product and company are "SplitNest" on every binary we build (SignPath requires
+    // the product name to be the project name and one product version per build; the version comes
+    // from package.json). Checked by scripts/binary-inventory.mjs.
+    appCopyright: 'Copyright (c) 2026 SplitNest contributors. MIT License.',
     win32metadata: {
       CompanyName: PRODUCT.name,
       FileDescription: PRODUCT.name,
       ProductName: PRODUCT.name,
+      InternalName: PRODUCT.executableName,
     },
     icon: 'assets/icon',
   },
@@ -47,7 +53,25 @@ const config: ForgeConfig = {
     // node-pty ships N-API prebuilds; no Electron-specific rebuild is needed.
     onlyModules: [],
   },
-  makers: [new MakerZIP({}, ['win32'])],
+  makers: [
+    // Windows installer (Squirrel.Windows): per-user install, Start menu shortcut, updates.
+    new MakerSquirrel({
+      name: PRODUCT.executableName,
+      exe: `${PRODUCT.executableName}.exe`,
+      setupExe: 'SplitNest-win32-x64-Setup.exe',
+      setupIcon: 'assets/icon.ico',
+      iconUrl: 'https://raw.githubusercontent.com/chafian/splitnest/main/assets/icon.ico',
+      // Squirrel stamps Setup.exe with these: description becomes its product name and description,
+      // authors its company (and the publisher in Windows' installed-apps list).
+      title: PRODUCT.name,
+      authors: PRODUCT.name,
+      owners: PRODUCT.name,
+      description: PRODUCT.name,
+      noMsi: true,
+    }),
+    // Portable build (no installer, no automatic updates).
+    new MakerZIP({}, ['win32']),
+  ],
   plugins: [
     new VitePlugin({
       build: [
