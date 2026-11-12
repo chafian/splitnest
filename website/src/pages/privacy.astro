@@ -21,19 +21,34 @@ import { LINKS } from '../config/site';
       <ul>
         <li>No telemetry or analytics in the app.</li>
         <li>Terminal output, command history, environment variables and credentials are never saved.</li>
-        <li>Starting with version 0.2.0 the app checks for updates by default. That request sends only the app version, platform and architecture. You can turn it off.</li>
+        <li>Starting with version 0.2.0 (not released yet) the app checks for updates by default. It tells you so the first time it starts, before any check, and you can turn it off there or later in Settings. The request sends only the app version, platform and architecture.</li>
         <li>This website uses no cookies, no analytics and no tracking.</li>
       </ul>
 
       <h2>Update check (starting with version 0.2.0)</h2>
       <div class="callout">
-        <p><strong>Starting with version 0.2.0</strong>, SplitNest checks for updates automatically by default, using GitHub Releases and Electron's update service. Earlier versions contain no update-check code.</p>
+        <p><strong>Starting with version 0.2.0</strong> (not released yet), SplitNest checks for updates automatically by default, using GitHub Releases and Electron's update service. Versions before 0.2.0 contain no update-check code.</p>
       </div>
       <ul>
-        <li>The requests send only the app version, platform and architecture, plus what any HTTPS request reveals (your IP address and user agent), to <code>update.electronjs.org</code> (operated by the Electron project) and to GitHub.</li>
-        <li>There is no analytics, no identifier and no telemetry.</li>
-        <li>You can turn the update check off in <strong>Settings → About</strong>.</li>
+        <li><strong>You are told first.</strong> The installer has no screens of its own; it starts SplitNest when it finishes. The first time SplitNest starts, it shows what the update check does and links to this page, with the option to turn it off, <em>before</em> any update request is sent. Nothing is sent until you have seen that notice.</li>
+        <li><strong>What is sent:</strong> the app version, platform and architecture, as part of the request address, plus what any HTTPS request reveals: your IP address and the user agent. Nothing about your workspaces, terminals, files or agents.</li>
+        <li><strong>To whom:</strong> Electron's update service <code>update.electronjs.org</code>, which looks up the newest release, and GitHub, which serves the release files. Only checks for newer releases of SplitNest; no account, no identifier, no analytics, no telemetry.</li>
+        <li><strong>How often:</strong> shortly after SplitNest starts and then every few hours while it runs. An update is downloaded in the background and installed the next time SplitNest starts, never in the middle of your work.</li>
+        <li><strong>Turning it off:</strong> in the first-run notice, or at any time in <strong>Settings → About</strong>. The portable ZIP version never checks for updates.</li>
       </ul>
+
+      <h3>Services SplitNest contacts</h3>
+      <table>
+        <thead><tr><th scope="col">Service</th><th scope="col">Used for</th><th scope="col">Its privacy terms</th></tr></thead>
+        <tbody>
+          <tr><th scope="row"><code>update.electronjs.org</code> (Electron project)</th><td>Update check: is there a newer release?</td><td><a href="https://github.com/electron/update.electronjs.org" rel="noopener">Service and source code</a>; Electron is a project of the OpenJS Foundation</td></tr>
+          <tr><th scope="row">GitHub (github.com, its release downloads)</th><td>Downloading an update; downloads from this site</td><td><a href={LINKS.githubPrivacy} rel="noopener">GitHub General Privacy Statement</a></td></tr>
+        </tbody>
+      </table>
+      <p>Nothing else: SplitNest itself has no server. Programs you run in its terminals, such as AI coding agents, make their own network connections under their own privacy terms; SplitNest does not see or forward that traffic.</p>
+
+      <h2>Installing and uninstalling (from version 0.2.0)</h2>
+      <p>The installer installs SplitNest for your Windows user only (no administrator rights) in <code>%LOCALAPPDATA%\splitnest</code>, adds a SplitNest entry to the Start menu, and registers SplitNest in Windows' installed apps and for its notifications. Uninstall it from <strong>Settings → Apps → Installed apps</strong>; that removes the program, the Start menu entry and the notification registration. Your settings and saved workspaces in <code>%APPDATA%\SplitNest</code> are kept, so a reinstall brings them back; delete that folder yourself to remove them. A few program files of the installer (<code>Update.exe</code> and the last version's folder) can remain in <code>%LOCALAPPDATA%\splitnest</code> after uninstalling; that folder can be deleted.</p>
 
       <h2>What the app stores on your computer</h2>
       <p>State file: <code>%APPDATA%\SplitNest\workspace-state.json</code>. Log file: <code>%APPDATA%\SplitNest\logs\splitnest.log</code>. Settings → About can open the state file in Explorer.</p>

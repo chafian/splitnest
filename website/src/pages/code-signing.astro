@@ -1,0 +1,63 @@
+---
+import Base from '../layouts/Base.astro';
+import { LINKS } from '../config/site';
+const policy = `${LINKS.repo}/blob/main/CODE_SIGNING.md`;
+---
+
+<Base
+  title="Code signing policy"
+  description="SplitNest's code signing policy: Windows releases are not signed yet; the project intends to apply to the SignPath Foundation. Team roles, what would be signed, how releases are built, and privacy."
+  path="/code-signing/"
+  crumbs={[{ name: 'Code signing policy', path: '/code-signing/' }]}
+>
+  <div class="narrow page-head">
+    <h1>Code signing policy</h1>
+    <p class="lead">How SplitNest's Windows releases are built, who may approve signing, what would be signed, and how to check a download.</p>
+  </div>
+  <div class="wrap prose">
+    <div class="narrow">
+      <div class="callout">
+        <p><strong>Status: SplitNest's Windows releases are not code signed yet.</strong> The project intends to apply to the <a href="https://signpath.org" rel="noopener">SignPath Foundation</a> for free code signing for open-source projects. Until an application is approved and this page is updated, every release is unsigned, and Windows SmartScreen may warn about it (see <a href="/download/">Download</a>).</p>
+      </div>
+      <p>Once approved, Windows releases will carry this statement:</p>
+      <blockquote><p>Free code signing provided by <a href="https://about.signpath.io" rel="noopener">SignPath.io</a>, certificate by <a href="https://signpath.org" rel="noopener">SignPath Foundation</a>.</p></blockquote>
+      <p>The publisher shown by Windows for signed files will then be <strong>SignPath Foundation</strong>.</p>
+
+      <h2>Team roles</h2>
+      <p>SplitNest is maintained by one person. The roles the SignPath Foundation requires are all held by the repository owner:</p>
+      <table>
+        <thead><tr><th scope="col">Role</th><th scope="col">Who</th><th scope="col">What it means</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Committer (author)</th><td><a href="https://github.com/chafian" rel="noopener">Souf CH (@chafian)</a></td><td>May change the source code without further review.</td></tr>
+          <tr><th scope="row">Reviewer</th><td><a href="https://github.com/chafian" rel="noopener">Souf CH (@chafian)</a></td><td>Reviews and merges every contribution from anyone who is not a committer (pull requests).</td></tr>
+          <tr><th scope="row">Approver</th><td><a href="https://github.com/chafian" rel="noopener">Souf CH (@chafian)</a></td><td>Approves each signing request by hand, after checking that it comes from the release workflow for a tagged version.</td></tr>
+        </tbody>
+      </table>
+      <p>Requirements for everyone holding a role: multi-factor authentication on GitHub and on SignPath, and no use of signing for anything other than this repository's own release builds.</p>
+
+      <h2>What is signed, and what is not</h2>
+      <p>Only binaries that the repository's release workflow builds for SplitNest are signed: the application <code>splitnest.exe</code>, the installer <code>SplitNest-win32-x64-Setup.exe</code>, and Squirrel's launcher generated for SplitNest (pending confirmation by the SignPath Foundation that it may be signed).</p>
+      <p>Files built by other open-source projects are shipped exactly as those projects publish them and are <strong>never signed with SplitNest's certificate</strong>: Electron's libraries, node-pty's native modules and winpty, Microsoft's ConPTY files (already signed by Microsoft) and Squirrel's <code>Update.exe</code>. Every release lists every binary, marked <em>ours</em> or <em>upstream</em>, with its SHA-256 hash, version information and signature status.</p>
+      <p>Every signed binary has product name <strong>SplitNest</strong>, company <strong>SplitNest</strong> and the release's version as product version; the release build fails if a file differs.</p>
+
+      <h2>How releases are built</h2>
+      <ul>
+        <li>Only by GitHub Actions, on GitHub-hosted Windows runners, from a version tag in the public repository, with dependencies installed from the committed lockfile.</li>
+        <li>The workflow runs the tests, builds the installer and the portable ZIP, and publishes them to <a href={`${LINKS.repo}/releases`} rel="noopener">GitHub Releases</a> with SHA-256 checksums. Build logs are public.</li>
+        <li>Once signing is approved, each signing request is approved by hand, and a release is only published when every expected file is signed and the checks pass. A release is never published partly signed.</li>
+      </ul>
+
+      <h2>Privacy</h2>
+      <p>See the <a href="/privacy/">privacy policy</a>. SplitNest has no telemetry or analytics. Starting with version 0.2.0 it checks for updates (enabled by default, explained when the app first starts, and can be turned off). That check contacts GitHub and Electron's update service; their privacy terms are linked from the privacy policy.</p>
+
+      <h2>Verifying a download</h2>
+      <ul>
+        <li>Compare the SHA-256 hash of your download with <code>SHA256SUMS.txt</code> from the same release (<a href="/download/#verify-the-sha-256-checksum">instructions</a>).</li>
+        <li>For signed releases, check the signature in PowerShell: <code>Get-AuthenticodeSignature .\SplitNest-win32-x64-Setup.exe</code>.</li>
+      </ul>
+
+      <h2>Reporting a problem</h2>
+      <p>If you believe a SplitNest binary was signed improperly or is harmful, report it privately as described in the <a href={`${LINKS.repo}/blob/main/SECURITY.md`} rel="noopener">security policy</a>. This policy is also in the repository: <a href={policy} rel="noopener">CODE_SIGNING.md</a>.</p>
+    </div>
+  </div>
+</Base>
