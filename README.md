@@ -6,7 +6,9 @@
 
 Open your project folders as workspaces, run real **PowerShell** and **WSL** shells in resizable split panes, and switch between projects without stopping a single session. When Claude Code, Codex or Gemini CLI runs in a tab, SplitNest shows what it is doing, tells you when it needs you, and brings the conversation back after a restart.
 
-> **Status: MVP prototype.** It works for daily use on the machine it was tested on, but it is not production-ready, the build is unsigned, and only Windows 11 x64 has been tested. See [Status and limitations](#status-and-limitations).
+**[⬇ Download for Windows (installer)](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-Setup.exe)** · [Portable ZIP](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-portable.zip) · [All releases](https://github.com/chafian/splitnest/releases) · [splitnest.dev](https://splitnest.dev)
+
+> **Early release (v0.2).** Windows 11 x64. Free and open source (MIT). The installer is **not code signed yet**, so Windows SmartScreen may warn the first time you run it; see [Getting started](#getting-started) and the [code signing policy](CODE_SIGNING.md). Known limitations are listed in [Status and limitations](#status-and-limitations).
 
 ![SplitNest with three workspaces, split panes, a Claude Code agent waiting for permission and a Codex agent working](docs/readme/hero.png)
 
@@ -70,17 +72,17 @@ The full feature reference is in the [user guide](docs/USER_GUIDE.md).
 
 ## Getting started
 
-There is **no installer and no release download yet**. Build it from source:
+1. Download **[SplitNest-win32-x64-Setup.exe](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-Setup.exe)** from the [latest release](https://github.com/chafian/splitnest/releases/latest) and run it. It installs for your Windows user only (no administrator rights) and adds SplitNest to the Start menu.
+2. The installer is **not code signed yet**, so Windows SmartScreen may show "Windows protected your PC". If you downloaded it from this repository's releases, you can check the file first (below) and then choose **More info → Run anyway**. Do not turn off Windows security features to run it.
+3. Click **Open folder…** and choose a project folder; a PowerShell terminal starts there. Run `claude`, `codex`, `gemini` or any other command-line agent in a tab.
 
-```powershell
-npm ci          # install the pinned dependencies (Node.js 20.19+ and npm)
-npm start       # run in development
-npm run make    # build a ZIP: out/make/zip/win32/x64/SplitNest-win32-x64-0.1.0.zip
-```
+The first time SplitNest starts, it explains its automatic update check and lets you turn it off before anything is sent ([privacy](#privacy)). Uninstall it from **Settings → Apps → Installed apps**; your saved workspaces are kept.
 
-Extract the ZIP anywhere and run `splitnest.exe` (Node.js is not needed to run it). Click **Open folder…** and choose a project folder; a PowerShell terminal starts there.
+**Portable:** prefer not to install? Download [SplitNest-win32-x64-portable.zip](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-portable.zip), extract it anywhere and run `splitnest.exe`. The portable version never checks for updates.
 
-The build is not code-signed, so Windows SmartScreen may show an "unrecognized app" prompt. Choose **More info → Run anyway** only if you built it yourself or trust where it came from. Do not turn off Windows security features to run it. See the [code signing policy](CODE_SIGNING.md) for how releases are built and the plan to sign them.
+**Check your download:** every release lists SHA-256 hashes in `SHA256SUMS.txt` (`Get-FileHash .\SplitNest-win32-x64-Setup.exe -Algorithm SHA256` in PowerShell) and has a GitHub build provenance attestation (`gh attestation verify SplitNest-win32-x64-Setup.exe -R chafian/splitnest`). Releases are built only by GitHub Actions from a version tag; see the [code signing policy](CODE_SIGNING.md).
+
+**Build from source:** see [Development](#development).
 
 ### Requirements
 
@@ -138,7 +140,7 @@ Details on restoring, cleanup and troubleshooting are in the [user guide](docs/U
 
 ## Status and limitations
 
-SplitNest is an **MVP prototype**. It is not production-ready.
+SplitNest is an **early release (v0.2)**. It works for daily use, but it has been tested on few machines so far; please [report problems](https://github.com/chafian/splitnest/issues/new/choose).
 
 - Windows 11 x64 only; builds are **unsigned** (Windows SmartScreen may warn; see the [code signing policy](CODE_SIGNING.md)). Since version 0.2.0 there is an installer with automatic updates; see [CHANGELOG.md](CHANGELOG.md).
 - The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.
@@ -150,6 +152,8 @@ SplitNest is an **MVP prototype**. It is not production-ready.
 The full list, with test results and measurements, is in [docs/TESTING.md](docs/TESTING.md#known-limitations-and-remaining-verification) and the [user guide](docs/USER_GUIDE.md#known-limitations).
 
 ## Development
+
+Build from source (Node.js 20.19+ and npm; no compiler needed): `npm ci`, then `npm start` to run it or `npm run make` to build the installer and portable ZIP into `out/make/`.
 
 ```powershell
 npm ci                 # install the pinned dependency set (package-lock.json)
@@ -164,7 +168,7 @@ npm run package        # -> out/SplitNest-win32-x64/
 npm run verify:package # checks unpacked native files and runs the packaged headless self-test
 npm run test:e2e       # drives the built app UI with Playwright (run `npm run package` first)
 npm run smoke:packaged # launches the packaged exe, screenshot, startup time, memory, forced-kill cleanup
-npm run make           # -> out/make/zip/win32/x64/*.zip
+npm run make           # -> out/make/: installer (squirrel.windows) and portable ZIP (zip)
 npm run licenses       # regenerate THIRD_PARTY_LICENSES.md
 npm run icons          # re-copy the file-icon subset after editing src/renderer/features/explorer/icon-map.json
 npm run ui-icons       # regenerate the UI icons (Tabler Icons subset) after editing scripts/ui-icons.mjs
@@ -174,9 +178,17 @@ Tests and the E2E script use temporary folders and a separate user-data folder, 
 
 Documentation: [user guide](docs/USER_GUIDE.md) · [architecture](docs/ARCHITECTURE.md) (processes, IPC and security boundaries) · [testing](docs/TESTING.md) · [plan](docs/PLAN.md)
 
+## Feedback and support
+
+- **Found a bug?** [Report it](https://github.com/chafian/splitnest/issues/new?template=bug_report.yml) (please include your Windows version, shell and agent).
+- **Missing something?** [Request a feature](https://github.com/chafian/splitnest/issues/new?template=feature_request.yml).
+- **Questions, ideas or how you use it:** [Discussions](https://github.com/chafian/splitnest/discussions).
+- **Security issue?** Do not open a public issue; report it privately as described in [SECURITY.md](SECURITY.md).
+- **Want to hear about new releases?** On GitHub choose **Watch → Custom → Releases**.
+
 ## Code signing policy
 
-Windows releases are **not code signed yet**; the project intends to apply to the SignPath Foundation for free code signing for open-source projects. How releases are built, who approves signing, what would be signed and how to verify a download: [code signing policy](CODE_SIGNING.md) (also on [splitnest.dev](https://splitnest.dev/code-signing/)). Security reports: [SECURITY.md](SECURITY.md).
+Windows releases are **not code signed yet**. The project has applied to the SignPath Foundation for free code signing for open-source projects; the application is pending review. How releases are built, who approves signing, what would be signed and how to verify a download: [code signing policy](CODE_SIGNING.md) (also on [splitnest.dev](https://splitnest.dev/code-signing/)). Security reports: [SECURITY.md](SECURITY.md).
 
 ## License
 

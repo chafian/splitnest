@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/DocLayout.astro
 title: "Troubleshooting and known limitations"
-description: "Fixes for common SplitNest problems with WSL and missing folders, and the full list of known limitations of this MVP prototype."
+description: "Fixes for common SplitNest problems with WSL and missing folders, and the full list of known limitations of this early release."
 path: /docs/troubleshooting/
 ---
 

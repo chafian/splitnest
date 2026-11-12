@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest something SplitNest should do, or do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the problem or the workflow first (for example "I run three Claude Code sessions and …"). The solution can come later.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Agents (status, notifications, inbox, resume)
+        - Workspaces, tabs and split panes
+        - Shells (PowerShell, WSL)
+        - File explorer, editor, Git
+        - Settings, themes, shortcuts
+        - Installer and updates
+        - Something else
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else (other tools you use, screenshots)

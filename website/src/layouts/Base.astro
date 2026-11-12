@@ -116,7 +116,7 @@ const here = (href: string) => path === href || (href !== '/' && path.startsWith
         <div class="cols">
           <div>
             <strong style="color:var(--text)">SplitNest</strong>
-            <p style="margin:0.3rem 0 0">{SITE.tagline}.<br />MVP prototype. Windows 11 x64.</p>
+            <p style="margin:0.3rem 0 0">{SITE.tagline}.<br />Early release (v0.2). Windows 11 x64.</p>
           </div>
           <ul aria-label="Footer">
             <li><a href={LINKS.repo} rel="noopener">GitHub</a></li>
@@ -126,6 +126,12 @@ const here = (href: string) => path === href || (href !== '/' && path.startsWith
             <li><a href="/docs/">Docs</a></li>
             <li><a href="/changelog/">Changelog</a></li>
             <li><a href="/download/">Download</a></li>
+          </ul>
+          <ul aria-label="Feedback">
+            <li><a href={LINKS.bugReport} rel="noopener">Report a bug</a></li>
+            <li><a href={LINKS.featureRequest} rel="noopener">Request a feature</a></li>
+            <li><a href={LINKS.discussions} rel="noopener">Discussions</a></li>
+            <li><a href={LINKS.security} rel="noopener">Report a security issue</a></li>
           </ul>
         </div>
         <p class="legal">

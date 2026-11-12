@@ -1,8 +1,8 @@
 # Code signing policy
 
-**Status: SplitNest's Windows releases are not code signed yet.** The project intends to apply to the
-[SignPath Foundation](https://signpath.org) for free code signing for open-source projects. Until an
-application is approved and this notice is updated, every SplitNest release is unsigned, and Windows
+**Status: SplitNest's Windows releases are not code signed yet.** The project has applied to the
+[SignPath Foundation](https://signpath.org) for free code signing for open-source projects (submitted
+2026-11-12, pending review). Until the application is approved and this notice is updated, every SplitNest release is unsigned, and Windows
 SmartScreen may warn about it (see [Download](https://splitnest.dev/download/)).
 
 Once approved, Windows releases will carry this statement:

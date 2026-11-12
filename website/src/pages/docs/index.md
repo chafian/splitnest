@@ -7,7 +7,7 @@ path: /docs/
 
 SplitNest is a Windows terminal workspace built for AI coding agents. This is the reference for everything it does. It is adapted from the [user guide](https://github.com/chafian/splitnest/blob/main/docs/USER_GUIDE.md) in the repository, which is the source of truth if the two ever differ.
 
-SplitNest is an **MVP prototype**: Windows 11 x64 only, with unsigned builds. See [troubleshooting and known limitations](/docs/troubleshooting/).
+SplitNest is an **early release (v0.2)**: Windows 11 x64 only, and the installer is not code signed yet. See [troubleshooting and known limitations](/docs/troubleshooting/).
 
 ## Where to start
 

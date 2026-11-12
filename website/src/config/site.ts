@@ -1,7 +1,7 @@
 /**
  * Single source for site-wide constants and download URLs.
- * The release asset names are provisional until the installer work is verified:
- * change them here and nowhere else.
+ * Release asset names are fixed by the release workflow (scripts/release/collect-assets.mjs):
+ * change them there and here together.
  */
 export const SITE = {
   name: 'SplitNest',
@@ -37,6 +37,10 @@ export const LINKS = {
   testing: `${SITE.repo}/blob/main/docs/TESTING.md`,
   thirdParty: `${SITE.repo}/blob/main/THIRD_PARTY_LICENSES.md`,
   issues: `${SITE.repo}/issues`,
+  bugReport: `${SITE.repo}/issues/new?template=bug_report.yml`,
+  featureRequest: `${SITE.repo}/issues/new?template=feature_request.yml`,
+  discussions: `${SITE.repo}/discussions`,
+  security: `${SITE.repo}/security/policy`,
   githubPrivacy: 'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement',
 } as const;
 

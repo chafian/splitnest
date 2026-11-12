@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/chafian/splitnest/discussions
+    about: Ask a question, share how you use SplitNest, or discuss an idea before opening an issue.
+  - name: Report a security vulnerability
+    url: https://github.com/chafian/splitnest/security/advisories/new
+    about: Please report security problems privately, not as a public issue.
+  - name: Documentation
+    url: https://splitnest.dev/docs/
+    about: Getting started, shortcuts, troubleshooting and known limitations.

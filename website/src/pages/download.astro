@@ -46,7 +46,7 @@ const faqLd = {
   <div class="narrow page-head">
     <h1>Download SplitNest</h1>
     <p class="lead">
-      {version ? `Latest release: v${version}. ` : ''}Free and open source (MIT). Windows 11 x64. This is an MVP prototype and the builds are unsigned.
+      {version ? `Latest release: v${version}. ` : ''}Free and open source (MIT). Windows 11 x64. This is an early release, and the installer is not code signed yet (see below).
     </p>
   </div>
   <div class="wrap prose">
@@ -93,7 +93,7 @@ const faqLd = {
           SplitNest builds are <strong>not code-signed</strong>, so Windows SmartScreen may show an "unrecognized app" prompt. Choose <strong>More info → Run anyway</strong> only if you built it yourself or trust where it came from. <strong>Do not turn off Windows security features</strong> to run it.
         </p>
       </div>
-      <p>To check that what you downloaded is what was published, verify its checksum, as described next. How releases are built, and the plan to sign them through the SignPath Foundation, are described in the <a href="/code-signing/">code signing policy</a>.</p>
+      <p>To check that what you downloaded is what was published, verify its checksum, as described next. How releases are built, and the pending application to sign them through the SignPath Foundation, are described in the <a href="/code-signing/">code signing policy</a>.</p>
 
       <h2 id="verify-the-sha-256-checksum">Verify the SHA-256 checksum</h2>
       <ol>
@@ -120,6 +120,9 @@ const faqLd = {
         ))
       }
       <p class="mt">Next: <a href="/docs/getting-started/">getting started</a>, and the <a href="/privacy/">privacy page</a>, which explains what the update check sends.</p>
+
+      <h2 id="problems-and-feedback">Problems and feedback</h2>
+      <p>If the installer or the app does not work for you, please <a href={LINKS.bugReport} rel="noopener">report a bug</a> with your Windows version and the shell and agent you use. Ideas go to <a href={LINKS.featureRequest} rel="noopener">feature requests</a> or <a href={LINKS.discussions} rel="noopener">Discussions</a>. Security problems: report them privately as described in the <a href={LINKS.security} rel="noopener">security policy</a>.</p>
     </div>
   </div>
 </Base>

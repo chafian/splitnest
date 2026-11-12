@@ -95,7 +95,7 @@ export const useCases: UseCase[] = [
       },
       {
         h: 'Good to know',
-        html: `<p>SplitNest is an MVP prototype tested on Windows 11 x64. Scrollback is per pane and lives only in memory. See the <a href="/docs/troubleshooting/">known limitations</a> for the full list.</p>`,
+        html: `<p>SplitNest is an early release (v0.2) tested on Windows 11 x64. Scrollback is per pane and lives only in memory. See the <a href="/docs/troubleshooting/">known limitations</a> for the full list.</p>`,
       },
     ],
   },
