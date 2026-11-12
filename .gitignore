@@ -1,0 +1,11 @@
+node_modules/
+.vite/
+out/
+coverage/
+*.log
+.DS_Store
+test-results/
+# Old location of the E2E screenshots (they show local temp paths)
+docs/screenshots/
+out-next/
+out-*/

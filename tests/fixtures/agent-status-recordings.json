@@ -1,0 +1,90 @@
+{
+  "about": [
+    "OSC 7501 status reports recorded from real agent CLIs in SplitNest (tests/e2e/run-agent-tasks.mjs and the",
+    "first detection check), Windows 11, PowerShell, a temporary folder. `t` is seconds after the tab started,",
+    "taken from the same run's state timeline (reports that did not change the shown state have an estimated t).",
+    "Redacted: the user and temp-folder names inside Claude Code's base64 `msg` were replaced; nothing else changed."
+  ],
+  "claude-code-2.1.316 task (asking permission mode, one approval)": [
+    {
+      "t": 1.0,
+      "body": "?"
+    },
+    {
+      "t": 1.9,
+      "body": "state=idle:app=claude-code"
+    },
+    {
+      "t": 2.5,
+      "body": "state=working:app=claude-code"
+    },
+    {
+      "t": 19.9,
+      "body": "state=blocked:app=claude-code:kind=permission:msg=YXBwcm92ZSBXcml0ZTogQzpcVXNlcnNcbWVcQXBwRGF0YVxMb2NhbFxUZW1wXHR3LXRhc2stWFhYWFhYXGNsYXVkZS10YXNrXGhlbGxvLnR4dA=="
+    },
+    {
+      "t": 21.1,
+      "body": "state=working:app=claude-code"
+    },
+    {
+      "t": 22.9,
+      "body": "state=done:app=claude-code"
+    },
+    {
+      "t": 23.9,
+      "body": "state=clear"
+    }
+  ],
+  "codex-0.166.0 task (on-request approvals, one approval)": [
+    {
+      "t": 1.8,
+      "body": "state=idle:app=codex"
+    },
+    {
+      "t": 2.5,
+      "body": "state=working:app=codex"
+    },
+    {
+      "t": 3.0,
+      "body": "state=idle:app=codex"
+    },
+    {
+      "t": 3.5,
+      "body": "state=working:app=codex"
+    },
+    {
+      "t": 7.7,
+      "body": "state=blocked:app=codex:kind=permission"
+    },
+    {
+      "t": 8.9,
+      "body": "state=working:app=codex"
+    },
+    {
+      "t": 11.5,
+      "body": "state=done:app=codex"
+    },
+    {
+      "t": 12.3,
+      "body": "state=idle:app=codex"
+    },
+    {
+      "t": 14.0,
+      "body": "state=clear"
+    }
+  ],
+  "codex-0.166.0 startup (no prompt)": [
+    {
+      "t": 1.7,
+      "body": "state=idle:app=codex"
+    },
+    {
+      "t": 2.2,
+      "body": "state=working:app=codex"
+    },
+    {
+      "t": 3.0,
+      "body": "state=idle:app=codex"
+    }
+  ]
+}

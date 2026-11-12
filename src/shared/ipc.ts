@@ -1,0 +1,143 @@
+import type { AgentResume } from './agent-resume';
+import type { AgentId } from './agents';
+import type { AgentNotice, NoticeDelivery, NoticeTarget } from './notifications';
+import type {
+  AppInfo,
+  CreateSessionRequest,
+  CreateSessionResult,
+  FileChangedEvent,
+  GitStatus,
+  ListDirectoryResult,
+  ReadFileResult,
+  StatFileResult,
+  WriteFileRequest,
+  WriteFileResult,
+  LoadStateResult,
+  PersistedState,
+  Result,
+  SessionEvent,
+  ShellDiscovery,
+} from './types';
+
+/** IPC channel names. Each one has a single, specific purpose. */
+export const IPC = {
+  loadState: 'tw:state:load',
+  saveState: 'tw:state:save',
+  pickFolder: 'tw:dialog:pick-folder',
+  checkFolder: 'tw:folder:check',
+  listShells: 'tw:shells:list',
+  createSession: 'tw:session:create',
+  closeSession: 'tw:session:close',
+  sessionInput: 'tw:session:input',
+  sessionResize: 'tw:session:resize',
+  sessionAck: 'tw:session:ack',
+  sessionEvent: 'tw:session:event',
+  clipboardRead: 'tw:clipboard:read',
+  clipboardWrite: 'tw:clipboard:write',
+  openExternal: 'tw:app:open-external',
+  appInfo: 'tw:app:info',
+  revealStateFile: 'tw:app:reveal-state-file',
+  listDirectory: 'tw:fs:list-directory',
+  revealPath: 'tw:fs:reveal-path',
+  readFile: 'tw:fs:read-file',
+  statFile: 'tw:fs:stat-file',
+  writeFile: 'tw:fs:write-file',
+  unsavedEditors: 'tw:editor:unsaved',
+  watchFile: 'tw:fs:watch-file',
+  fileChanged: 'tw:fs:file-changed',
+  saveAllRequest: 'tw:app:save-all-request',
+  saveAllResult: 'tw:app:save-all-result',
+  quitAborted: 'tw:app:quit-aborted',
+  sessionAgent: 'tw:session:agent',
+  sessionResume: 'tw:session:resume',
+  agentPoke: 'tw:session:agent-poke',
+  windowTheme: 'tw:window:theme',
+  gitRefresh: 'tw:git:refresh',
+  gitStatuses: 'tw:git:statuses',
+  gitStatus: 'tw:git:status',
+  notifyAgent: 'tw:notify:agent',
+  notifyWithdraw: 'tw:notify:withdraw',
+  notifyActivate: 'tw:notify:activate',
+  notifyTest: 'tw:notify:test',
+  windowFocus: 'tw:window:focus',
+} as const;
+
+export interface PickFolderResult {
+  path: string;
+  suggestedName: string;
+}
+
+/** The complete API the renderer can use, exposed as `window.appApi`. */
+export interface AppApi {
+  /** Windows build number (e.g. 26300), or 0 if unknown. xterm needs it to treat rows as ConPTY does. */
+  readonly windowsBuild: number;
+  loadState(): Promise<LoadStateResult>;
+  saveState(state: PersistedState): Promise<Result<object>>;
+  pickFolder(): Promise<PickFolderResult | null>;
+  checkFolder(workspaceId: string): Promise<{ exists: boolean }>;
+  listShells(refresh?: boolean): Promise<ShellDiscovery>;
+  createSession(request: CreateSessionRequest): Promise<CreateSessionResult>;
+  closeSession(sessionId: string): Promise<void>;
+  writeSession(sessionId: string, data: string): void;
+  resizeSession(sessionId: string, cols: number, rows: number): void;
+  ackSession(sessionId: string, chars: number): void;
+  onSessionEvent(listener: (event: SessionEvent) => void): () => void;
+  readClipboard(): Promise<string>;
+  writeClipboard(text: string): Promise<void>;
+  openExternal(url: string): Promise<boolean>;
+  getAppInfo(): Promise<AppInfo>;
+  revealStateFile(): Promise<void>;
+  /** Lists a folder inside a workspace (`relativePath` uses `/`, '' = workspace root). */
+  listDirectory(workspaceId: string, relativePath: string): Promise<ListDirectoryResult>;
+  /** Shows a file or folder inside a workspace in Windows File Explorer. */
+  revealPath(workspaceId: string, relativePath: string): Promise<boolean>;
+  /** Reads an existing text file inside a workspace for the editor. */
+  readFile(workspaceId: string, relativePath: string): Promise<ReadFileResult>;
+  statFile(workspaceId: string, relativePath: string): Promise<StatFileResult>;
+  /** Saves an existing file inside a workspace (explicit user save only). */
+  writeFile(request: WriteFileRequest): Promise<WriteFileResult>;
+  /** Tells main how many editor tabs have unsaved changes (for the quit confirmation). */
+  setUnsavedEditors(count: number): void;
+  /** Starts (`true`) or stops watching an open file for changes made outside the editor. */
+  watchFile(workspaceId: string, relativePath: string, on: boolean): void;
+  onFileChanged(listener: (event: FileChangedEvent) => void): () => void;
+  /**
+   * Main asks the page to save every dirty editor before quitting; the
+   * handler's result is sent back. Only one handler is kept.
+   */
+  onSaveAllRequest(handler: () => Promise<{ ok: boolean; failed: number }>): void;
+  /** Quitting was stopped because saving failed. */
+  onQuitAborted(listener: (result: { ok: boolean; failed: number }) => void): () => void;
+  /** Main detected (or lost) an AI agent CLI among a session's processes (PowerShell sessions only). */
+  onSessionAgent(listener: (event: { sessionId: string; agent: AgentId | null }) => void): () => void;
+  /** The conversation the agent in a session runs (null: the agent exited), for resuming after a restart. */
+  onSessionResume(listener: (event: { sessionId: string; resume: AgentResume | null }) => void): () => void;
+  /** Something changed in a session (e.g. its title); main looks for agent processes sooner. */
+  pokeAgentScan(sessionId: string): void;
+  /** Appearance: window background and title bar (native caption buttons) colours, `#rrggbb`. */
+  setWindowTheme(colors: { background: string; titleBar: string; symbol: string }): void;
+  /** The user is looking at this workspace (selected it, came back to the window): check Git now. */
+  refreshGit(workspaceId: string): void;
+  /** Git state of every workspace checked so far (workspaces without one are absent). */
+  getGitStatuses(): Promise<Record<string, GitStatus>>;
+  /** A workspace's Git state changed; `status` is null when it is not (or no longer) shown. */
+  onGitStatus(listener: (event: { workspaceId: string; status: GitStatus | null }) => void): () => void;
+  /**
+   * An agent event for a tab the user is not looking at, while SplitNest is in the background.
+   * Main writes the notification text itself (see shared/notifications.ts); `in-app` means the
+   * window is focused after all (or Windows notifications are off), so the page shows its notice.
+   */
+  notifyAgent(notice: AgentNotice): Promise<NoticeDelivery>;
+  /** The user has seen these tabs (or their agents moved on): remove their notifications. No ids = all. */
+  withdrawNotifications(tabIds?: string[]): void;
+  /** A notification was clicked: show this tab (or Settings › Notifications for the test notification). */
+  onNotificationActivate(listener: (target: NoticeTarget) => void): () => void;
+  /** Settings › Notifications: sends a test Windows notification; resolves with what Windows reported. */
+  testNotification(): Promise<{ ok: boolean; detail: string }>;
+  /**
+   * The window is in front and not minimized (main's view). The page's own `document.hasFocus()`
+   * stays true while the window is minimized or another program is in front, so it can't be used.
+   */
+  windowFocused(): boolean;
+  onWindowFocus(listener: (focused: boolean) => void): () => void;
+}

@@ -1,0 +1,103 @@
+/* Design tokens: "SplitNest theme" — graphite and silver from the logo's white ribbon.
+   The logo blue (Nest Blue) is kept for small details only: focus and the cursor. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces: Base, Sidebar, Pane, Raised, Hover */
+  --bg-app: #0c0c0e;
+  --bg-sidebar: #111113;
+  --bg-surface: #151517;
+  --bg-elevated: #1d1d21;
+  --bg-hover: #232328;
+  --bg-active: #1d1d21;
+  --bg-terminal: #0c0c0e;
+  --bg-pane-bar-active: #19191c;
+  --bg-overlay: color-mix(in srgb, var(--bg-app) 94%, transparent);
+  --backdrop: rgba(4, 4, 6, 0.6);
+
+  --border: #26262b;
+  --border-strong: #36363d;
+
+  --text: #ededf2;
+  --text-muted: #8e8e99;
+  /* Not in the theme sheet: a step below Muted that stays >= 4.5:1 on Pane and Raised at 12px. */
+  --text-faint: #85858f;
+  --text-on-accent: #0c0c0e;
+  --text-on-danger: #0c0c0e;
+
+  /* Silver: main buttons, active tab, selected things. */
+  --accent: #dbddf0;
+  --accent-strong: #ffffff;
+
+  /* Nest Blue: focus ring and cursor only. Blue Text: links. */
+  --focus: #2f6bff;
+  --link: #7fa6ff;
+  --link-hover: #a8c3ff;
+
+  --success: #5ee0a0;
+  --warning: #f5d06b;
+  --danger: #ff7a85;
+  --danger-hover: #ff9aa2;
+
+  /* Derived from the colours above, so every theme (Settings › Appearance) gets them. */
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 45%, transparent);
+  --focus-soft: color-mix(in srgb, var(--focus) 10%, transparent);
+  --success-soft: color-mix(in srgb, var(--success) 13%, var(--bg-app));
+  --warning-soft: color-mix(in srgb, var(--warning) 13%, var(--bg-app));
+  --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
+
+  /* Editor and syntax colours (from the theme's terminal palette). */
+  --ed-comment: #6e6e7a;
+  --ed-gutter: #5e5e69;
+  --ed-gutter-active: #b4b4be;
+  --ed-active-line: #111113;
+  --ed-selection: color-mix(in srgb, var(--accent) 18%, var(--bg-terminal));
+  --ed-match: color-mix(in srgb, var(--accent) 12%, var(--bg-terminal));
+  --ed-match-current: color-mix(in srgb, var(--focus) 35%, var(--bg-terminal));
+  --syn-keyword: #b49cff;
+  --syn-string: #5ee0a0;
+  --syn-number: #ff9ea6;
+  --syn-function: #6ea0ff;
+  --syn-type: #f5d06b;
+  --syn-property: #5cd5f5;
+  --syn-tag: #ff7a85;
+  --syn-operator: #8ae2f8;
+
+  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+  /* UI type only. Terminal text uses the font size setting (xterm options). */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 22px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  --sidebar-width: 236px;
+  --sidebar-collapsed-width: 52px;
+  --toolbar-height: 44px;
+  /* Must match TITLE_BAR_HEIGHT and titleBarOverlay.color in src/main/main.ts. */
+  --titlebar-height: 40px;
+  --bg-titlebar: #111113;
+  --pane-header-height: 30px;
+  --pane-bar-height: 34px;
+  /* "Focused pane": Nest Blue border with a soft blue halo. */
+  --focus-pane-line: var(--focus);
+  --active-pane-line: color-mix(in srgb, var(--accent) 16%, transparent);
+  --divider-size: 6px;
+
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border-strong);
+  --focus-ring: 0 0 0 2px var(--focus);
+  --transition: 120ms ease;
+}

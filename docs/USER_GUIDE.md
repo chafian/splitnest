@@ -1,0 +1,181 @@
+# SplitNest user guide
+
+The detailed reference for everything SplitNest does. For the overview, screenshots and getting started, see the [README](../README.md).
+
+Contents: [Using it](#using-it) · [Keyboard shortcuts](#keyboard-shortcuts) · [Saved state and restoration](#saved-state-and-restoration) · [Session cleanup policy](#session-cleanup-policy) · [Troubleshooting](#troubleshooting) · [Known limitations](#known-limitations)
+
+## Using it
+
+- **Workspaces** (left sidebar): one project folder each. **New workspace from folder…** is the folder button at the top of the sidebar (**Ctrl+Shift+O**). The current workspace has a mint bar and bold name. Rename and remove workspaces with the buttons that appear on hover. **Removing a workspace never deletes files**; it only removes the entry and ends its sessions after confirmation.
+- **Sidebars**: the workspace sidebar and the file explorer are independent.
+  - **Collapse / expand the workspace sidebar** to an icon rail with **Ctrl+Shift+B** or the first title-bar button. **Show / hide the explorer** with **Ctrl+Shift+E** or the second.
+  - **Resize** either one by dragging its right edge, or focus the edge with Tab and use ←/→ (Shift = larger steps). Widths are saved and come back after a restart or after collapsing.
+  - On a small window the panels are narrowed for display (explorer first) so the terminals keep at least 360 px; your saved widths are restored when the window grows.
+  - **Focus terminals** (**Ctrl+Shift+Enter**, the third title-bar button, or the palette) hides both sidebars. Using it again, or pressing either sidebar shortcut, restores them exactly as they were. The title-bar button stays highlighted while focus mode is on.
+- **Terminals**: **New terminal** in the title bar (or **Ctrl+Shift+T**) opens a terminal tab **in the current pane** with the default shell; its arrow chooses another shell (PowerShell 7, Windows PowerShell, or a WSL distribution). The **+** in a pane’s tab bar does the same for that pane, using that pane’s current shell.
+- **Title bar**: SplitNest draws its own title bar.
+  - **Left:** sidebar, file-explorer and focus-mode toggles, and the current workspace’s name and folder.
+  - **Center:** a search box that opens the command palette.
+  - **Right:** **New terminal ▾**, **Split left/right** and **Split top/bottom** (both act on the current pane). Every icon button has a tooltip with its shortcut.
+  - **Window buttons:** minimize, maximize and close are still the native Windows buttons (Electron’s title-bar overlay), so snap layouts, double-click to maximize and dragging all work as usual.
+- **Tabs**: every split pane has its own tab bar, so it can hold several terminals. Switch with **Ctrl+Tab** / **Ctrl+Shift+Tab** or the arrow keys on a focused tab bar. Close with the tab’s **×**, middle-click, **Delete** on a focused tab, or **Ctrl+Shift+W** (closing the last tab closes the pane). **Drag a tab** to reorder it or drop it on another pane’s tab bar to move it; its shell keeps running. Background tabs keep running too.
+  - A tab shows a status dot, its name, and a state label when not running (*Not started*, *Starting*, *Exited (code)*, *Failed*). The tooltip has the shell, state, starting folder (it does not follow later `cd` commands) and the title the shell last set, if any.
+  - **Rename a terminal** (for example *Backend*, *Tests*, *Logs*) by double-clicking its tab, pressing **F2** on a focused tab, right-click → **Rename terminal…**, or the palette’s **Rename terminal…**. Enter saves, Escape cancels, and an empty name goes back to the shell’s name. Named tabs also show the shell in smaller text. Titles set by the shell never replace a name you chose. Long names are shortened on the tab; the full name is in the tooltip.
+  - Right-click a tab (or **Shift+F10** on it) for rename, start/restart, split with this shell, and close.
+- **Panes**: each pane header has **+** (new terminal here), **Split left/right**, **Split top/bottom** and **⋯** (find, start/restart, rename, close terminal, close pane). When there are several panes, the current pane has a faint mint outline and a lighter header; while it has keyboard focus the outline is solid mint. Clicking a terminal or **Ctrl+Alt+Arrow** moves focus.
+- **Short prompts** (Settings → *Short folder names in prompts*, on by default): long folders no longer wrap the prompt.
+  - **PowerShell** shows `PS car-rental>` (or `PS ~>` at home) instead of the full path. This applies only when PowerShell's built-in prompt is active after your profile ran; a prompt from `$PROFILE`, oh-my-posh or Starship is left alone. The setup line is not added to PSReadLine's up-arrow history, but `Get-History` lists it as entry 1.
+  - **WSL bash** gets `PROMPT_DIRTRIM=1` (passed through `WSLENV`), so the usual `\w` prompt shows `user@host:.../car-rental$`. A `PROMPT_DIRTRIM` set in your `~/.bashrc` wins, and prompts without `\w` (zsh, custom PS1) are unaffected.
+  - **Only the prompt changes.** Terminal output is never rewritten or filtered. `pwd`, `Get-Location`, error messages and copied output keep full paths, and your profile files (`$PROFILE`, `~/.bashrc`) are not modified. The full path is also in the tab tooltip.
+  - It applies per session: changing the setting affects shells started afterwards, and turning it off gives the normal full-path prompt again.
+- **Maximise pane** (**Ctrl+Shift+M**, the ⤢ button in a pane's header, its ⋯ menu, or the palette): the pane temporarily fills the terminal area. The other panes stay open underneath, so their shells keep running and their editors keep unsaved text. **Restore layout** (same shortcut or button) brings back the exact split sizes and selected tabs. Moving focus to another pane (Ctrl+Alt+arrows, opening a file beside it) or closing the pane also restores the layout.
+- **AI agents in terminals** (Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor Agent, Aider, OpenCode, Qwen Code, Amp): when one runs in a tab, the tab shows its logo instead of the status dot, its name, and what it is doing.
+  - **States:** *Working* (mint, pulsing badge), *Needs you* (amber badge, pill and underline, e.g. waiting for a permission or an answer), *Done*, *Error*. Idle shows no pill. The sidebar sums it up per workspace ("1 agent needs you · 2 working"), and the window title gets a count, e.g. `(1) car-rental — SplitNest`, so it shows in the taskbar.
+  - **Reported vs. estimated:** a state the agent reported is shown solid. A guess (for agents that don't report) is shown dashed with a "?" (*Needs you?*, *Working?*), reads "may need you" in the sidebar, isn't counted in the window title, and the tooltip says what it is based on. Once an agent has reported, nothing about it is guessed any more for that run.
+  - **Seeing vs. answering:** opening or typing into a tab clears its *notification* (a bell) and a *Done*/*Error* you have now seen. It never clears what the agent is waiting for: *Needs permission* stays until the agent itself reports that it continues.
+  - **When the agent exits** (its process ends, the shell's prompt or title comes back, or the session ends), its logo, state and session title all go, so the next program in that terminal starts clean.
+  - **Session title:** if the agent reports one, the tab shows it (e.g. *Fix login redirect · Claude Code*); a name you gave the tab still wins. Details (agent, state, reason, message) are in the tooltip.
+  - **How it knows:**
+    1. **Program Status Protocol (OSC 7501).** The agent reports its own state. SplitNest answers the protocol's feature query, which Claude Code waits for before reporting; Codex reports on its own. Checked with Claude Code 2.1.316 and Codex 0.166.0 on this machine.
+    2. **Process detection** (PowerShell tabs only): a hidden helper looks for the agent's process under the tab's shell, every 3 s while something changes, otherwise every 12 s. Command lines never leave the main process and are not logged.
+    3. **Fallbacks** for an identified agent that doesn't report (shown as estimated, see above): a terminal bell means *Needs you?*; a spinner in the title or recent output means *Working?*. Output, bells or titles alone never make a program count as an agent.
+  - **Limits:** WSL tabs can't use process detection (Linux processes aren't visible to Windows), so they rely on the agent's own reports or Claude Code's exact title ("✳ Claude Code"). Claude Code's first-run questions (e.g. "Claude in Chrome extension detected") are not reported by Claude, so they show as idle. No agent settings or hooks are changed. Logos come from [developer-icons](https://github.com/xandemon/developer-icons) (MIT); they are trademarks of their owners.
+- **Agent notifications** (Settings → Notifications, on by default): when an agent *needs you* (permission, a question, sign-in, or anything else it waits for), *finishes*, or *stops with an error*.
+  - **Where:** nothing for the tab you are looking at. With SplitNest in front but another tab, workspace or Settings shown, a notice appears at the bottom right with a **Show** button. With SplitNest minimized or behind another program, a Windows notification appears; clicking it, also later from Notification Center, brings SplitNest back and shows that exact tab.
+  - **Taskbar:** for *needs you*, the taskbar button also flashes, and a small amber dot stays on it until you have seen the tab.
+  - **What it says:** SplitNest's own words, e.g. *Claude Code needs permission*, then the workspace and the name you gave the tab (*car-rental · Backend*), else the agent's name. The agent's session title and message can contain your prompt, so they are left out unless you turn on *Include what the agent wrote*.
+  - **When:** a notice goes away when the agent continues or you open the tab. *Finished* comes from the agent's own report (Claude Code and Codex both report it at the end of a turn) and is skipped if the agent starts working again within 1.5 s. Estimated states (a bell) don't notify unless you turn that on. More than three Windows notifications within 10 s become one summary. SplitNest removes its notifications from Notification Center when it quits.
+  - **Spoofing:** only agents SplitNest found running in the tab can raise a Windows notification (PowerShell tabs); a program that merely prints a status report naming an agent can't. WSL tabs can't be checked that way, so there the agent's report is enough.
+  - **Start menu:** Windows needs a Start menu entry to show an app's notifications, so the first notification adds *SplitNest* to the Start menu (it opens the copy of SplitNest that last showed a notification). Windows doesn't display the very notification that registers an app, so SplitNest shows that first one a second time 3 seconds later; you see it once, slightly late. *Send a test notification* in Settings shows whether Windows accepts them; if no banner appears, check Do Not Disturb and SplitNest's entry in Windows Settings → System → Notifications.
+- **Agent inbox** (the bell in the title bar, **Ctrl+Shift+A**): every agent that is waiting for you, in all workspaces. The bell shows how many (amber when one needs you).
+  - **Listed:** an agent that *needs you* (permission, a question, sign-in), from the moment it waits until it continues or exits; opening its tab doesn't remove it, because it is still blocked. A *finished* turn or an *error*, until you look at that tab or the agent works again.
+  - **Order:** agents that need you first, then errors, then finished turns; within each, the one that has waited longest comes first. Each row shows the agent, what it needs, the workspace and tab, and how long it has waited.
+  - **Ctrl+Shift+U** goes to the next waiting agent, also from Settings or another workspace; pressing it again walks through all of them. Clicking a row does the same for that one. Both are in the command palette too, together with one entry per waiting agent.
+  - **Same rules as notifications:** the kinds you turned off in Settings → Notifications are not listed, and what the agent wrote appears only with *Include what the agent wrote*. Nothing is saved: the inbox is what is waiting right now, not a history.
+- **Resume agent conversations** (Claude Code and Codex): if an agent was running in a terminal when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex) next to *Start PowerShell only*. The restore notice offers **Resume agents (N)**.
+  - **What it does:** starts a new PowerShell in the folder the agent ran in and types `claude --resume <id>` or `codex resume <id>` at the prompt, visibly. The text above the button says exactly that before you click. Nothing runs until you click.
+  - **Which conversation:** Claude Code's own record for the agent process in that tab, so two agents in one folder each get their own; it follows `/clear`. For Codex, the conversation started in that folder after the agent started, or the id the tab itself resumed. If SplitNest can't be sure, Resume opens the agent's own list of earlier conversations instead of guessing.
+  - **Saved:** the agent, the conversation id and the folder, with the tab; never conversation text. Also the conversation's title (Claude Code's own name for it, or the session title an agent reports), shown above the button. That is on by default (Settings → Workspaces → *Show conversation titles for Resume*); a title can contain words from your prompt, and turning the setting off removes the saved ones. It is kept through a quit or a crash of SplitNest and removed when the agent exits on its own, or when you start a plain shell in that terminal instead (*Start PowerShell only*, *Start all shells*, restart).
+  - **No setup:** no hooks or agent settings are installed or changed. If the agent doesn't start within 25 s, the terminal says so and stays usable.
+  - **Also:** the command palette has *Resume <agent> in this terminal* and *Resume agents in this workspace*. **Settings → Workspaces → Resume agents automatically when the app opens** (off by default) resumes them without a click, each workspace the first time it is shown. With *Start fresh shells automatically* on, a terminal where an agent was running still waits with its Resume button instead of starting a plain shell.
+  - **WSL tabs:** Windows can't see their processes, so SplitNest knows only that Claude Code or Codex ran there (from the agent's own status reports), not which conversation. Resume there starts the shell in the workspace folder and opens the agent's own list (`claude --resume`, `codex resume`).
+  - **Limits:**
+    - The agents' session files are undocumented; if a future version changes them, Resume falls back to the agent's list.
+    - Codex's `/new` is not followed: the saved conversation stays the one the tab started with.
+    - If the agent ran in a folder outside the workspace folder, Resume is refused and the terminal offers a plain shell.
+- **Workspace counts** in the sidebar show running shells only (*1 shell running*, *6 shells running*), including background tabs. Editor tabs and shells that are not started, starting, failed or exited are not counted.
+- **Git status** in the sidebar (Settings → Workspaces, on by default): each workspace folder that is in a Git repository shows its branch (or *detached at 1a2b3c4*). A clean workspace shows only that.
+  - **+added −removed** appears only when lines were added or removed since the last commit (staged and unstaged together, tracked files). Large numbers are shortened (*+8.5M*); the tooltip has every number, the upstream branch and how far ahead or behind it is.
+  - A **small dot** means files changed without changed lines: a rename, a mode change, a binary file, or untracked files (the tooltip then says *Untracked files present*; their lines are not counted). The tooltip says which.
+  - **When it updates:** when you select a workspace, come back to SplitNest from another program, or save a file in the editor (several within a second give one check right after that second); and after terminal output in that workspace has settled (a `git switch` shows within about a second). Output that never stops, like a development server's log, causes a check at most every 30 seconds, plus one when it stops. Changes made elsewhere while you stay in SplitNest show on the next of these.
+  - **Read-only:** SplitNest never changes the repository (no index refresh, no locks). Git's file-system monitor, external diff and text-conversion programs are switched off for these checks. If the repository's own Git configuration names a filter program (which Git would start to compare files), only the branch is shown and the tooltip says that changes were not checked; filters you set up yourself (e.g. Git LFS) work as usual. Submodules are not looked into (Git would check them with their own configuration), so changes inside a submodule are not counted. Git otherwise uses your configuration, and repositories owned by another user are refused unless you allowed them (`safe.directory`).
+  - **Which repository:** Git looks in the workspace folder and upwards, but not into your user folder or a drive root. A project folder that is not a repository therefore shows nothing even if your user folder is one (some people keep dotfiles there); the user folder itself, as a workspace, shows its repository.
+  - **WSL:** what counts is the workspace folder, not the terminal. A folder on a Windows drive (`C:\…`) shows Git status also when its terminals run WSL. Workspaces whose folder is inside WSL (`\\wsl$\…` or `\\wsl.localhost\…`) show none in this version.
+  - Needs Git for Windows (`git.exe` on PATH); without it nothing is shown.
+- **Tab labels**: a renamed terminal shows *Project B · PowerShell*, with the shell in smaller text; unnamed tabs show just the shell. In narrow panes the shell part is dropped first; the full label is in the tooltip and accessible name.
+- **Splits**: drag dividers to resize, or focus a divider with Tab and use the arrow keys (Shift = larger steps).
+- **WSL panes** start in the Linux path that `wslpath` reports for the workspace folder (for example `/mnt/c/...`). If the folder can’t be mapped, the pane explains why and offers an explicit **Start in home directory instead** button. It never silently starts somewhere else.
+- **File explorer** (left of the terminals, **Ctrl+Shift+E** or the toolbar button): a tree of the workspace folder with [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme) file icons (MIT).
+  - **Compact folders** (Settings → File explorer, on by default): a folder whose only entry is another folder is shown together with it as one row, such as `src/main/java/com/example`, as soon as the tree loads. Expanding it opens the whole chain.
+    - To know this, SplitNest lists the folders inside each folder you can see, one level at a time: at most 48 per listing, never through links or junctions, never a recursive scan.
+    - Results are cached and re-checked on refresh or when the window regains focus, so a new file or folder breaks a chain then. A folder that can't be read just ends the chain. Only the display changes: nothing on disk is renamed or moved. Right-click a single part (e.g. `main`) to copy, reveal or insert *that* folder's path. Long names are cut off with `…`; hover for the full path.
+  - Arrow keys navigate. **Click a file or press Enter** to open it in the editor.
+  - **Ctrl+Enter** inserts the file’s quoted path at the terminal prompt without running it.
+  - Right-click (or Shift+F10) offers *Open in editor*, *Insert path into terminal*, *Copy path*, *Copy relative path* and *Reveal in File Explorer*.
+  - The tree never runs, renames, moves or deletes files. There is no file watcher; open folders refresh when the window regains focus or via the refresh button. Drag its right edge to resize.
+- **Settings** (⚙ at the bottom of the sidebar, **Ctrl+,**, or the palette) opens as a page, not a dialog. A *Settings* row appears under the workspaces and the main area shows a section list (Appearance, Shells, Terminal, File explorer, Workspaces, About) with one row per setting.
+  - **Appearance:** five themes: **Graphite** (default), **Silver Light**, **Midnight Blue**, **Ember** and **Lagoon**. They change the whole app instantly: surfaces, text, buttons, focus, terminal colours, the editor's syntax colours and the window's title bar.
+  - **Mode:** *Dark* uses the chosen dark theme, *Light* uses Silver Light, and *Match system* follows Windows (Silver Light by day, your dark theme at night) and switches live when Windows does. *Reset to default* returns to Graphite. Terminals keep running behind it. Click a workspace to go back; the Settings row stays until you close it with its ✕ (or *Close settings* in the palette). New terminal, split and other workspace commands also go back to the workspace.
+- **File editor** (built on [CodeMirror 6](https://codemirror.net/), MIT): a file opens as a tab in a pane beside your terminals, splitting the largest pane. More files join that pane's tabs, and opening a file that's already open just shows its tab. Editor tabs can be dragged between panes like terminals.
+  - Syntax highlighting for TypeScript/JavaScript, JSON, CSS, HTML, Markdown, Python, Java, XML, YAML, SQL, shell, PowerShell, Dockerfile, properties/INI/.env, TOML, Groovy/Gradle, Kotlin, C/C++/C#, Go, Rust, Ruby and Lua. Other files open as plain text.
+  - Line numbers, folding, bracket matching and auto-closing, multiple cursors, word completion, and find/replace (**Ctrl+F**, or **Ctrl+Shift+F** / the ⋯ menu).
+  - **Saving is always explicit: Ctrl+S** (only inside the editor; terminals still receive Ctrl+S). There is no auto-save.
+  - Unsaved tabs show a dot. The status bar says *Unsaved*, *Saving…*, *Saved* (only right after a successful write) or *Save failed · edits kept*. Read-only files say *Read-only* and offer no saving.
+  - Closing an unsaved tab offers **Save and close / Discard / Cancel**; closing its pane or workspace offers to save all of them first. If a save fails, nothing closes and your text stays in the editor.
+  - **Quitting** (closing the window, Alt+F4, or the app being asked to quit) with unsaved files offers **Save all and quit / Discard and quit / Cancel**. Running shells are mentioned in the same dialog.
+    - Save all waits for every write. If any file can't be written, or changed on disk and is still unresolved, SplitNest stays open, shows which file, and keeps all edits.
+    - Cancel leaves editors and shells as they were. Repeated close requests while the dialog is open don't open a second one.
+    - This does not protect against the process being killed (Task Manager, a crash) or Windows shutting down without asking apps.
+  - The file's encoding (UTF-8, UTF-8 with BOM, UTF-16 LE) and line endings (LF/CRLF) are kept. A file with mixed line endings is saved with the one it uses most. The status bar shows the line/column, language, encoding and line ending.
+  - **Changes on disk** are noticed while you work: git, formatters, other editors, and commands run in SplitNest's own terminals.
+    - Open files are watched (their folder, so atomic "write a temp file and rename it" saves and delete/re-create are caught), and re-checked when the window regains focus.
+    - An unmodified tab reloads quietly and keeps its cursor and scroll position. A deleted file is reported and its text kept. SplitNest's own saves are not reported as changes.
+  - With unsaved edits you choose: **Keep my edits** (nothing on disk changes), **Reload from disk…** (asks before discarding your edits) or **Overwrite file…** (asks before replacing the other version).
+  - **Every save first checks the file's current content** (a SHA-256 of its bytes, not just its timestamp) against the version you started from. If it changed, the save is refused until you choose; *Keep my edits* does not turn that check off. A program writing to the file in the few milliseconds between this check and the write can still be overwritten: Windows offers no compare-and-swap for in-place writes.
+  - **Limits and safety:** only existing files inside the workspace folder can be opened (up to 5 MB), and new files are never created. Binary files are refused. Files that aren't valid UTF-8/UTF-16, read-only files, and files reached through a link or junction to outside the workspace open **read-only**. File contents are never logged or stored in the app's state; only the open file paths are saved, and the files are re-read from disk after a restart.
+- **Links** in terminal output open in your browser only on **Ctrl+click**, and only for `http`/`https`.
+
+### Keyboard shortcuts
+
+Also listed in the app (**Ctrl+Shift+/**). Plain Ctrl+letter keys always go to the shell.
+
+| Action | Keys |
+|---|---|
+| Command palette | Ctrl+Shift+P |
+| New workspace from folder | Ctrl+Shift+O |
+| New terminal in the current pane | Ctrl+Shift+T |
+| Next / previous terminal in the pane | Ctrl+Tab / Ctrl+Shift+Tab |
+| Split left/right / split top/bottom | Ctrl+Shift+D / Ctrl+Shift+S |
+| Close terminal (last one closes the pane) | Ctrl+Shift+W |
+| Rename terminal (on a focused tab) | F2 |
+| Find in terminal | Ctrl+Shift+F (Enter / Shift+Enter: next / previous, Esc: close) |
+| Start / restart shell | Ctrl+Shift+R |
+| Move focus between panes | Ctrl+Alt+Arrow keys |
+| Next / previous workspace | Ctrl+Shift+PgDn / Ctrl+Shift+PgUp |
+| Collapse / expand workspace sidebar | Ctrl+Shift+B |
+| Show / hide file explorer | Ctrl+Shift+E |
+| Focus terminals (hide / restore both sidebars) | Ctrl+Shift+Enter |
+| Maximise pane / restore layout | Ctrl+Shift+M (see note below) |
+| Font size bigger / smaller / reset | Ctrl+= / Ctrl+− / Ctrl+0 |
+| Agent inbox / next waiting agent | Ctrl+Shift+A / Ctrl+Shift+U |
+| Settings | Ctrl+, |
+| Keyboard shortcut list | Ctrl+Shift+/ |
+| Copy | Ctrl+C **when text is selected** (otherwise Ctrl+C interrupts), or Ctrl+Shift+C |
+| Paste | Ctrl+V or Ctrl+Shift+V; right-click pastes when nothing is selected, copies otherwise |
+
+**Shortcut scope.** App shortcuts are a fixed table in `src/renderer/features/commands/shortcuts.ts`; there is no user configuration yet. They work everywhere in the window, including inside terminals and the editor, so the app takes them before the shell or the editor sees them.
+- **Ctrl+Shift+M** (maximise): none of SplitNest's other shortcuts or the editor's key bindings use it (CodeMirror's only Ctrl+Shift+M is its lint panel, which SplitNest doesn't load). In xterm.js a shell would receive it as plain Ctrl+M (Enter) anyway.
+- **Could still clash:** it is Windows Terminal's default *mark mode* key, and a custom binding in a TUI or shell profile could expect it. This was checked against SplitNest's own tables, not against every possible user binding.
+- Ctrl+M, Ctrl+Alt+M and Alt+Shift+M still go to the shell.
+
+## Saved state and restoration
+
+- State file: `%APPDATA%\SplitNest\workspace-state.json` (see **Settings → About**, which can also open it in Explorer). Log file: `%APPDATA%\SplitNest\logs\splitnest.log`.
+- **Saved:** a schema version, workspace IDs, names and folders, the pane layout and split proportions, each terminal’s shell profile and optional custom name, the agent conversation running in it (agent, conversation id, folder, and its title unless turned off; for Resume), the active workspace and pane, and appearance settings (font size, scrollback, sidebar collapsed/width, explorer visibility/width, focus mode, default shell, restore behaviour). Files written before custom names and sidebar widths existed load unchanged with defaults.
+- **Never saved:** terminal output, command history, environment variables, credentials, or the contents of files open in the editor (only their workspace-relative paths). The log records lifecycle events and errors only, never terminal input or output.
+- Writes are debounced and atomic (temp file + rename). If the file is malformed or from an unsupported version, it is **kept** next to the original as `workspace-state.corrupt-<time>.json` (or `.unsupported-<time>.json`) and the app starts empty with a notice.
+- **Restoring:** by default the layout comes back with nothing running. One notice per restored workspace says *“Layout restored. Start new shells to continue.”*, and each unstarted terminal shows **Ready to start** with a shell selector and a **Start ‹shell›** button.
+  - **Start all shells** starts a *new* shell, with each terminal’s selected shell in its saved folder, for every unstarted terminal of that workspace, background tabs included. Running terminals are left alone. Repeated clicks or an individual Start at the same time never create a second session.
+  - A terminal that fails is listed in the notice with **Retry** and **Show**; the others keep running. The notice disappears when nothing is left to start. **Dismissing** it starts and closes nothing.
+  - Optionally, **Settings → Start fresh shells automatically** starts a new shell in each restored terminal.
+  - Starting a shell runs its normal profile scripts (for example `$PROFILE` or `~/.bashrc`). Previous processes are never resumed and commands are never replayed.
+
+## Session cleanup policy
+
+- **Closing a pane** with a running session asks first, then ends that pane’s shell. On Windows this closes its pseudoconsole, which ends the shell and the processes attached to that console. Other panes are not affected.
+- **Quitting** with running sessions asks first (the app cannot tell whether a shell is idle), then ends all sessions, waiting up to 3 seconds.
+- **WSL**: closing a pane ends only that pane’s `wsl.exe` session. The app never runs `wsl --shutdown` or terminates a distribution.
+- **Not covered:** processes intentionally detached from the console (for example `Start-Process`, `nohup … &`, `setsid`, Windows services, or daemons started by a WSL shell) may keep running after their pane closes. That is by design of those tools.
+
+## Troubleshooting
+
+- **“The terminal backend is unavailable” / panes fail with a node-pty error:** the packaged app must contain `resources\app.asar.unpacked\node_modules\node-pty\prebuilds\win32-x64\` (with `conpty.node`, `conpty\conpty.dll`, `conpty\OpenConsole.exe`). Run `npm run verify:package` to check. In development, delete `node_modules` and run `npm ci` again. The log file records the load error.
+- **WSL is listed as unavailable:** run `wsl --list --verbose` yourself. If it reports no distributions or that the feature is not enabled, install or enable WSL using Microsoft’s documentation, then use **Refresh shell list**. Docker Desktop’s internal `docker-desktop*` distributions are intentionally hidden.
+- **A WSL pane is slow to start:** the first start boots the distribution’s VM (a few seconds). Mapping the folder times out after 25 s with an option to start in the home directory.
+- **A WSL pane says the folder can’t be mapped:** this happens with network shares or drives that aren’t mounted inside the distribution, or a customised `[automount]` in `/etc/wsl.conf`. Use **Start in home directory instead**, or mount the drive in WSL.
+- **Missing project folder:** a banner offers **Choose folder…** (relink) or **Remove workspace**. Panes offer to start in your home directory instead.
+
+## Known limitations
+
+See [TESTING.md](TESTING.md#known-limitations-and-remaining-verification) for the full list. Highlights:
+
+- Windows 11 x64 only; unsigned; no installer or auto-update (ZIP only).
+- The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.
+- Full-screen programs work, but ConPTY repaints them itself, so their screens can leave frames in the scrollback.
+- **Resizing:** dividers and window resizes do not flash; the console's screen, the cursor and xterm's agree after every resize, and output above the screen (scrollback) is kept when a pane is narrowed, widened or maximised. One thing you can still see: when the top row of the screen is the middle of a long wrapped line and the width changes, the console only has the rest of that line and draws it as a line of its own, so it shows on the top row, under the complete line in the history. It is removed from the history as soon as output scrolls it off the screen. It stays if, at that moment, you are scrolled up or have text selected and more than a screenful of output passes. WSL output is slower than with the ConPTY bundled with node-pty (about 1.15 s instead of 0.48 s for 16 MB of text in the packaged app; see TESTING.md).
+- **Slow ↑/↓ in PowerShell (about 1 s):** this happens when another PowerShell process keeps PSReadLine's history lock (it affects every PowerShell window, not only SplitNest, and new commands stop being saved). Closing that PowerShell fixes it. SplitNest's own automated tests no longer use your history file.
+- **Windows PowerShell 5.1 in very narrow panes:** if the prompt itself wrapped (pane narrower than the prompt) and the pane is then resized before you press Enter, what you type next can be drawn over the prompt. The cause is PSReadLine 2.0 (bundled with Windows PowerShell 5.1), which keeps the input's start column from before the resize; the same happens in other terminals, and the next prompt is clean. The terminal side is fixed: wrapped lines, including the current prompt, now rejoin correctly when a pane widens. Newer PSReadLine versions (PowerShell 7) may behave better; not tested here.
+- Shells get a clean environment: when SplitNest is started from inside another terminal or an AI agent CLI, that session's markers and IPC variables (e.g. `CLAUDE_CODE_CHILD_SESSION`, `CLAUDECODE`, VS Code's git askpass hooks) are not passed on to its shells. Your own variables, including `CLAUDE_CODE_*` settings and API keys, are kept.
+- Linux-only projects opened via `\\wsl.localhost\...` are not specially supported (PowerShell can start there; WSL mapping depends on `wslpath`).
+- Scrollback is per pane and lives only in memory.
+- Dev/build tooling (Electron Forge 7, Vitest) has npm-audit advisories; runtime dependencies have none (`npm audit --omit=dev`). Forge 8 needs Node ≥ 22.13; this machine has Node 20.
