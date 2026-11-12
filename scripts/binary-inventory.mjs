@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { squirrelVersion } from './release/squirrel-version.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -29,6 +30,8 @@ const appDir = path.join(out, `${pkg.productName}-win32-x64`);
 const squirrelDir = path.join(out, 'make', 'squirrel.windows', 'x64');
 const PRODUCT = pkg.productName;
 const VERSION = pkg.version;
+// Squirrel writes Setup.exe's version in its own form (0.2.0-beta.1 -> 0.2.0-beta1); Windows may add a 4th part.
+const VERSIONS = new Set([VERSION, squirrelVersion(VERSION), `${VERSION}.0`]);
 const PE = /\.(exe|dll|node)$/i;
 
 /**
@@ -110,7 +113,7 @@ const problems = [];
 for (const e of entries.filter((x) => x.kind === 'ours')) {
   if (/_executionstub\.exe$/i.test(e.file)) continue;
   if (e.product !== PRODUCT) problems.push(`${e.where}/${e.file}: product name "${e.product}", expected "${PRODUCT}"`);
-  if (!String(e.productVersion ?? '').startsWith(VERSION)) problems.push(`${e.where}/${e.file}: product version "${e.productVersion}", expected ${VERSION}`);
+  if (!VERSIONS.has(String(e.productVersion ?? ''))) problems.push(`${e.where}/${e.file}: product version "${e.productVersion}", expected ${VERSION}`);
   if (e.company !== PRODUCT) problems.push(`${e.where}/${e.file}: company "${e.company}", expected "${PRODUCT}"`);
 }
 
