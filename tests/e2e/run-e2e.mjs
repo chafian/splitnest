@@ -118,6 +118,23 @@ async function typeIn(page, id, text, enter = true) {
   if (enter) await page.keyboard.press('Enter');
 }
 
+/**
+ * Does `act` (typing or pasting a command) until `pattern` shows in the terminal. On a slow machine
+ * (GitHub's Windows runner) input sent right when a prompt comes back can be lost while PSReadLine
+ * redraws; Escape clears anything half-typed before the next try. Only for idempotent commands.
+ */
+async function untilShown(page, id, act, pattern, tries = 4) {
+  for (let i = 1; ; i++) {
+    await act();
+    try {
+      return await waitText(page, id, pattern, i === tries ? 30_000 : 5000);
+    } catch (e) {
+      if (i === tries) throw e;
+      await page.keyboard.press('Escape');
+    }
+  }
+}
+
 const shot = (page, name) => page.screenshot({ path: path.join(shots, name) });
 
 const tabsIn = (page, paneId) => page.$$eval(`[data-pane-id="${paneId}"] [role="tab"]`, (els) => els.map((e) => e.getAttribute('data-tab-id')));
@@ -238,9 +255,16 @@ async function main() {
   await step('paste with Ctrl+V and copy a selection with Ctrl+C', async () => {
     await app.evaluate(({ clipboard }) => clipboard.writeText('Write-Output ("PASTED-" + "OK")'));
     await page.click(`[data-pane-id="${ps}"] .tabview:not([hidden]) .pane__terminal`, { position: { x: 40, y: 20 } });
-    await page.keyboard.press('Control+V');
-    await page.keyboard.press('Enter');
-    await waitText(page, ps, /^PASTED-OK$/m);
+    // Right after the Ctrl+C step the prompt is being redrawn; a paste then could be lost.
+    await untilShown(
+      page,
+      ps,
+      async () => {
+        await page.keyboard.press('Control+V');
+        await page.keyboard.press('Enter');
+      },
+      /^PASTED-OK$/m,
+    );
     await app.evaluate(({ clipboard }) => clipboard.writeText(''));
     const box = await page.locator(`[data-pane-id="${ps}"] .tabview:not([hidden]) .pane__terminal`).boundingBox();
     await page.mouse.move(box.x + 10, box.y + 8);
