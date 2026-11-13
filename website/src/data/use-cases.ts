@@ -45,7 +45,7 @@ export const useCases: UseCase[] = [
       },
       {
         h: 'After a restart',
-        html: `<p>Layouts and folders come back with nothing running. A terminal where Claude Code was running offers <strong>Resume Claude Code</strong>. In a PowerShell tab it types <code>claude --resume &lt;id&gt;</code> for the exact conversation. In a WSL tab SplitNest knows only that Claude Code ran there, so it starts the shell in the workspace folder and opens Claude Code's own list of earlier conversations.</p>`,
+        html: `<p>Layouts and folders come back with nothing running. A terminal where Claude Code was running offers <strong>Resume Claude Code</strong>. It types <code>claude --resume &lt;id&gt;</code> for the exact conversation, in PowerShell and WSL tabs alike, in the folder where Claude Code ran. A WSL terminal started in the Linux home instead opens Claude Code's own list of earlier conversations.</p>`,
       },
       {
         h: 'Good to know',
@@ -171,7 +171,7 @@ export const useCases: UseCase[] = [
       },
       {
         h: 'Limits',
-        html: `<p>In WSL tabs SplitNest cannot tell which conversation ran, so Resume opens the agent's own list. Codex's <code>/new</code> is not followed. If an agent ran in a folder outside the workspace folder, Resume is refused and the terminal offers a plain shell. The agents' session files are undocumented, so a future agent update may make Resume fall back to the agent's list.</p>`,
+        html: `<p>A WSL terminal started in the Linux home, or an agent known only from its own status reports, gets the agent's own list instead of the exact conversation. Codex's <code>/new</code> is not followed. If an agent ran in a folder outside the workspace folder, Resume is refused and the terminal offers a plain shell. The agents' session files are undocumented, so a future agent update may make Resume fall back to the agent's list.</p>`,
       },
     ],
   },

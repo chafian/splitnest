@@ -195,7 +195,7 @@ export const features: Feature[] = [
       {
         h: 'Limits',
         html: `<ul>
-<li>WSL tabs: SplitNest knows which agent ran there, not which conversation. Resume there starts the shell in the workspace folder and opens the agent's own list.</li>
+<li>WSL tabs: the conversation is found the same way, from the agent's files in your Linux home (read from Windows; nothing is written in the distribution), so Resume starts WSL in the agent's folder and reopens that conversation. A terminal started in the Linux home gets the agent's own list.</li>
 <li>The agents' session files are undocumented; if a future version changes them, Resume falls back to the agent's list.</li>
 <li>Codex's <code>/new</code> is not followed: the saved conversation stays the one the tab started with.</li>
 <li>If the agent ran in a folder outside the workspace folder, Resume is refused and the terminal offers a plain shell.</li>

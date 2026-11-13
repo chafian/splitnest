@@ -149,7 +149,7 @@ SplitNest is an **early release (v0.2)**. It works for daily use, but it has bee
 - Windows 11 x64 only; builds are **unsigned** (Windows SmartScreen may warn; see the [code signing policy](CODE_SIGNING.md)). Since version 0.2.0 there is an installer with automatic updates; see [CHANGELOG.md](CHANGELOG.md).
 - The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.
 - Full-screen programs work, but ConPTY repaints them itself, so their screens can leave frames in the scrollback.
-- In WSL tabs, Resume opens the agent's own conversation list rather than a specific conversation (agents themselves are detected there like in PowerShell tabs).
+- In WSL tabs, Resume reopens the exact conversation when the terminal started in the workspace folder; otherwise (a terminal started in the Linux home, or an agent known only from its own reports) it opens the agent's own conversation list.
 - Display scaling, Windows 10 and PowerShell 7 are untested.
 - Scrollback is per pane and lives only in memory.
 
