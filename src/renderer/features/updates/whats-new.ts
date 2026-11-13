@@ -26,6 +26,12 @@ export function whatsNewDecision(settings: { lastVersionSeen: string | null; upd
   return compareVersions(current, last) > 0 ? { kind: 'show', version: current } : { kind: 'record', version: current };
 }
 
+/**
+ * The release an "Update ready" notice refers to. The updater only installs the newest published
+ * release, so its notes are the latest release on GitHub (the downloaded version isn't reported).
+ */
+export const LATEST_RELEASE_URL = `${REPO_URL}/releases/latest`;
+
 /** This version's release notes on GitHub. */
 export function releaseNotesUrl(version: string): string {
   return isVersion(version) ? `${REPO_URL}/releases/tag/v${version}` : `${REPO_URL}/releases`;

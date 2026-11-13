@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareVersions, releaseNotesUrl, whatsNewDecision } from '../../src/renderer/features/updates/whats-new';
+import { compareVersions, LATEST_RELEASE_URL, releaseNotesUrl, whatsNewDecision } from '../../src/renderer/features/updates/whats-new';
 import { DEFAULT_SETTINGS, SCHEMA_VERSION } from '../../src/shared/types';
 import { parsePersistedState } from '../../src/shared/validation';
 
@@ -34,6 +34,7 @@ describe("what's new", () => {
   it('links to the release on GitHub', () => {
     expect(releaseNotesUrl('0.2.1')).toBe('https://github.com/chafian/splitnest/releases/tag/v0.2.1');
     expect(releaseNotesUrl('../x')).toBe('https://github.com/chafian/splitnest/releases');
+    expect(LATEST_RELEASE_URL).toBe('https://github.com/chafian/splitnest/releases/latest');
   });
 
   it('keeps a valid saved version and drops anything else', () => {

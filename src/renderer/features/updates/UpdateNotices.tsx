@@ -1,10 +1,10 @@
 // Automatic updates in the page: the first-run notice (no update request is made before it is
-// acknowledged, see src/main/updater.ts) and "Update ready" with Restart now.
+// acknowledged, see src/main/updater.ts) and "Update ready" with Restart now and the release notes.
 import { useEffect, useState } from 'react';
 import type { UpdateStatus } from '../../../shared/updates';
 import { api } from '../../api';
 import { Icon } from '../../components/Icon';
-import { releaseNotesUrl } from './whats-new';
+import { LATEST_RELEASE_URL, releaseNotesUrl } from './whats-new';
 
 export const PRIVACY_URL = 'https://splitnest.dev/privacy/';
 
@@ -68,6 +68,9 @@ export function UpdateNotices({ status, onChoose }: Props) {
           </span>
           <button type="button" className="button button--small button--primary" data-testid="update-restart" onClick={() => void api.restartToUpdate()}>
             Restart now
+          </button>
+          <button type="button" className="button button--small" data-testid="update-release-notes" onClick={() => void api.openExternal(LATEST_RELEASE_URL)}>
+            Release notes
           </button>
           <button type="button" className="button button--small" onClick={() => setLaterFor('ready')}>
             Later

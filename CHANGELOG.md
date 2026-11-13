@@ -4,6 +4,7 @@ All notable changes to SplitNest. Release notes on GitHub are taken from the sec
 
 ## Unreleased
 
+- **Release notes before you restart**: the *Update ready* notice has a *Release notes* button that opens the latest release on GitHub in your browser, so you can see what changed before restarting.
 - **Welcome guide**: the first screen now explains workspaces, split panes and agents (tab state and the inbox) in three short cards, with their shortcuts.
 - **Exact Resume in WSL tabs**: SplitNest now finds which Claude Code, Codex or Gemini CLI conversation runs in a WSL terminal (from the agent's files in your Linux home, read through `\\wsl.localhost`; Claude Code by its Linux process), so after a restart Resume starts WSL in the agent's folder and reopens that conversation, instead of opening the agent's list. Nothing is written in the distribution.
 

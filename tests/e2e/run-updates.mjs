@@ -109,6 +109,13 @@ try {
     if (process.env.TW_UPDATE_SHOTS) await page.screenshot({ path: path.join(process.env.TW_UPDATE_SHOTS, 'update-about.png') });
   });
 
+  await step('"Release notes" on the Update ready notice opens the latest release on GitHub, and the notice stays', async () => {
+    await page.click('[data-testid="update-release-notes"]');
+    const opened = await until(() => app.evaluate(() => (globalThis.__twOpened ?? []).at(-1)), 'opened');
+    if (opened !== 'https://github.com/chafian/splitnest/releases/latest') throw new Error(opened);
+    if (!(await page.$('[data-testid="update-ready"]'))) throw new Error('notice closed');
+  });
+
   await step('Restart now goes through the quit prompt: Cancel keeps SplitNest open and installs nothing', async () => {
     await quitWith(app, 'cancel');
     await page.click('[data-testid="update-restart"]');
