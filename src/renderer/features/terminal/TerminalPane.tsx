@@ -1,7 +1,7 @@
 // A split pane: a tab bar on top and one terminal or file editor per tab.
 // Inactive tabs stay mounted (hidden) so their shells keep running and keep
 // their scrollback, and editors keep unsaved text and undo history.
-import { RESUME_LABEL, resumeCommand } from '../../../shared/agent-resume';
+import { RESUME_LABEL, resumeCommand, resumeFallbackText } from '../../../shared/agent-resume';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import type { PaneLeaf, SessionStatus, ShellDiscovery, StartLocation, TerminalTab, Workspace } from '../../../shared/types';
 import { isFileTab, isTerminalTab, LIMITS } from '../../../shared/types';
@@ -650,7 +650,7 @@ function TabView(props: {
               <p className="ready__detail" data-testid="resume-detail">
                 {resume.sessionId
                   ? `Resume reopens that conversation: a new ${shellName} in ${resume.cwd}, then “${resumeCommand(resume)}”.`
-                  : `The exact conversation isn't known, so Resume opens ${resumeLabel}'s list of earlier conversations in ${resume.cwd}.`}
+                  : resumeFallbackText(resume.agent, resume.cwd)}
               </p>
             )}
             <div className="ready__row">

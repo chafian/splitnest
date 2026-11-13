@@ -6,6 +6,7 @@ All notable changes to SplitNest. Release notes on GitHub are taken from the sec
 
 - **Feedback links**: Settings → About → Feedback, and the command palette (*Report a bug*, *Suggest a feature*, *Questions and ideas*), open the GitHub issue forms and Discussions in your browser. The bug form arrives with your SplitNest version filled in; nothing is sent until you submit it.
 - **What's new after an update**: the first time a newer version starts, a notice names it and offers its release notes on GitHub (opened in your browser only if you click). It appears once per version and never on a first install. Settings → About also links to the current version's release notes.
+- **Resume Gemini CLI conversations**: after a restart, a terminal where Gemini CLI was running offers *Resume Gemini CLI*, which types `gemini --resume <id>` in that folder, like Claude Code and Codex. SplitNest reads only the first line of Gemini CLI's session file and its project list, never conversation text. When the exact conversation isn't known, Resume runs `gemini --resume` (its most recent conversation in that folder).
 
 ## 0.2.0 (2026-11-12)
 

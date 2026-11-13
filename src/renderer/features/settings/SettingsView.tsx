@@ -462,7 +462,7 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
               <Row
                 title="Show conversation titles for Resume"
                 hint={
-                  'A terminal where Claude Code or Codex was running offers Resume after a restart. With this on, it also shows the ' +
+                  'A terminal where Claude Code, Codex or Gemini CLI was running offers Resume after a restart. With this on, it also shows the ' +
                   "conversation's title (the agent's own name for it), which is saved with the terminal in the state file. A title can " +
                   'contain words from your prompt. Turning this off removes the titles already saved.'
                 }
@@ -471,7 +471,7 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
               <Row
                 title="Resume agents automatically when the app opens"
                 hint={
-                  'Off by default: a terminal where Claude Code or Codex was running offers Resume after a restart. When on, those ' +
+                  'Off by default: a terminal where Claude Code, Codex or Gemini CLI was running offers Resume after a restart. When on, those ' +
                   'terminals resume their conversation as soon as their workspace is shown: a new shell in the agent\'s folder with ' +
                   'the resume command typed at its prompt. Resuming sends nothing to the agent, but it does start it. In WSL terminals, ' +
                   "and wherever the exact conversation isn't known, the agent's own list of conversations opens instead."

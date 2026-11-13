@@ -131,6 +131,9 @@ describe('agent resume: what runs', () => {
     expect(resumeCommand({ agent: 'claude', sessionId: null })).toBe('claude --resume');
     expect(resumeCommand({ agent: 'codex', sessionId: ID })).toBe(`codex resume ${ID}`);
     expect(resumeCommand({ agent: 'codex', sessionId: null })).toBe('codex resume');
+    expect(resumeCommand({ agent: 'gemini', sessionId: ID })).toBe(`gemini --resume ${ID}`);
+    expect(resumeCommand({ agent: 'gemini', sessionId: null })).toBe('gemini --resume');
+    expect(resumeCommand({ agent: 'gemini', sessionId: `${ID} & calc` })).toBe('gemini --resume');
     // Anything that isn't a UUID never reaches the command line.
     expect(resumeCommand({ agent: 'claude', sessionId: `${ID}; Remove-Item -Recurse C:\\` })).toBe('claude --resume');
   });

@@ -52,7 +52,7 @@ export interface TerminalTab {
    */
   name?: string;
   /**
-   * The agent conversation running in this terminal (Claude Code, Codex), kept while the agent
+   * The agent conversation running in this terminal (Claude Code, Codex, Gemini CLI), kept while the agent
    * runs and through a quit, so it can be resumed after a restart. Removed when the agent exits
    * on its own. Holds an id and a folder, never conversation text.
    */

@@ -1,9 +1,10 @@
 // Agent session resume, end to end (dev build with TW_E2E=1; temporary folders, profile and
-// agent home only). No real agent runs: `claude.exe` and `codex.exe` in a temporary folder at the
+// agent home only). No real agent runs: `claude.exe`, `codex.exe` and `gemini.exe` in a temporary folder at the
 // front of PATH are copies of cmd.exe (they keep running, so process detection finds them), and
 // the agents' session records are written into a temporary home (TW_E2E_AGENT_HOME, dev only)
-// in the formats measured with Claude Code 2.1.322 and Codex 0.166.0. Before each Resume the
-// script checks that `claude`/`codex` resolve to those copies, so a real agent can never start.
+// in the formats measured with Claude Code 2.1.322 and Codex 0.166.0, and Gemini CLI's from its
+// source. Before each Resume the script checks that `claude`/`codex`/`gemini` resolve to those
+// copies, so a real agent can never start.
 // Usage: node tests/e2e/run-resume.mjs   (after `npm run package`, which builds .vite/build)
 import { _electron as electron } from 'playwright-core';
 import { createRequire } from 'node:module';
@@ -25,8 +26,10 @@ writeFileSync(path.join(proj, 'README.md'), '# resume\n');
 const sys32 = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32');
 const fakeClaude = path.join(fakebin, 'claude.exe');
 const fakeCodex = path.join(fakebin, 'codex.exe');
+const fakeGemini = path.join(fakebin, 'gemini.exe');
 copyFileSync(path.join(sys32, 'cmd.exe'), fakeClaude);
 copyFileSync(path.join(sys32, 'cmd.exe'), fakeCodex);
+copyFileSync(path.join(sys32, 'cmd.exe'), fakeGemini);
 
 const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === 'path') ?? 'Path';
 const env = { ...process.env, TW_E2E: '1', TW_E2E_PICK_FOLDER: proj, TW_E2E_AGENT_HOME: agentHome };
@@ -60,7 +63,7 @@ const fakes = (exe) => {
   return out ? out.split(/\r?\n/).map((l) => ({ pid: Number(l.split('|')[0]), cmd: l.slice(l.indexOf('|') + 1) })) : [];
 };
 const killFakes = () => {
-  for (const exe of [fakeClaude, fakeCodex]) for (const f of fakes(exe)) ps(`Stop-Process -Id ${f.pid} -Force -ErrorAction SilentlyContinue`);
+  for (const exe of [fakeClaude, fakeCodex, fakeGemini]) for (const f of fakes(exe)) ps(`Stop-Process -Id ${f.pid} -Force -ErrorAction SilentlyContinue`);
 };
 const savedTabs = () => {
   try {
@@ -81,6 +84,14 @@ const codexRollout = (id) => {
   const iso = new Date().toISOString();
   writeFileSync(path.join(dir, `rollout-${iso.slice(0, 19).replace(/:/g, '-')}-${id}.jsonl`), JSON.stringify({ timestamp: iso, type: 'session_meta', payload: { id, session_id: id, timestamp: iso, cwd: proj, cli_version: '0.167.1', source: 'cli' } }) + '\n');
 };
+// Gemini CLI: its project list maps the (lowercased) folder to a slug; the session file starts with its metadata.
+const geminiSession = (id) => {
+  const dir = path.join(agentHome, '.gemini', 'tmp', 'resume-ws', 'chats');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(agentHome, '.gemini', 'projects.json'), JSON.stringify({ projects: { [proj.toLowerCase()]: 'resume-ws' } }, null, 2));
+  const iso = new Date().toISOString();
+  writeFileSync(path.join(dir, `session-${iso.slice(0, 16).replace(/:/g, '-')}-${id.slice(0, 8)}.jsonl`), JSON.stringify({ sessionId: id, projectHash: 'f'.repeat(64), startTime: iso, lastUpdated: iso, kind: 'main' }) + '\n');
+};
 const typeIn = async (page, tabId, text) => {
   await page.click(`[role="tab"][data-tab-id="${tabId}"]`);
   await page.click(`.tabview[data-tab-id="${tabId}"] .pane__terminal`, { position: { x: 40, y: 20 } });
@@ -98,12 +109,14 @@ const quit = async (app) => {
 const A = randomUUID();
 const B = randomUUID();
 const C = randomUUID();
+const G = randomUUID();
 let app = null;
 try {
   await step('safety: in the app\'s environment, claude and codex resolve to the stand-ins', async () => {
     const c = ps('(Get-Command claude).Source');
     const x = ps('(Get-Command codex).Source');
-    if (c.toLowerCase() !== fakeClaude.toLowerCase() || x.toLowerCase() !== fakeCodex.toLowerCase()) throw new Error(`claude -> ${c}, codex -> ${x}`);
+    const g = ps('(Get-Command gemini).Source');
+    if (c.toLowerCase() !== fakeClaude.toLowerCase() || x.toLowerCase() !== fakeCodex.toLowerCase() || g.toLowerCase() !== fakeGemini.toLowerCase()) throw new Error(`claude -> ${c}, codex -> ${x}, gemini -> ${g}`);
   });
   if (!results.every((r) => r.ok)) throw new Error('unsafe: stopping before anything runs');
 
@@ -117,7 +130,10 @@ try {
   await page.keyboard.press('Control+Shift+T');
   await until(async () => (await selectedTab()) !== claudeTab, 'second tab');
   const codexTab = await selectedTab();
-  await new Promise((r) => setTimeout(r, 2500)); // its shell starts
+  await page.keyboard.press('Control+Shift+T');
+  await until(async () => ![claudeTab, codexTab].includes(await selectedTab()), 'third tab');
+  const geminiTab = await selectedTab();
+  await new Promise((r) => setTimeout(r, 2500)); // their shells start
 
   let claudePid = 0;
   await step('Claude Code: the session of its process is saved with the tab', async () => {
@@ -145,22 +161,33 @@ try {
     return { exact: r.exact };
   });
 
-  await step('quitting SplitNest keeps both conversations', async () => {
+  await step('Gemini CLI: the one session started in its project after it is saved with its tab', async () => {
+    await typeIn(page, geminiTab, 'gemini');
+    await until(() => fakes(fakeGemini)[0], 'stand-in gemini running');
+    await new Promise((r) => setTimeout(r, 1500));
+    geminiSession(G);
+    await until(() => savedTabs().find((t) => t.id === geminiTab)?.resume?.sessionId === G, 'gemini resume saved');
+    const r = savedTabs().find((t) => t.id === geminiTab).resume;
+    if (r.agent !== 'gemini' || r.cwd.toLowerCase() !== proj.toLowerCase()) throw new Error(JSON.stringify(r));
+    return { exact: r.exact, cwd: r.cwd === proj ? 'workspace spelling' : r.cwd };
+  });
+
+  await step('quitting SplitNest keeps all three conversations', async () => {
     await quit(app);
     app = null;
     killFakes();
     const tabs = savedTabs();
-    const ok = tabs.find((t) => t.id === claudeTab)?.resume?.sessionId === B && tabs.find((t) => t.id === codexTab)?.resume?.sessionId === C;
+    const ok = tabs.find((t) => t.id === claudeTab)?.resume?.sessionId === B && tabs.find((t) => t.id === codexTab)?.resume?.sessionId === C && tabs.find((t) => t.id === geminiTab)?.resume?.sessionId === G;
     if (!ok) throw new Error(JSON.stringify(tabs));
   });
 
   app = await launch();
   page = await app.firstWindow();
   await page.setViewportSize({ width: 1280, height: 800 }).catch(() => undefined);
-  await step('after a restart: "Resume agents (2)" and a Resume button saying what will run', async () => {
+  await step('after a restart: "Resume agents (3)" and a Resume button saying what will run', async () => {
     const all = await page.waitForSelector('[data-testid="resume-all"]', { timeout: 15_000 });
     const label = (await all.textContent())?.trim();
-    if (label !== 'Resume agents (2)') throw new Error(label);
+    if (label !== 'Resume agents (3)') throw new Error(label);
     await page.click(`[role="tab"][data-tab-id="${claudeTab}"]`);
     const detail = await page.textContent(`.tabview[data-tab-id="${claudeTab}"] [data-testid="resume-detail"]`);
     if (!detail.includes(`claude --resume ${B}`) || !detail.includes(proj)) throw new Error(detail);
@@ -168,7 +195,12 @@ try {
     const title = await page.textContent(`.tabview[data-tab-id="${claudeTab}"] [data-testid="resume-title"]`);
     if (title !== '“Fix login redirect”') throw new Error(`title: ${title}`);
     // Nothing runs before a click.
-    if (fakes(fakeClaude).length || fakes(fakeCodex).length) throw new Error('an agent started without a click');
+    if (fakes(fakeClaude).length || fakes(fakeCodex).length || fakes(fakeGemini).length) throw new Error('an agent started without a click');
+    await page.click(`[role="tab"][data-tab-id="${geminiTab}"]`);
+    const gDetail = await page.textContent(`.tabview[data-tab-id="${geminiTab}"] [data-testid="resume-detail"]`);
+    if (!gDetail.includes(`gemini --resume ${G}`)) throw new Error(gDetail);
+    if (process.env.TW_RESUME_SHOTS) await page.screenshot({ path: path.join(process.env.TW_RESUME_SHOTS, 'resume-gemini.png') });
+    await page.click(`[role="tab"][data-tab-id="${claudeTab}"]`);
     if (process.env.TW_RESUME_SHOTS) await page.screenshot({ path: path.join(process.env.TW_RESUME_SHOTS, 'resume-restored.png') });
   });
 
@@ -185,10 +217,14 @@ try {
     return { pid: f.pid };
   });
 
-  await step('Resume agents: Codex gets `codex resume <id>`', async () => {
+  await step('Resume agents: Codex gets `codex resume <id>`, Gemini CLI `gemini --resume <id>`', async () => {
     if (ps('(Get-Command codex).Source').toLowerCase() !== fakeCodex.toLowerCase()) throw new Error('codex is not the stand-in');
+    if (ps('(Get-Command gemini).Source').toLowerCase() !== fakeGemini.toLowerCase()) throw new Error('gemini is not the stand-in');
     await page.click('[data-testid="resume-all"]');
     await until(() => fakes(fakeCodex).find((p) => p.cmd.includes(`resume ${C}`)), 'codex resume C running');
+    await until(() => fakes(fakeGemini).find((p) => p.cmd.includes(`--resume ${G}`)), 'gemini --resume G running');
+    // The command line names the session, so it is now exact.
+    await until(() => savedTabs().find((t) => t.id === geminiTab)?.resume?.exact === true, 'gemini resume exact');
   });
 
   await step('the agent exiting on its own removes Resume from its tab', async () => {

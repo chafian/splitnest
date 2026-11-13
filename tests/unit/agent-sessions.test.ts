@@ -3,7 +3,17 @@
 // resume, phase 1"), with made-up ids and folders.
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { AgentSessionTracker, parseClaudeLiveFile, parseCodexRolloutHead, pickCodexRollout, resumeIdFromCommandLine, withinFolder } from '../../src/main/agent-sessions';
+import {
+  AgentSessionTracker,
+  geminiLegacyProjectDir,
+  parseClaudeLiveFile,
+  parseCodexRolloutHead,
+  parseGeminiProjects,
+  parseGeminiSessionHead,
+  pickCodexRollout,
+  resumeIdFromCommandLine,
+  withinFolder,
+} from '../../src/main/agent-sessions';
 import { parseAgentResume } from '../../src/shared/agent-resume';
 import type { ProcessInfo } from '../../src/shared/agents';
 
@@ -43,6 +53,11 @@ function fakeFs(files: Record<string, { text: string; mtime?: number }>) {
 }
 
 const proc = (pid: number, name: string, cmd = name): ProcessInfo => ({ pid, ppid: 1, name, cmd });
+// Gemini CLI: the shapes in its source (ChatRecordingService, ProjectRegistry), made-up values.
+const geminiHead = (sessionId: string, iso: string, kind = 'main') =>
+  JSON.stringify({ sessionId, projectHash: 'f'.repeat(64), startTime: iso, lastUpdated: iso, kind }) +
+  '\n{"id":"m1","type":"user","content":[{"text":"SECRET CONVERSATION TEXT"}]}\n';
+const geminiProjects = (map: Record<string, string>) => JSON.stringify({ projects: map }, null, 2);
 const liveFile = (pid: number) => path.join(HOME, '.claude', 'sessions', `${pid}.json`);
 
 describe('agent session capture: parsing', () => {
@@ -103,6 +118,35 @@ describe('agent session capture: parsing', () => {
   });
 });
 
+describe('agent session capture: Gemini CLI parsing', () => {
+  it("reads Gemini CLI's project list, keeping only absolute folders and plain slugs", () => {
+    expect(parseGeminiProjects(geminiProjects({ 'c:\\work\\car-rental': 'car-rental', relative: 'x', 'c:\\evil': '../..' }))).toEqual([{ folder: 'c:\\work\\car-rental', slug: 'car-rental' }]);
+    expect(parseGeminiProjects('{broken')).toEqual([]);
+    expect(parseGeminiProjects('{"projects": 5}')).toEqual([]);
+  });
+
+  it("reads a Gemini session file's first line: a UUID and a start time, never a subagent's", () => {
+    const iso = '2026-11-13T10:00:05.000Z';
+    expect(parseGeminiSessionHead(geminiHead(A, iso).split('\n')[0]!)).toEqual({ id: A, startedAt: Date.parse(iso) });
+    expect(parseGeminiSessionHead(geminiHead(A, iso, 'subagent').split('\n')[0]!)).toBeNull();
+    expect(parseGeminiSessionHead(geminiHead('abc; calc', iso).split('\n')[0]!)).toBeNull();
+    expect(parseGeminiSessionHead(JSON.stringify({ sessionId: A }))).toBeNull();
+  });
+
+  it('older versions: the project folder is the SHA-256 of its path', () => {
+    expect(geminiLegacyProjectDir(PROJECT)).toMatch(/^[0-9a-f]{64}$/);
+    expect(geminiLegacyProjectDir(PROJECT)).not.toBe(geminiLegacyProjectDir(`${PROJECT}2`));
+  });
+
+  it('takes the id from `gemini --resume <id>`, `-r <id>` and `--resume=<id>` only', () => {
+    expect(resumeIdFromCommandLine('gemini', `node C:\\npm\\node_modules\\@google\\gemini-cli\\dist\\index.js --resume ${A}`)).toBe(A);
+    expect(resumeIdFromCommandLine('gemini', `gemini -r ${A}`)).toBe(A);
+    expect(resumeIdFromCommandLine('gemini', `gemini --resume=${A}`)).toBe(A);
+    expect(resumeIdFromCommandLine('gemini', 'gemini --resume 2')).toBeNull();
+    expect(resumeIdFromCommandLine('gemini', 'gemini --resume')).toBeNull();
+  });
+});
+
 describe('agent session capture: tracking a tab', () => {
   it('Claude Code: the exact session of its process, following /clear, and nothing once it exits', async () => {
     let now = 1000;
@@ -155,6 +199,51 @@ describe('agent session capture: tracking a tab', () => {
 
     // Only first lines were used; the conversation lines are never parsed or returned.
     expect(JSON.stringify(await tracker.update('s4', PROJECT, codex(99)))).not.toContain('SECRET');
+  });
+
+  it('Gemini CLI: the id from `gemini --resume <id>`, else the one session that fits in a project inside the folder, else none', async () => {
+    const started = Date.parse('2026-11-13T10:00:00.000Z');
+    let now = started;
+    const gemini = (pid: number, cmd = 'gemini.exe') => ({ id: 'gemini', process: proc(pid, 'gemini.exe', cmd) });
+    const chats = (slug: string) => path.join(HOME, '.gemini', 'tmp', slug, 'chats');
+    const fs = fakeFs({
+      [path.join(HOME, '.gemini', 'projects.json')]: {
+        text: geminiProjects({ 'c:\\work\\car-rental': 'car-rental', 'c:\\work\\car-rental\\api': 'api', 'c:\\work\\car-rental-old': 'car-rental-old' }),
+      },
+      // An older session in the folder, and a new one in a sibling folder with a common prefix.
+      [path.join(chats('car-rental'), `session-2026-11-12T09-00-${A.slice(0, 8)}.jsonl`)]: { text: geminiHead(A, '2026-11-12T09:00:00.000Z'), mtime: started - 86_400_000 },
+      [path.join(chats('car-rental-old'), `session-2026-11-13T10-00-${D.slice(0, 8)}.jsonl`)]: { text: geminiHead(D, '2026-11-13T10:00:02.000Z'), mtime: started + 2_000 },
+    });
+    const tracker = new AgentSessionTracker(fs.deps(() => now));
+
+    expect(await tracker.update('s1', PROJECT, gemini(40))).toEqual({ agent: 'gemini', sessionId: null, cwd: PROJECT, exact: false, at: now });
+    // Gemini writes the session file as it starts.
+    fs.files[path.join(chats('car-rental'), `session-2026-11-13T10-00-${B.slice(0, 8)}.jsonl`)] = { text: geminiHead(B, '2026-11-13T10:00:03.000Z'), mtime: started + 3_000 };
+    now = started + 5_000;
+    expect(await tracker.update('s1', PROJECT, gemini(40))).toEqual({ agent: 'gemini', sessionId: B, cwd: PROJECT, exact: false, at: now });
+
+    // A second tab started in a subfolder project: its session there is the only one left, and the
+    // folder keeps the workspace's spelling.
+    fs.files[path.join(chats('api'), `session-2026-11-13T10-00-${C.slice(0, 8)}.jsonl`)] = { text: geminiHead(C, '2026-11-13T10:00:06.000Z'), mtime: started + 6_000 };
+    expect(await tracker.update('s2', PROJECT, gemini(41))).toEqual({ agent: 'gemini', sessionId: C, cwd: `${PROJECT}\\api`, exact: false, at: now });
+
+    // Older Gemini CLI versions: the SHA-256 folder.
+    const legacy = new AgentSessionTracker(
+      fakeFs({ [path.join(chats(geminiLegacyProjectDir(PROJECT)), `session-2026-11-13T10-00-${D.slice(0, 8)}.jsonl`)]: { text: geminiHead(D, '2026-11-13T10:00:01.000Z'), mtime: started + 1_000 } }).deps(() => started + 2_000),
+    );
+    expect(await legacy.update('s9', PROJECT, gemini(50))).toMatchObject({ sessionId: D, cwd: PROJECT });
+
+    // A resumed tab: the command line says which.
+    expect(await tracker.update('s3', PROJECT, gemini(77, `gemini --resume ${A}`))).toMatchObject({ sessionId: A, exact: true });
+
+    // Two new sessions that could both be this tab's: no guess.
+    fs.files[path.join(chats('car-rental'), `session-2026-11-13T10-01-${'11111111'}.jsonl`)] = { text: geminiHead('11111111-1111-4111-8111-111111111111', '2026-11-13T10:01:00.000Z'), mtime: started + 60_000 };
+    fs.files[path.join(chats('car-rental'), `session-2026-11-13T10-01-${'22222222'}.jsonl`)] = { text: geminiHead('22222222-2222-4222-8222-222222222222', '2026-11-13T10:01:01.000Z'), mtime: started + 61_000 };
+    now = started + 59_000;
+    expect(await tracker.update('s4', PROJECT, gemini(88))).toMatchObject({ sessionId: null });
+
+    // Only first lines were used.
+    expect(JSON.stringify(await tracker.update('s5', PROJECT, gemini(99)))).not.toContain('SECRET');
   });
 
   it('other agents are not tracked', async () => {

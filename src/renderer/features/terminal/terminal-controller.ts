@@ -11,7 +11,7 @@ import '@xterm/xterm/css/xterm.css';
 import { LIMITS, type AppError, type SessionEvent, type SessionStatus, type StartLocation } from '../../../shared/types';
 import { api } from '../../api';
 import type { AgentId } from '../../../shared/agents';
-import { resumeCommand, type AgentResume, type ResumableAgent } from '../../../shared/agent-resume';
+import { isResumableAgent, resumeCommand, type AgentResume, type ResumableAgent } from '../../../shared/agent-resume';
 import { agentFromTitle, deriveAgentView, hasTitleStatus, parseProgramStatus, PROGRAM_STATUS_REPLY, StatusRecords, titleLooksLikeShell, type AgentView } from './agent-status';
 import { StartGate, type StartOutcome } from './bulk-start';
 import { partOfLineAbove, removeCutLinePart, type CutLinePart } from './cut-line';
@@ -61,7 +61,7 @@ export interface ControllerHooks {
   shortPrompt(): boolean;
   bindSession(sessionId: string, controller: TerminalController): void;
   /**
-   * WSL tabs: Claude Code or Codex is (or is no longer) running here, from its own reports (process
+   * WSL tabs: Claude Code, Codex or Gemini CLI is (or is no longer) running here, from its own reports (process
    * detection can't see Linux processes). Resume then opens the agent's own list of conversations.
    */
   wslAgent(agent: ResumableAgent | null): void;
@@ -1119,7 +1119,7 @@ export class TerminalController {
     if (JSON.stringify(view) !== JSON.stringify(this.snapshot.agent)) this.update({ agent: view });
     // WSL: only while the shell runs (an exit, including SplitNest quitting, keeps the record).
     if (this.isWsl && this.snapshot.status === 'running') {
-      const want: ResumableAgent | null = view?.id === 'claude' || view?.id === 'codex' ? view.id : null;
+      const want: ResumableAgent | null = isResumableAgent(view?.id) ? view.id : null;
       if (want && want === this.snapshot.resuming?.agent) this.dismissResuming(); // the resumed agent is running
       if (want !== this.wslResumeAgent) {
         this.wslResumeAgent = want;
