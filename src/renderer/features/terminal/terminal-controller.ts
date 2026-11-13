@@ -11,7 +11,7 @@ import '@xterm/xterm/css/xterm.css';
 import { LIMITS, type AppError, type SessionEvent, type SessionStatus, type StartLocation } from '../../../shared/types';
 import { api } from '../../api';
 import type { AgentId } from '../../../shared/agents';
-import { isResumableAgent, resumeCommand, type AgentResume, type ResumableAgent } from '../../../shared/agent-resume';
+import { isResumableAgent, resumeCommand, resumeForShell, type AgentResume, type ResumableAgent } from '../../../shared/agent-resume';
 import { agentFromTitle, deriveAgentView, hasTitleStatus, parseProgramStatus, PROGRAM_STATUS_REPLY, StatusRecords, titleLooksLikeShell, type AgentView } from './agent-status';
 import { StartGate, type StartOutcome } from './bulk-start';
 import { partOfLineAbove, removeCutLinePart, type CutLinePart } from './cut-line';
@@ -911,10 +911,12 @@ export class TerminalController {
   async resume(profileId: string, r: AgentResume): Promise<StartOutcome> {
     if (this.disposed) return 'skipped';
     if (!this.startGate.busy && this.snapshot.status === 'running') return 'running';
-    // WSL: the shell starts in the workspace folder's Linux path, and the agent's own list is opened
-    // (which conversation ran here isn't known there).
+    // The exact conversation only in the kind of shell it ran in. Otherwise (or for a WSL record
+    // without an id) WSL starts in the workspace folder's Linux path and the agent's own list opens.
     const wsl = profileId.startsWith('wsl:');
-    const outcome = await this.startGate.run(() => (wsl ? this.startSession(profileId, 'workspace-root') : this.startSession(profileId, 'workspace-root', r.cwd)));
+    const use = resumeForShell(r, wsl);
+    const inFolder = !wsl || use.sessionId !== null;
+    const outcome = await this.startGate.run(() => (inFolder ? this.startSession(profileId, 'workspace-root', r.cwd) : this.startSession(profileId, 'workspace-root')));
     if (outcome !== 'running') return outcome;
     this.update({ resuming: { agent: r.agent, phase: 'waiting' } });
     const started = Date.now();
@@ -925,7 +927,7 @@ export class TerminalController {
     }
     const id = this.snapshot.sessionId;
     if (this.disposed || !id || this.snapshot.status !== 'running') return outcome;
-    api.writeSession(id, `${resumeCommand(wsl ? { agent: r.agent, sessionId: null } : r)}\r`);
+    api.writeSession(id, `${resumeCommand(use)}\r`);
     this.lastPoke = 0;
     this.pokeAgentScan();
     if (this.resumeTimer) clearTimeout(this.resumeTimer);

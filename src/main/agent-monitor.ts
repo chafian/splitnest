@@ -8,13 +8,14 @@
 // is), so a helper inside each distribution in use lists the processes that
 // carry the terminal's marker (wsl-processes.ts). The renderer also keeps using
 // the agent's own OSC 7501 reports and terminal title there. Which conversation
-// runs is not tracked for WSL (Resume opens the agent's own list there).
+// runs there is found like on Windows, in the agents' files under the Linux home
+// (read through \\wsl.localhost), with the folders given in Windows form.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentResume } from '../shared/agent-resume';
 import { findAgent, type AgentId, type ProcessInfo } from '../shared/agents';
 import type { AgentSessionTracker } from './agent-sessions';
 import type { SessionProcess } from './session-broker';
-import { findWslAgent, parseWslSnapshot, WslScanHelper } from './wsl-processes';
+import { findWslAgent, linuxToWindowsPath, parseWslHome, parseWslSnapshot, wslHomeForWindows, WslScanHelper } from './wsl-processes';
 
 export interface AgentMonitorDeps {
   sessions(): SessionProcess[];
@@ -28,7 +29,12 @@ export interface AgentMonitorDeps {
   /** Injected for tests: one distribution's scan output (see WSL_SCAN_SCRIPT), or null for no answer. */
   wslSnapshot?(distro: string): Promise<string | null>;
   /** Which conversation each agent runs, for resuming it after a restart (see agent-sessions.ts). */
-  resume?: { tracker: AgentSessionTracker; report(ownerId: number, sessionId: string, resume: AgentResume | null): void };
+  resume?: {
+    tracker: AgentSessionTracker;
+    report(ownerId: number, sessionId: string, resume: AgentResume | null): void;
+    /** A tracker reading a distribution's Linux home (given as a Windows path). */
+    wslTracker?(homeForWindows: string): AgentSessionTracker;
+  };
 }
 
 /** How often to look while something is happening, and when quiet. */
@@ -75,6 +81,8 @@ export class AgentMonitor {
   private stopped = false;
   private readonly last = new Map<string, AgentId | null>();
   private readonly wslHelpers = new Map<string, WslScanHelper>();
+  /** Per distribution: its Linux home (Windows path) and the tracker reading the agents' files there. */
+  private readonly wslTrackers = new Map<string, { home: string; tracker: AgentSessionTracker }>();
 
   constructor(private readonly deps: AgentMonitorDeps) {}
 
@@ -101,6 +109,7 @@ export class AgentMonitor {
   forget(sessionId: string): void {
     this.last.delete(sessionId);
     this.deps.resume?.tracker.forget(sessionId);
+    for (const t of this.wslTrackers.values()) t.tracker.forget(sessionId);
   }
 
   private schedule(ms: number): void {
@@ -117,6 +126,7 @@ export class AgentMonitor {
       if (all.some((s) => s.sessionId === id)) continue;
       this.last.delete(id);
       this.deps.resume?.tracker.forget(id);
+      for (const t of this.wslTrackers.values()) t.tracker.forget(id);
     }
     if (wslSessions.length > 0 || this.wslHelpers.size > 0) await this.scanWsl(wslSessions);
     if (sessions.length > 0) {
@@ -152,6 +162,7 @@ export class AgentMonitor {
       if (distros.has(d)) continue;
       h.stop();
       this.wslHelpers.delete(d);
+      this.wslTrackers.delete(d);
     }
     for (const distro of distros) {
       let text: string | null;
@@ -162,17 +173,43 @@ export class AgentMonitor {
       }
       if (this.stopped) return;
       const byMarker = parseWslSnapshot(text ?? '');
+      const tracker = this.wslTrackerFor(distro, text ? parseWslHome(text) : null);
       for (const s of sessions.filter((x) => x.distro === distro)) {
         // The terminal's own shell always carries its marker: none at all means no answer, not "no agent".
         const processes = byMarker.get(s.marker!);
         if (!processes?.length) continue;
-        const agent = findWslAgent(processes)?.id ?? null;
+        const found = findWslAgent(processes);
+        const agent = found?.id ?? null;
         if (!this.last.has(s.sessionId) || this.last.get(s.sessionId) !== agent) {
           this.last.set(s.sessionId, agent);
           this.deps.report(s.ownerId, s.sessionId, agent);
         }
+        // Which conversation: only for terminals started in a folder (not in the Linux home).
+        if (tracker && s.linuxCwd && this.deps.resume && !this.stopped) {
+          const r = await tracker.update(s.sessionId, s.linuxCwd, found).catch(() => undefined);
+          if (r === undefined || this.stopped) continue;
+          if (r === null) {
+            this.deps.resume.report(s.ownerId, s.sessionId, null);
+            continue;
+          }
+          // Folders in Windows form, so the saved record means the same thing everywhere.
+          const cwd = linuxToWindowsPath(distro, r.cwd) ?? linuxToWindowsPath(distro, s.linuxCwd);
+          if (cwd) this.deps.resume.report(s.ownerId, s.sessionId, { ...r, cwd, wsl: true });
+        }
       }
     }
+  }
+
+  /** The tracker for a distribution's Linux home (kept while the home stays the same). */
+  private wslTrackerFor(distro: string, linuxHome: string | null): AgentSessionTracker | null {
+    const current = this.wslTrackers.get(distro);
+    const factory = this.deps.resume?.wslTracker;
+    const home = linuxHome ? wslHomeForWindows(distro, linuxHome) : null;
+    if (!factory || !home) return current?.tracker ?? null;
+    if (current?.home === home) return current.tracker;
+    const tracker = factory(home);
+    this.wslTrackers.set(distro, { home, tracker });
+    return tracker;
   }
 
   private wslHelper(distro: string): WslScanHelper | null {

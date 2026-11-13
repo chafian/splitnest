@@ -39,8 +39,34 @@ while IFS= read -r q; do
     a=$(tr '\000\t\n' '   ' < /proc/$p/cmdline 2>/dev/null | head -c 2000)
     printf '%s\t%s\t%s\t%s\t%s\n' "$p" "$2" "$t" "$c" "$a"
   done
+  printf 'HOME\t%s\n' "$HOME"
   printf '<<END %s>>\n' "${'$'}{q#scan }"
 done`;
+
+/** The Linux home folder the helper reported (its `HOME` line), if it looks like one. */
+export function parseWslHome(text: string): string | null {
+  const m = /^HOME\t(\/[^\0\r\n\t]{0,1000})$/m.exec(text);
+  const home = m?.[1]?.replace(/\/+$/, '');
+  return home && !home.split('/').includes('..') ? home : null;
+}
+
+const DISTRO_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/**
+ * A Linux path as Windows sees it: `/mnt/c/x` is `C:\x`; anything else is inside the distribution
+ * (`\\wsl.localhost\<distro>\…`). Null for paths that aren't plain absolute paths.
+ */
+export function linuxToWindowsPath(distro: string, linuxPath: string): string | null {
+  if (!DISTRO_NAME.test(distro) || !linuxPath.startsWith('/') || /[\0\r\n\\]/.test(linuxPath) || linuxPath.split('/').includes('..') || linuxPath.length > 4000) return null;
+  const drive = /^\/mnt\/([a-zA-Z])(\/.*)?$/.exec(linuxPath);
+  if (drive) return `${drive[1]!.toUpperCase()}:\\${(drive[2] ?? '').replace(/^\/+/, '').replace(/\//g, '\\')}`;
+  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\/+$/, '').replace(/\//g, '\\')}`;
+}
+
+/** The Linux home as a Windows path (to read the agents' session files there). */
+export function wslHomeForWindows(distro: string, home: string): string | null {
+  return home.startsWith('/mnt/') ? null : linuxToWindowsPath(distro, home);
+}
 
 /** One scan's answer: the marked processes of each terminal (by marker). */
 export function parseWslSnapshot(text: string): Map<string, ProcessInfo[]> {

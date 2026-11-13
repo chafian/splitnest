@@ -42,6 +42,8 @@ interface SessionRecord {
   /** WSL sessions: the distribution, and the marker its processes inherit (wsl-processes.ts). */
   distro?: string;
   marker?: string;
+  /** WSL sessions started in a folder: that folder's Linux path (what `--cd` got). */
+  linuxCwd?: string;
   /** The folder the shell was started in. */
   cwd?: string;
 }
@@ -56,6 +58,8 @@ export interface SessionProcess {
   /** WSL sessions: the distribution and the marker its Linux processes carry. */
   distro?: string;
   marker?: string;
+  /** WSL sessions started in a folder: its Linux path. */
+  linuxCwd?: string;
 }
 
 interface PendingSpawn {
@@ -167,6 +171,9 @@ export class SessionBroker {
         record.pid = spawned.pid;
         record.wsl = request.profileId.startsWith('wsl:');
         if (distro && marker) Object.assign(record, { distro, marker });
+        const cdAt = resolved.launch.args.indexOf('--cd');
+        const linuxCwd = distro && cdAt >= 0 ? resolved.launch.args[cdAt + 1] : undefined;
+        if (linuxCwd && linuxCwd.startsWith('/')) record.linuxCwd = linuxCwd;
       }
       this.log.info(`session started (${resolved.profileLabel})`);
       return { ok: true, sessionId, cwdLabel: resolved.launch.cwdLabel, profileLabel: resolved.profileLabel, repaintsOnResize: spawned.repaintsOnResize };
@@ -226,7 +233,7 @@ export class SessionBroker {
     const out: SessionProcess[] = [];
     for (const s of this.sessions.values()) {
       if (s.status === 'running' && s.pid) {
-        out.push({ sessionId: s.id, ownerId: s.ownerId, pid: s.pid, wsl: s.wsl === true, cwd: s.cwd ?? '', ...(s.distro && s.marker ? { distro: s.distro, marker: s.marker } : {}) });
+        out.push({ sessionId: s.id, ownerId: s.ownerId, pid: s.pid, wsl: s.wsl === true, cwd: s.cwd ?? '', ...(s.distro && s.marker ? { distro: s.distro, marker: s.marker } : {}), ...(s.linuxCwd ? { linuxCwd: s.linuxCwd } : {}) });
       }
     }
     return out;

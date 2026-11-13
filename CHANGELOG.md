@@ -2,6 +2,10 @@
 
 All notable changes to SplitNest. Release notes on GitHub are taken from the section for each version.
 
+## Unreleased
+
+- **Exact Resume in WSL tabs**: SplitNest now finds which Claude Code, Codex or Gemini CLI conversation runs in a WSL terminal (from the agent's files in your Linux home, read through `\\wsl.localhost`; Claude Code by its Linux process), so after a restart Resume starts WSL in the agent's folder and reopens that conversation, instead of opening the agent's list. Nothing is written in the distribution.
+
 ## 0.2.1 (2026-11-13)
 
 Feedback links, a What's new notice after updates, Resume for Gemini CLI, and agent detection in WSL tabs.

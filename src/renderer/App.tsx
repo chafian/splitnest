@@ -1002,7 +1002,13 @@ export function App() {
       const ws = stateRef.current.workspaces.find((w) => findPaneOfTab(w.layout, tabId));
       if (!ws) return;
       let next = resume;
-      if (next && !next.cwd) next = { ...next, cwd: ws.rootPath }; // from a WSL tab
+      if (next && !next.cwd) {
+        // A WSL tab's "this agent runs here" (from its reports): it never replaces the exact
+        // conversation main already found for the same agent in that terminal.
+        const current = listTerminalTabs(ws.layout).find((t) => t.id === tabId)?.resume;
+        if (current?.wsl && current.agent === next.agent && current.sessionId) return;
+        next = { ...next, cwd: ws.rootPath, wsl: true };
+      }
       if (next) {
         // The title: the agent's own record (Claude Code), else the session title it reported in the terminal.
         const { title: fromMain, ...rest } = next;

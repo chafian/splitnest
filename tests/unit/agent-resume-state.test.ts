@@ -138,7 +138,7 @@ describe('agent resume: what runs', () => {
     expect(resumeCommand({ agent: 'claude', sessionId: `${ID}; Remove-Item -Recurse C:\\` })).toBe('claude --resume');
   });
 
-  it('main starts the shell in the agent folder only inside the workspace, only for PowerShell, only if it exists', async () => {
+  it('main starts the shell in the agent folder only inside the workspace and only if it exists (WSL: that folder mapped with wslpath)', async () => {
     const root = 'C:\\code\\w1';
     const resolve = (isDirectory: (p: string) => boolean) =>
       createLaunchResolver({
@@ -159,7 +159,8 @@ describe('agent resume: what runs', () => {
         }),
         isDirectory: async (p) => isDirectory(p),
         exists: async () => true,
-        run: async () => ({ code: 0, stdout: Buffer.from('/mnt/c/code/w1'), stderr: Buffer.alloc(0), timedOut: false, notFound: false }),
+        // wslpath stand-in: the Windows folder asked for (the last argument) as /mnt/c/...
+        run: async (_file, args) => ({ code: 0, stdout: Buffer.from(`/mnt/c/${String(args[args.length - 1]).slice(3).replace(/\\/g, '/')}`), stderr: Buffer.alloc(0), timedOut: false, notFound: false }),
         env: {},
         homeDir: 'C:\\Users\\me',
       });
@@ -168,7 +169,9 @@ describe('agent resume: what runs', () => {
     expect(await all(req({ startPath: 'C:\\code\\w1\\api' }))).toMatchObject({ ok: true, launch: { cwd: 'C:\\code\\w1\\api', cwdLabel: 'C:\\code\\w1\\api' } });
     expect(await all(req({ startPath: 'C:\\code\\w1-other' }))).toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } });
     expect(await all(req({ startPath: 'C:\\code\\w1\\..\\..\\Windows' }))).toMatchObject({ ok: false });
-    expect(await all(req({ startPath: 'C:\\code\\w1\\api', profileId: 'wsl:Ubuntu' }))).toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } });
+    expect(await all(req({ startPath: 'C:\\code\\w1\\api', profileId: 'wsl:Ubuntu' }))).toMatchObject({ ok: true, launch: { args: ['--distribution', 'Ubuntu', '--cd', '/mnt/c/code/w1/api'], cwdLabel: '/mnt/c/code/w1/api' } });
+    expect(await all(req({ profileId: 'wsl:Ubuntu' }))).toMatchObject({ ok: true, launch: { args: ['--distribution', 'Ubuntu', '--cd', '/mnt/c/code/w1'] } });
+    expect(await all(req({ startPath: 'C:\\code\\w1-other', profileId: 'wsl:Ubuntu' }))).toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } });
     expect(await resolve((p) => p === root)(req({ startPath: 'C:\\code\\w1\\gone' }))).toMatchObject({ ok: false, error: { code: 'FOLDER_MISSING' } });
     expect(() => req({ startPath: 'relative\\dir' })).toThrow();
     expect(() => req({ startPath: 'C:\\code\\w1', startIn: 'home' })).toThrow();

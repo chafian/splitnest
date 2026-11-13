@@ -74,8 +74,8 @@ export function createLaunchResolver(deps: ResolverDeps): LaunchResolver {
       };
     }
     if (request.startPath !== undefined) {
-      // Resuming an agent where it ran: only inside this workspace, only in PowerShell.
-      if (profile.kind === 'wsl' || request.startIn !== 'workspace-root' || !withinFolder(request.startPath, workspace.rootPath)) {
+      // Resuming an agent where it ran: only inside this workspace (WSL maps that folder below).
+      if (request.startIn !== 'workspace-root' || !withinFolder(request.startPath, workspace.rootPath)) {
         return { ok: false, error: { code: 'INVALID_REQUEST', message: 'That folder is not inside this workspace.' } };
       }
       if (!(await deps.isDirectory(request.startPath))) {
@@ -84,7 +84,7 @@ export function createLaunchResolver(deps: ResolverDeps): LaunchResolver {
     }
     let linuxPath: string | undefined;
     if (profile.kind === 'wsl' && request.startIn === 'workspace-root') {
-      const resolved = await resolveWslDirectory(deps.run, executable, profile.distro!, workspace.rootPath, deps.env);
+      const resolved = await resolveWslDirectory(deps.run, executable, profile.distro!, request.startPath ?? workspace.rootPath, deps.env);
       if (!resolved.ok) return resolved;
       linuxPath = resolved.linuxPath;
     }

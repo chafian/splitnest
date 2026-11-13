@@ -139,6 +139,31 @@ const fileWatcher = new OpenFileWatcher(
   { onError: (message) => log.warn(message) },
 );
 
+/** Reading the agents' session files: small reads from the start, folder listings, modification times. */
+const agentFiles = {
+  readText: async (file: string, maxBytes: number): Promise<string | null> => {
+    try {
+      const handle = await fsp.open(file, 'r');
+      try {
+        const buf = Buffer.alloc(maxBytes);
+        const { bytesRead } = await handle.read(buf, 0, maxBytes, 0);
+        return buf.subarray(0, bytesRead).toString('utf8');
+      } finally {
+        await handle.close();
+      }
+    } catch {
+      return null;
+    }
+  },
+  list: (dir: string): Promise<string[]> => fsp.readdir(dir).catch(() => []),
+  mtimeMs: (file: string): Promise<number | null> =>
+    fsp.stat(file).then(
+      (st) => st.mtimeMs,
+      () => null,
+    ),
+  now: () => Date.now(),
+};
+
 const agentMonitor = new AgentMonitor({
   sessions: () => broker.runningProcesses(),
   report: (ownerId, sessionId, agent) => {
@@ -152,27 +177,11 @@ const agentMonitor = new AgentMonitor({
     tracker: new AgentSessionTracker({
       // Development E2E runs point this at a temporary folder (never in packaged builds).
       home: (!app.isPackaged && process.env.TW_E2E === '1' && process.env.TW_E2E_AGENT_HOME) || os.homedir(),
-      readText: async (file, maxBytes) => {
-        try {
-          const handle = await fsp.open(file, 'r');
-          try {
-            const buf = Buffer.alloc(maxBytes);
-            const { bytesRead } = await handle.read(buf, 0, maxBytes, 0);
-            return buf.subarray(0, bytesRead).toString('utf8');
-          } finally {
-            await handle.close();
-          }
-        } catch {
-          return null;
-        }
-      },
-      list: (dir) => fsp.readdir(dir).catch(() => []),
-      mtimeMs: (file) => fsp.stat(file).then(
-        (s) => s.mtimeMs,
-        () => null,
-      ),
-      now: () => Date.now(),
+      ...agentFiles,
     }),
+    // WSL: the same files under the distribution's Linux home, read through \\wsl.localhost.
+    // Development E2E runs may point it at a temporary folder inside the distribution (Windows form).
+    wslTracker: (home) => new AgentSessionTracker({ home: (!app.isPackaged && process.env.TW_E2E === '1' && process.env.TW_E2E_WSL_AGENT_HOME) || home, ...agentFiles }),
     report: (ownerId, sessionId, resume) => {
       const contents = webContents.fromId(ownerId);
       if (contents && !contents.isDestroyed()) contents.send(IPC.sessionResume, { sessionId, resume });

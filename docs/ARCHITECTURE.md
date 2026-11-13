@@ -81,7 +81,7 @@
   - **Codex:** the id in `codex resume <id>`, else the single rollout (`~/.codex/sessions/…`, first line only) started in the tab's folder after the agent was first seen and not claimed by another tab, else none (the agent's picker).
   - Only metadata is read. Ids must be UUIDs and folders absolute (`shared/agent-resume.ts`).
 - **Saved (renderer).** `IPC.sessionResume` → `TerminalTab.resume` via `setTabResume`; validated on load (a bad record drops only Resume). Main stops the monitor before ending shells at quit, so quitting doesn't clear it.
-- **Resume.** `TerminalController.resume()` starts PowerShell with `startPath` (main checks: inside the workspace folder, exists, not WSL), waits for the prompt (output, then 600 ms quiet), and writes `resumeCommand()` (built from the agent id and a validated UUID only). If process detection doesn't find that agent within 25 s, the pane says so.
+- **Resume.** `TerminalController.resume()` starts the shell with `startPath` (main checks: inside the workspace folder, exists; for WSL the folder is mapped with `wslpath`), waits for the prompt (output, then 600 ms quiet), and writes `resumeCommand()` (built from the agent id and a validated UUID only). If process detection doesn't find that agent within 25 s, the pane says so.
 
 ## Agent notifications
 
@@ -96,7 +96,7 @@
 - **Text (main).** `src/main/notifications.ts` writes all Windows notification text from the event kind, the agent id, and the workspace and tab names in main's saved state (`shared/notifications.ts`, shared with the in-app notice).
   - **Agent's own text:** session title and message are used only with *Include what the agent wrote*.
   - **Validation:** the page's request is checked whole (ids, kind, agent id, app name, lengths).
-- **WSL processes.** Each WSL session gets `SPLITNEST_TERMINAL=<16 hex>` (via `WSLENV`, `/u`), inherited by its Linux processes. `wsl-processes.ts` keeps one `sh` per distribution in use (`wsl.exe --distribution <name> --exec sh -c <script>`); each scan greps `/proc/*/environ` for the marker and prints pid, parent, marker, name and command line of those processes, and `findWslAgent` searches below each terminal's shell. No answer means "no information" (the last result stays).
+- **WSL processes.** Each WSL session gets `SPLITNEST_TERMINAL=<16 hex>` (via `WSLENV`, `/u`), inherited by its Linux processes. `wsl-processes.ts` keeps one `sh` per distribution in use (`wsl.exe --distribution <name> --exec sh -c <script>`); each scan greps `/proc/*/environ` for the marker and prints pid, parent, marker, name and command line of those processes, and `findWslAgent` searches below each terminal's shell. No answer means "no information" (the last result stays). Each scan also prints `$HOME`; per distribution an `AgentSessionTracker` reads the agents' files there through `\\wsl.localhost\<distribution>` (Linux pid for Claude Code, Codex and Gemini as on Windows, with the terminal's `--cd` folder), and the folder is reported in Windows form with `wsl: true` on the record (`resumeForShell` keeps it exact only in WSL terminals).
 - **Identity.** A Windows notification needs `AgentView.confirmed`: process detection found the agent the reports name, or the terminal is WSL (where an agent's report still counts on its own). An unconfirmed "needs you" waits for confirmation; other unconfirmed events stay in-app.
 - **Clicks.**
   - **Routing:** each notification's `click` event, through main's notification → tab map. Windows' activation arguments are empty for Electron notifications (measured).

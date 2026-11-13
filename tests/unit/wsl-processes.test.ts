@@ -3,7 +3,20 @@
 // real distribution by tests/e2e/run-e2e.mjs.
 import { describe, expect, it } from 'vitest';
 import { AgentMonitor } from '../../src/main/agent-monitor';
-import { findWslAgent, newWslMarker, parseWslSnapshot, withWslMarker, WSL_MARKER, WSL_SCAN_SCRIPT } from '../../src/main/wsl-processes';
+import path from 'node:path';
+import { AgentSessionTracker } from '../../src/main/agent-sessions';
+import {
+  findWslAgent,
+  linuxToWindowsPath,
+  newWslMarker,
+  parseWslHome,
+  parseWslSnapshot,
+  withWslMarker,
+  wslHomeForWindows,
+  WSL_MARKER,
+  WSL_SCAN_SCRIPT,
+} from '../../src/main/wsl-processes';
+import { parseAgentResume, resumeForShell, type AgentResume } from '../../src/shared/agent-resume';
 import type { AgentId } from '../../src/shared/agents';
 import { mergeSessionEnv } from '../../src/pty-host/session-manager';
 
@@ -105,6 +118,83 @@ describe('WSL agent detection: the monitor', () => {
     asked.length = 0;
     await tick();
     expect(asked).toEqual(['Debian']);
+    monitor.stop();
+  });
+});
+
+describe('WSL resume: paths and records', () => {
+  it('reads the Linux home from a scan, and refuses anything odd', () => {
+    expect(parseWslHome(`11\t10\t${M1}\tbash\t-bash\nHOME\t/home/me\n`)).toBe('/home/me');
+    expect(parseWslHome('HOME\t/root/\n')).toBe('/root');
+    expect(parseWslHome('HOME\trelative\n')).toBeNull();
+    expect(parseWslHome('HOME\t/home/../etc\n')).toBeNull();
+    expect(parseWslHome('nothing')).toBeNull();
+  });
+
+  it('gives Linux folders in Windows form: /mnt/<drive> as the drive, the rest inside the distribution', () => {
+    expect(linuxToWindowsPath('Ubuntu-22.04', '/mnt/c/Users/me/car-rental')).toBe('C:\\Users\\me\\car-rental');
+    expect(linuxToWindowsPath('Ubuntu-22.04', '/mnt/d')).toBe('D:\\');
+    expect(linuxToWindowsPath('Ubuntu-22.04', '/home/me/api/')).toBe('\\\\wsl.localhost\\Ubuntu-22.04\\home\\me\\api');
+    expect(linuxToWindowsPath('Ubuntu-22.04', 'relative')).toBeNull();
+    expect(linuxToWindowsPath('Ubuntu-22.04', '/home/me/../../etc')).toBeNull();
+    expect(linuxToWindowsPath('Ubuntu-22.04', '/home/me\\x')).toBeNull();
+    expect(linuxToWindowsPath('bad\\name', '/home/me')).toBeNull();
+    // The home is read through \\wsl.localhost; a home on a Windows drive isn't used.
+    expect(wslHomeForWindows('Ubuntu-22.04', '/home/me')).toBe('\\\\wsl.localhost\\Ubuntu-22.04\\home\\me');
+    expect(wslHomeForWindows('Ubuntu-22.04', '/mnt/c/Users/me')).toBeNull();
+  });
+
+  it('a record from WSL resumes exactly only in WSL, a Windows one only in PowerShell; it keeps the WSL mark when saved', () => {
+    const fromWsl: AgentResume = { agent: 'claude', sessionId: 'ff7e99ad-614e-4263-8b68-9515e5f3d720', cwd: 'C:\\code\\w1', exact: true, at: 1, wsl: true };
+    expect(resumeForShell(fromWsl, true)).toBe(fromWsl);
+    expect(resumeForShell(fromWsl, false)).toMatchObject({ sessionId: null, exact: false });
+    const fromWindows: AgentResume = { ...fromWsl, wsl: undefined };
+    delete fromWindows.wsl;
+    expect(resumeForShell(fromWindows, false)).toBe(fromWindows);
+    expect(resumeForShell(fromWindows, true)).toMatchObject({ sessionId: null });
+    expect(parseAgentResume(fromWsl)).toEqual(fromWsl);
+    expect(parseAgentResume({ ...fromWsl, wsl: 'yes' })).not.toHaveProperty('wsl');
+    // A folder inside the distribution is a valid saved folder too.
+    expect(parseAgentResume({ ...fromWsl, cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\api' })?.cwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\api');
+  });
+
+  it("the monitor finds Claude Code's conversation in a WSL terminal through its Linux pid and reports it in Windows form", async () => {
+    const HOME = '\\\\wsl.localhost\\Ubuntu\\home\\me';
+    const ID = 'ff7e99ad-614e-4263-8b68-9515e5f3d720';
+    const files: Record<string, string> = {
+      [path.join(HOME, '.claude', 'sessions', '20.json')]: JSON.stringify({ pid: 20, sessionId: ID, cwd: '/mnt/c/code/w1/api', kind: 'interactive', name: 'Fix login redirect' }),
+    };
+    const homes: string[] = [];
+    const reports: (AgentResume | null)[] = [];
+    let scan = [row(11, 10, M1, 'bash', '-bash'), row(20, 11, M1, 'claude', 'claude'), 'HOME\t/home/me'].join('\n');
+    const monitor = new AgentMonitor({
+      sessions: () => [{ sessionId: 'w1', ownerId: 1, pid: 700, wsl: true, cwd: 'C:\\code\\w1', distro: 'Ubuntu', marker: M1, linuxCwd: '/mnt/c/code/w1' }],
+      report: () => undefined,
+      powershellPath: 'unused',
+      log: () => undefined,
+      snapshot: async () => [],
+      wslSnapshot: async () => scan,
+      resume: {
+        tracker: new AgentSessionTracker({ home: 'C:\\Users\\me', readText: async () => null, list: async () => [], mtimeMs: async () => null, now: () => 5 }),
+        report: (_o, _s, r) => reports.push(r),
+        wslTracker: (home) => {
+          homes.push(home);
+          return new AgentSessionTracker({ home, readText: async (f) => files[f] ?? null, list: async () => [], mtimeMs: async () => null, now: () => 5 });
+        },
+      },
+    });
+    const tick = () => (monitor as unknown as { tick(): Promise<void> }).tick();
+    await tick();
+    expect(homes).toEqual([HOME]);
+    expect(reports).toEqual([{ agent: 'claude', sessionId: ID, cwd: 'C:\\code\\w1\\api', exact: true, at: 5, title: 'Fix login redirect', wsl: true }]);
+    // Unchanged: nothing new is reported; the same tracker is kept.
+    await tick();
+    expect(reports).toHaveLength(1);
+    expect(homes).toHaveLength(1);
+    // Claude exits: the record goes.
+    scan = [row(11, 10, M1, 'bash', '-bash'), 'HOME\t/home/me'].join('\n');
+    await tick();
+    expect(reports[1]).toBeNull();
     monitor.stop();
   });
 });

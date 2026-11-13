@@ -1,7 +1,7 @@
 // A split pane: a tab bar on top and one terminal or file editor per tab.
 // Inactive tabs stay mounted (hidden) so their shells keep running and keep
 // their scrollback, and editors keep unsaved text and undo history.
-import { RESUME_LABEL, resumeCommand, resumeFallbackText } from '../../../shared/agent-resume';
+import { RESUME_LABEL, resumeCommand, resumeFallbackText, resumeForShell } from '../../../shared/agent-resume';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import type { PaneLeaf, SessionStatus, ShellDiscovery, StartLocation, TerminalTab, Workspace } from '../../../shared/types';
 import { isFileTab, isTerminalTab, LIMITS } from '../../../shared/types';
@@ -630,8 +630,8 @@ function TabView(props: {
   }, [controller]);
 
   const start = (startIn: StartLocation) => void controller.start(tab.profileId, startIn);
-  // WSL: which conversation ran isn't known there, so Resume opens the agent's own list.
-  const resume = tab.resume ? (tab.profileId.startsWith('wsl:') ? { ...tab.resume, sessionId: null, exact: false } : tab.resume) : null;
+  // The exact conversation only in the kind of shell it ran in (a WSL record in WSL); else the agent's own list.
+  const resume = tab.resume ? resumeForShell(tab.resume, tab.profileId.startsWith('wsl:')) : null;
   const resumeLabel = resume ? RESUME_LABEL[resume.agent] : '';
 
   return (

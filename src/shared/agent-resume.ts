@@ -18,6 +18,11 @@ export interface AgentResume {
   at: number;
   /** The conversation's title (setting `resumeTitles`); plain text, at most TITLE_MAX characters. */
   title?: string;
+  /**
+   * The agent ran in a WSL terminal (its id and folder come from the Linux side; `cwd` is that
+   * folder in Windows form). Resumed exactly only in a WSL terminal again.
+   */
+  wsl?: true;
 }
 
 export const TITLE_MAX = 120;
@@ -44,7 +49,15 @@ export function parseAgentResume(v: unknown): AgentResume | null {
   if (typeof r.cwd !== 'string' || r.cwd.length < 3 || r.cwd.length > 4096 || /[\0\r\n]/.test(r.cwd) || !/^([a-zA-Z]:[\\/]|\\\\)/.test(r.cwd)) return null;
   if (typeof r.exact !== 'boolean' || typeof r.at !== 'number' || !Number.isFinite(r.at)) return null;
   const title = cleanTitle(r.title);
-  return { agent: r.agent, sessionId: r.sessionId, cwd: r.cwd, exact: r.exact && r.sessionId !== null, at: r.at, ...(title ? { title } : {}) };
+  return {
+    agent: r.agent,
+    sessionId: r.sessionId,
+    cwd: r.cwd,
+    exact: r.exact && r.sessionId !== null,
+    at: r.at,
+    ...(title ? { title } : {}),
+    ...(r.wsl === true ? { wsl: true as const } : {}),
+  };
 }
 
 export const RESUME_LABEL: Record<ResumableAgent, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI' };
@@ -67,4 +80,12 @@ export function resumeFallbackText(agent: ResumableAgent, cwd: string): string {
   return agent === 'gemini'
     ? `The exact conversation isn't known, so Resume opens Gemini CLI's most recent conversation in ${cwd} (type /resume there to pick another).`
     : `The exact conversation isn't known, so Resume opens ${RESUME_LABEL[agent]}'s list of earlier conversations in ${cwd}.`;
+}
+
+/**
+ * What Resume uses in a terminal of this shell: the exact conversation only where it was recorded
+ * (a WSL record in a WSL terminal, a Windows one in PowerShell); elsewhere the agent's own list.
+ */
+export function resumeForShell(r: AgentResume, wslTerminal: boolean): AgentResume {
+  return (r.wsl === true) === wslTerminal ? r : { ...r, sessionId: null, exact: false };
 }
