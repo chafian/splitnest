@@ -8,7 +8,7 @@
 //  3. answer "Keep automatic updates": the update is found and downloaded in the background from
 //     the repository's GitHub Releases, and "Update ready" appears;
 //  4. "Restart now": SplitNest quits and the newer version starts; settings are kept;
-//  5. the newer version: one Start menu entry, a real notification under the installed App ID;
+//  5. the newer version: "What's new" once (from 0.2.1), one Start menu entry, a real notification under the installed App ID;
 //  6. a corrupted update package is refused and the installed version keeps working;
 //  7. uninstall.
 import { createRequire } from 'node:module';
@@ -28,6 +28,12 @@ if (!process.env.GITHUB_ACTIONS) {
 const oldVersion = oldTag.replace(/^v/, '');
 mkdirSync(path.dirname(path.resolve(resultsFile)), { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** `version` is `min` or later (x.y.z; a prerelease of `min` counts as earlier). */
+const atLeast = (version, min) => {
+  const [a, b] = [version, min].map((v) => v.split('-')[0].split('.').map(Number));
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return !version.includes('-');
+};
 const ps = (cmd) => {
   try {
     return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference = 'SilentlyContinue'; ${cmd}`], { encoding: 'utf8', maxBuffer: 16 << 20 }).trim();
@@ -121,6 +127,16 @@ try {
   const entries = ps(`Get-ChildItem '${lnk}' -Recurse -Filter *.lnk | Where-Object { $_.Name -like '*plit*' } | ForEach-Object { $_.FullName }`).split(/\r?\n/).filter(Boolean);
   check('one Start menu entry after the update', entries.length === 1, entries.map((e) => path.basename(e)));
   ({ browser, page } = await attach(appExe(newVersion)));
+  // From 0.2.1 on: the first start of the newer version names it and offers its release notes, once.
+  if (atLeast(newVersion, '0.2.1')) {
+    const notice = await page.waitForSelector('[data-testid="whats-new"]', { timeout: 20_000 }).catch(() => null);
+    const text = notice ? await notice.textContent() : null;
+    check(`"What's new" names ${newVersion} after the update`, !!text?.includes(newVersion), { text });
+    if (notice) await page.click('[data-testid="whats-new-dismiss"]');
+    await sleep(1500); // the state file is written shortly after a change
+    const seen = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, 'utf8')).settings?.lastVersionSeen : null;
+    check(`"What's new" dismissed is remembered (${newVersion})`, seen === newVersion, { lastVersionSeen: seen });
+  }
   await page.keyboard.press('Control+,');
   await page.click('.settings-nav__item:has-text("Notifications")');
   await page.click('button:has-text("Send a test notification")');
