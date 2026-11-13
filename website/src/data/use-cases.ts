@@ -41,11 +41,7 @@ export const useCases: UseCase[] = [
       {
         h: 'Run Claude Code in either shell',
         html: `<p>Start Claude Code in a tab the way you normally would. SplitNest answers the status protocol's feature query that Claude Code waits for, so Claude Code reports its own state (Working, Needs you, Done) and the tab shows its logo. No Claude Code settings or hooks are changed.</p>
-<p>There is one difference between the two shells, because Windows cannot see Linux processes:</p>
-<ul>
-<li><strong>PowerShell tabs</strong> also get process detection, which finds the agent even if it does not report.</li>
-<li><strong>WSL tabs</strong> rely on Claude Code's own reports (or its exact title). Claude Code's first-run questions are not reported, so they show as idle.</li>
-</ul>`,
+<p>In both shells SplitNest also looks for the agent's process (in WSL, among the Linux processes started in that terminal), so it is found even if it does not report. Claude Code's first-run questions are not reported, so they show as idle.</p>`,
       },
       {
         h: 'After a restart',
@@ -91,7 +87,7 @@ export const useCases: UseCase[] = [
       },
       {
         h: 'Which agents',
-        html: `<p>Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor Agent, Aider, OpenCode, Qwen Code and Amp are recognised. Agents that report their own state (the Program Status Protocol, OSC 7501) give the most accurate result; for others SplitNest falls back to process detection in PowerShell tabs, and to clearly marked guesses.</p>`,
+        html: `<p>Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor Agent, Aider, OpenCode, Qwen Code and Amp are recognised. Agents that report their own state (the Program Status Protocol, OSC 7501) give the most accurate result; for others SplitNest falls back to process detection in PowerShell and WSL tabs, and to clearly marked guesses.</p>`,
       },
       {
         h: 'Good to know',
@@ -144,9 +140,9 @@ export const useCases: UseCase[] = [
   {
     slug: 'resume-agent-conversations-after-restart',
     name: 'Pick up agent conversations after a restart',
-    title: 'Pick up Claude Code and Codex conversations after a restart',
+    title: 'Pick up Claude Code, Codex and Gemini CLI conversations after a restart',
     description:
-      'Restart Windows or SplitNest without losing track of an agent conversation. SplitNest restores your layout and offers a visible, one-click Resume for Claude Code and Codex.',
+      'Restart Windows or SplitNest without losing track of an agent conversation. SplitNest restores your layout and offers a visible, one-click Resume for Claude Code, Codex and Gemini CLI.',
     summary: 'Restore the layout, then resume the exact conversation with one click, with nothing run behind your back.',
     intro:
       'Restarting Windows or closing SplitNest ends your shells, but you do not want to lose the thread of an agent conversation. SplitNest brings the layout back and offers to resume each conversation, only when you click.',
@@ -159,11 +155,11 @@ export const useCases: UseCase[] = [
       },
       {
         h: 'What you can resume',
-        html: `<p>If Claude Code or Codex was running in a terminal when SplitNest closed, that terminal says so and offers <strong>Resume Claude Code</strong> (or Codex) next to <em>Start PowerShell only</em>. The notice offers <strong>Resume agents (N)</strong> for the whole workspace. The text above the button states exactly what will run, and nothing runs until you click.</p>`,
+        html: `<p>If Claude Code, Codex or Gemini CLI was running in a terminal when SplitNest closed, that terminal says so and offers <strong>Resume Claude Code</strong> (or Codex, or Gemini CLI) next to <em>Start PowerShell only</em>. The notice offers <strong>Resume agents (N)</strong> for the whole workspace. The text above the button states exactly what will run, and nothing runs until you click.</p>`,
       },
       {
         h: 'What it types',
-        html: `<p>A new PowerShell starts in the folder the agent ran in, and <code>claude --resume &lt;id&gt;</code> or <code>codex resume &lt;id&gt;</code> is typed at the prompt, visibly. Two Claude Code agents in the same folder each resume their own conversation. If SplitNest cannot be sure which conversation was meant, it opens the agent's own list of earlier conversations instead of guessing.</p>`,
+        html: `<p>A new PowerShell starts in the folder the agent ran in, and <code>claude --resume &lt;id&gt;</code>, <code>codex resume &lt;id&gt;</code> or <code>gemini --resume &lt;id&gt;</code> is typed at the prompt, visibly. Two Claude Code agents in the same folder each resume their own conversation. If SplitNest cannot be sure which conversation was meant, it opens the agent's own list of earlier conversations instead of guessing. Gemini CLI has no such list on its command line, so there Resume runs <code>gemini --resume</code>, its most recent conversation in that folder.</p>`,
       },
       {
         h: 'What is stored',

@@ -12,7 +12,7 @@ const highlights = [
   { t: 'Agent-aware tabs', d: 'Claude Code, Codex and seven more get their logo and a live state on the tab: Working, Needs you, Done or Error.', h: '/features/agent-aware-tabs/' },
   { t: 'Never miss a prompt', d: 'In-app notices, Windows notifications and a taskbar flash tell you when an agent needs permission, asks a question, finishes or fails.', h: '/features/notifications/' },
   { t: 'One inbox for every agent', d: 'A bell in the title bar lists every waiting agent across all workspaces. One shortcut jumps to the next.', h: '/features/agent-inbox/' },
-  { t: 'Pick up where you left off', d: 'After a restart, terminals that ran Claude Code or Codex offer a Resume button for that conversation.', h: '/features/resume-conversations/' },
+  { t: 'Pick up where you left off', d: 'After a restart, terminals that ran Claude Code, Codex or Gemini CLI offer a Resume button for that conversation.', h: '/features/resume-conversations/' },
   { t: 'Projects, not windows', d: 'Each folder is a workspace with its own layout. Background sessions keep running, and layouts come back after a restart.', h: '/features/workspaces-splits-tabs/' },
   { t: 'Everything beside the terminal', d: 'File explorer, a built-in CodeMirror editor, per-workspace Git status, five themes and a command palette.', h: '/features/file-explorer-editor/' },
   { t: 'Private by design', d: 'No telemetry, no terminal output or credentials saved, and agent text stays out of notifications unless you opt in.', h: '/privacy/' },
@@ -114,7 +114,7 @@ const highlights = [
           <p class="eyebrow">Resume</p>
           <h2>Pick up agent conversations after a restart</h2>
           <p>
-            If Claude Code or Codex was running when SplitNest closed, that terminal says so and offers <strong>Resume Claude Code</strong> (or Codex). The text above the button states exactly what will run, and nothing runs until you click. Only the conversation id, folder and an optional title are saved, never conversation text.
+            If Claude Code, Codex or Gemini CLI was running when SplitNest closed, that terminal says so and offers <strong>Resume Claude Code</strong> (or Codex, or Gemini CLI). The text above the button states exactly what will run, and nothing runs until you click. Only the conversation id, folder and an optional title are saved, never conversation text.
           </p>
           <p><a class="more-link" href="/features/resume-conversations/">How resume works →</a></p>
         </div>
@@ -170,7 +170,7 @@ const highlights = [
         </li>
         <li>
           <h3>Process detection</h3>
-          <p class="muted">In PowerShell tabs a hidden helper looks for the agent's process under the tab's shell. Command lines never leave the main process and are not logged.</p>
+          <p class="muted">In PowerShell and WSL tabs a hidden helper looks for the agent's process under the tab's shell. Command lines never leave the main process and are not logged.</p>
         </li>
         <li>
           <h3>Fallbacks, marked as guesses</h3>

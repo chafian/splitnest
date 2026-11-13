@@ -21,7 +21,7 @@ Open your project folders as workspaces, run real **PowerShell** and **WSL** she
 - **Agent-aware tabs.** Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor Agent, Aider, OpenCode, Qwen Code and Amp get their logo and a live state on the tab: *Working*, *Needs you*, *Done* or *Error*.
 - **Never miss a prompt.** In-app notices, Windows notifications and a taskbar flash tell you when an agent needs a permission, asks a question, finishes or fails.
 - **One inbox for every agent.** A bell in the title bar lists every waiting agent across all workspaces; one shortcut jumps to the next.
-- **Pick up where you left off.** After a restart, terminals that ran Claude Code or Codex offer a **Resume** button for that conversation.
+- **Pick up where you left off.** After a restart, terminals that ran Claude Code, Codex or Gemini CLI offer a **Resume** button for that conversation.
 - **Projects, not windows.** Each folder is a workspace with its own layout. Background sessions keep running, and layouts and folders come back after a restart.
 - **Everything beside the terminal.** File explorer, a built-in CodeMirror editor, per-workspace Git status, five themes and a command palette.
 - **Private by design.** No telemetry, no terminal output or credentials saved, and agent text stays out of notifications unless you opt in.
@@ -48,7 +48,7 @@ The bell in the title bar (**Ctrl+Shift+A**) lists every agent waiting for you i
 
 ![A restored terminal: "Claude Code was running here" with a Resume Claude Code button](docs/readme/resume.png)
 
-If Claude Code or Codex was running when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex). The text above the button states exactly what will run, and nothing runs until you click. Only the conversation id, folder and an optional title are saved, never conversation text.
+If Claude Code, Codex or Gemini CLI was running when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex, or Gemini CLI). The text above the button states exactly what will run, and nothing runs until you click. Only the conversation id, folder and an optional title are saved, never conversation text.
 
 ## Workspaces, splits and tabs
 
@@ -149,7 +149,7 @@ SplitNest is an **early release (v0.2)**. It works for daily use, but it has bee
 - Windows 11 x64 only; builds are **unsigned** (Windows SmartScreen may warn; see the [code signing policy](CODE_SIGNING.md)). Since version 0.2.0 there is an installer with automatic updates; see [CHANGELOG.md](CHANGELOG.md).
 - The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.
 - Full-screen programs work, but ConPTY repaints them itself, so their screens can leave frames in the scrollback.
-- WSL tabs cannot use process detection, so they rely on the agent's own status reports; Resume there opens the agent's own conversation list rather than a specific conversation.
+- In WSL tabs, Resume opens the agent's own conversation list rather than a specific conversation (agents themselves are detected there like in PowerShell tabs).
 - Display scaling, Windows 10 and PowerShell 7 are untested.
 - Scrollback is per pane and lives only in memory.
 
@@ -187,6 +187,7 @@ Documentation: [user guide](docs/USER_GUIDE.md) · [architecture](docs/ARCHITECT
 - **Found a bug?** [Report it](https://github.com/chafian/splitnest/issues/new?template=bug_report.yml) (please include your Windows version, shell and agent).
 - **Missing something?** [Request a feature](https://github.com/chafian/splitnest/issues/new?template=feature_request.yml).
 - **Questions, ideas or how you use it:** [Discussions](https://github.com/chafian/splitnest/discussions).
+- **From the app:** Settings → About → Feedback (or *Report a bug* in the command palette) opens the same forms, with your version filled in.
 - **Security issue?** Do not open a public issue; report it privately as described in [SECURITY.md](SECURITY.md).
 - **Want to hear about new releases?** On GitHub choose **Watch → Custom → Releases**.
 

@@ -55,7 +55,7 @@ export const features: Feature[] = [
         h: 'How SplitNest knows',
         html: `<ol>
 <li><strong>The agent reports itself</strong> through the Program Status Protocol (OSC 7501). SplitNest answers the protocol's feature query, which Claude Code waits for before reporting; Codex reports on its own. This was checked with Claude Code 2.1.316 and Codex 0.166.0.</li>
-<li><strong>Process detection</strong> in PowerShell tabs: a hidden helper looks for the agent's process under the tab's shell, every 3 seconds while something changes and otherwise every 12 seconds. Command lines never leave the main process and are not logged.</li>
+<li><strong>Process detection</strong> in PowerShell and WSL tabs: a hidden helper looks for the agent's process under the tab's shell (in WSL, among the Linux processes started in that terminal), every 3 seconds while something changes and otherwise every 12 seconds. Command lines never leave the main process and are not logged.</li>
 <li><strong>Fallbacks</strong> for an identified agent that does not report: a terminal bell means "Needs you?" and a spinner in the title or recent output means "Working?". Output, bells or titles alone never make a program count as an agent.</li>
 </ol>
 <p>No agent settings or hooks are changed.</p>`,
@@ -72,7 +72,7 @@ export const features: Feature[] = [
       {
         h: 'Limits',
         html: `<ul>
-<li>WSL tabs cannot use process detection, because Linux processes are not visible to Windows. They rely on the agent's own reports or Claude Code's exact title.</li>
+<li>WSL tabs: Linux processes are not visible to Windows, so each WSL terminal passes a marker variable into Linux and a small helper in that distribution lists the processes carrying it. It reads only <code>/proc</code> and writes nothing there.</li>
 <li>Claude Code's first-run questions (for example "Claude in Chrome extension detected") are not reported by Claude, so they show as idle.</li>
 </ul>`,
       },
@@ -166,23 +166,23 @@ export const features: Feature[] = [
   {
     slug: 'resume-conversations',
     name: 'Resume conversations',
-    summary: 'After a restart, a Resume button brings back the Claude Code or Codex conversation that was running.',
-    title: 'Resume Claude Code and Codex conversations after a restart',
+    summary: 'After a restart, a Resume button brings back the Claude Code, Codex or Gemini CLI conversation that was running.',
+    title: 'Resume Claude Code, Codex and Gemini CLI conversations after a restart',
     description:
-      'SplitNest remembers which Claude Code or Codex conversation ran in a terminal and offers a Resume button after a restart. It saves only the id, folder and an optional title.',
+      'SplitNest remembers which Claude Code, Codex or Gemini CLI conversation ran in a terminal and offers a Resume button after a restart. It saves only the id, folder and an optional title.',
     intro:
-      'If Claude Code or Codex was running when SplitNest closed, that terminal says so after a restart and offers Resume Claude Code (or Codex) next to Start PowerShell only. The restore notice offers Resume agents (N).',
+      'If Claude Code, Codex or Gemini CLI was running when SplitNest closed, that terminal says so after a restart and offers Resume Claude Code (or Codex, or Gemini CLI) next to Start PowerShell only. The restore notice offers Resume agents (N).',
     shots: ['resume'],
     related: ['workspaces-splits-tabs', 'agent-aware-tabs'],
     docs: { label: 'Resume in the user guide', href: '/docs/agents/' },
     blocks: [
       {
         h: 'What the button does',
-        html: `<p>It starts a new PowerShell in the folder the agent ran in and types <code>claude --resume &lt;id&gt;</code> or <code>codex resume &lt;id&gt;</code> at the prompt, visibly. The text above the button says exactly that before you click. <strong>Nothing runs until you click.</strong></p>`,
+        html: `<p>It starts a new PowerShell in the folder the agent ran in and types <code>claude --resume &lt;id&gt;</code>, <code>codex resume &lt;id&gt;</code> or <code>gemini --resume &lt;id&gt;</code> at the prompt, visibly. The text above the button says exactly that before you click. <strong>Nothing runs until you click.</strong></p>`,
       },
       {
         h: 'Which conversation',
-        html: `<p>Claude Code's own record for the agent process in that tab is used, so two agents in one folder each get their own, and it follows <code>/clear</code>. For Codex it is the conversation started in that folder after the agent started, or the id the tab itself resumed. If SplitNest cannot be sure, Resume opens the agent's own list of earlier conversations instead of guessing.</p>`,
+        html: `<p>Claude Code's own record for the agent process in that tab is used, so two agents in one folder each get their own, and it follows <code>/clear</code>. For Codex and Gemini CLI it is the conversation started in that folder after the agent started, or the id the tab itself resumed. If SplitNest cannot be sure, Resume opens the agent's own list of earlier conversations instead of guessing. Gemini CLI has no such list on its command line, so there Resume runs <code>gemini --resume</code>, its most recent conversation in that folder.</p>`,
       },
       {
         h: 'What is saved',
@@ -195,7 +195,7 @@ export const features: Feature[] = [
       {
         h: 'Limits',
         html: `<ul>
-<li>WSL tabs: Windows cannot see their processes, so SplitNest knows only that Claude Code or Codex ran there, not which conversation. Resume there starts the shell in the workspace folder and opens the agent's own list.</li>
+<li>WSL tabs: SplitNest knows which agent ran there, not which conversation. Resume there starts the shell in the workspace folder and opens the agent's own list.</li>
 <li>The agents' session files are undocumented; if a future version changes them, Resume falls back to the agent's list.</li>
 <li>Codex's <code>/new</code> is not followed: the saved conversation stays the one the tab started with.</li>
 <li>If the agent ran in a folder outside the workspace folder, Resume is refused and the terminal offers a plain shell.</li>

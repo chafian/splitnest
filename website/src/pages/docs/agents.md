@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/DocLayout.astro
 title: "AI agents"
-description: "Reference for agent-aware tabs, notifications, the agent inbox and resuming Claude Code and Codex conversations in SplitNest."
+description: "Reference for agent-aware tabs, notifications, the agent inbox and resuming Claude Code, Codex and Gemini CLI conversations in SplitNest."
 path: /docs/agents/
 ---
 
@@ -18,9 +18,10 @@ Supported agents: Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor Age
 - **Session title:** if the agent reports one, the tab shows it (e.g. *Fix login redirect · Claude Code*); a name you gave the tab still wins. Details (agent, state, reason, message) are in the tooltip.
 - **How it knows:**
   1. **Program Status Protocol (OSC 7501).** The agent reports its own state. SplitNest answers the protocol's feature query, which Claude Code waits for before reporting; Codex reports on its own. Checked with Claude Code 2.1.316 and Codex 0.166.0 by the project.
-  2. **Process detection** (PowerShell tabs only): a hidden helper looks for the agent's process under the tab's shell, every 3 s while something changes, otherwise every 12 s. Command lines never leave the main process and are not logged.
+  2. **Process detection** (PowerShell and WSL tabs): a hidden helper looks for the agent's process under the tab's shell (in WSL, among the Linux processes started in that terminal), every 3 s while something changes, otherwise every 12 s. Command lines never leave the main process and are not logged.
   3. **Fallbacks** for an identified agent that doesn't report (shown as estimated, see above): a terminal bell means *Needs you?*; a spinner in the title or recent output means *Working?*. Output, bells or titles alone never make a program count as an agent.
-- **Limits:** WSL tabs can't use process detection (Linux processes aren't visible to Windows), so they rely on the agent's own reports or Claude Code's exact title ("✳ Claude Code"). Claude Code's first-run questions (e.g. "Claude in Chrome extension detected") are not reported by Claude, so they show as idle. No agent settings or hooks are changed. Logos come from [developer-icons](https://github.com/xandemon/developer-icons) (MIT); they are trademarks of their owners.
+- **WSL tabs:** Linux processes aren't visible to Windows, so each WSL terminal gets a marker variable (`SPLITNEST_TERMINAL`, a random value passed in through `WSLENV`) that everything started in it inherits, and one small `sh` in that distribution lists the processes carrying a marker (only your own processes, read from `/proc`; nothing is written there). The agent's own reports and Claude Code's exact title ("✳ Claude Code") count there too.
+- **Limits:** Claude Code's first-run questions (e.g. "Claude in Chrome extension detected") are not reported by Claude, so they show as idle. No agent settings or hooks are changed. Logos come from [developer-icons](https://github.com/xandemon/developer-icons) (MIT); they are trademarks of their owners.
 
 ## Agent notifications
 
@@ -44,14 +45,14 @@ The bell in the title bar, **Ctrl+Shift+A**. Every agent that is waiting for you
 
 ## Resume agent conversations
 
-Available for Claude Code and Codex. If an agent was running in a terminal when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex) next to *Start PowerShell only*. The restore notice offers **Resume agents (N)**.
+Available for Claude Code, Codex and Gemini CLI. If an agent was running in a terminal when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex, or Gemini CLI) next to *Start PowerShell only*. The restore notice offers **Resume agents (N)**.
 
-- **What it does:** starts a new PowerShell in the folder the agent ran in and types `claude --resume <id>` or `codex resume <id>` at the prompt, visibly. The text above the button says exactly that before you click. Nothing runs until you click.
-- **Which conversation:** Claude Code's own record for the agent process in that tab, so two agents in one folder each get their own; it follows `/clear`. For Codex, the conversation started in that folder after the agent started, or the id the tab itself resumed. If SplitNest can't be sure, Resume opens the agent's own list of earlier conversations instead of guessing.
+- **What it does:** starts a new PowerShell in the folder the agent ran in and types `claude --resume <id>`, `codex resume <id>` or `gemini --resume <id>` at the prompt, visibly. The text above the button says exactly that before you click. Nothing runs until you click.
+- **Which conversation:** Claude Code's own record for the agent process in that tab, so two agents in one folder each get their own; it follows `/clear`. For Codex and Gemini CLI, the conversation started in that folder (or, for Gemini CLI, a project folder inside it) after the agent started, or the id the tab itself resumed. If SplitNest can't be sure, Resume opens the agent's own list of earlier conversations instead of guessing. Gemini CLI has no such list on its command line, so there Resume runs `gemini --resume`, its most recent conversation in that folder. (`/resume` inside Gemini CLI picks another.)
 - **Saved:** the agent, the conversation id and the folder, with the tab; never conversation text. Also the conversation's title (Claude Code's own name for it, or the session title an agent reports), shown above the button. That is on by default (Settings → Workspaces → *Show conversation titles for Resume*); a title can contain words from your prompt, and turning the setting off removes the saved ones. It is kept through a quit or a crash of SplitNest and removed when the agent exits on its own, or when you start a plain shell in that terminal instead (*Start PowerShell only*, *Start all shells*, restart).
 - **No setup:** no hooks or agent settings are installed or changed. If the agent doesn't start within 25 s, the terminal says so and stays usable.
 - **Also:** the command palette has *Resume <agent> in this terminal* and *Resume agents in this workspace*. **Settings → Workspaces → Resume agents automatically when the app opens** (off by default) resumes them without a click, each workspace the first time it is shown. With *Start fresh shells automatically* on, a terminal where an agent was running still waits with its Resume button instead of starting a plain shell.
-- **WSL tabs:** Windows can't see their processes, so SplitNest knows only that Claude Code or Codex ran there (from the agent's own status reports), not which conversation. Resume there starts the shell in the workspace folder and opens the agent's own list (`claude --resume`, `codex resume`).
+- **WSL tabs:** SplitNest knows which agent ran there, not which conversation. Resume there starts the shell in the workspace folder and opens the agent's own list (`claude --resume`, `codex resume`), or for Gemini CLI its most recent conversation there (`gemini --resume`).
 - **Limits:**
   - The agents' session files are undocumented; if a future version changes them, Resume falls back to the agent's list.
   - Codex's `/new` is not followed: the saved conversation stays the one the tab started with.
