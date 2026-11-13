@@ -6,6 +6,8 @@ export interface RunResult {
   stderr: Buffer;
   timedOut: boolean;
   notFound: boolean;
+  /** Output went past `maxBuffer` (1 MB): the program was stopped and the output is cut off. */
+  overflow?: boolean;
 }
 
 export interface RunOptions {
@@ -43,8 +45,9 @@ export const runFile: Runner = (file, args, options) =>
           code: typeof e.code === 'number' ? e.code : null,
           stdout: out,
           stderr: err,
-          timedOut: e.killed === true && e.signal === 'SIGTERM',
+          timedOut: e.killed === true && e.signal === 'SIGTERM' && e.code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
           notFound: e.code === 'ENOENT',
+          overflow: e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
         });
       },
     );

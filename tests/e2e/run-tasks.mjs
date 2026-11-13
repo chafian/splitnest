@@ -193,6 +193,31 @@ try {
     if (branch !== 'splitnest/fix-login') throw new Error(branch);
   });
 
+  await step('Review lists what the task changed against main, committed or not, and shows each file’s diff', async () => {
+    // Uncommitted work on top of the commit: an edit and a new file.
+    writeFileSync(path.join(fixRoot, 'login.js'), 'export const login = () => true;\nexport const logout = () => false;\n');
+    writeFileSync(path.join(fixRoot, 'notes.md'), '# notes\n');
+    await page.hover('.ws-item:has(.ws-item__label:text-is("Fix login"))');
+    await page.click('[aria-label="Review changes in Fix login"]');
+    await page.waitForSelector('[data-testid="review-files"]', { timeout: 15_000 });
+    const files = await page.$$eval('[data-testid="review-files"] [role="option"]', (els) => els.map((e) => e.getAttribute('data-path')));
+    if (files.join('|') !== 'login.js|notes.md') throw new Error(files.join('|'));
+    const summary = await page.textContent('[data-testid="review-summary"]');
+    if (!/splitnest\/fix-login against main/.test(summary) || !summary.includes('2 files') || !summary.includes('2 not committed')) throw new Error(summary);
+    await until(async () => (await page.textContent('[data-testid="review-diff"]'))?.includes('export const logout'), 'login.js diff');
+    const added = await page.$$eval('[data-testid="review-diff"] .diff__row--add .diff__text', (els) => els.map((e) => e.textContent));
+    if (!added.includes('export const logout = () => false;')) throw new Error(added.join('|'));
+    await page.click('[data-testid="review-files"] [data-path="notes.md"]');
+    await until(async () => (await page.textContent('[data-testid="review-diff"]'))?.includes('# notes'), 'notes.md diff');
+    // Changes made while it is open show after Refresh.
+    writeFileSync(path.join(fixRoot, 'later.txt'), 'later\n');
+    await page.click('[data-testid="review-refresh"]');
+    await page.waitForSelector('[data-testid="review-files"] [data-path="later.txt"]', { timeout: 10_000 });
+    if (process.env.TW_TASK_SHOTS) await page.screenshot({ path: path.join(process.env.TW_TASK_SHOTS, 'task-review.png') });
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="review-files"]', { state: 'detached' });
+  });
+
   await step('a second task runs in parallel with Codex, listed under the same workspace', async () => {
     standInsOnly();
     await selectWorkspace(page, 'shop app');
@@ -212,6 +237,19 @@ try {
     if (rows.join('|') !== 'shop app|Fix login|Add tests') throw new Error(rows.join('|'));
     if (git(testsRoot, 'symbolic-ref', '--short', 'HEAD') !== 'splitnest/add-tests') throw new Error('branch');
     if (process.env.TW_TASK_SHOTS) await page.screenshot({ path: path.join(process.env.TW_TASK_SHOTS, 'task-sidebar.png') });
+  });
+
+  await step('Review of a task with no changes yet says so (palette command)', async () => {
+    await selectWorkspace(page, 'Add tests');
+    if (!(await palette(page, 'Review task changes…'))) throw new Error('command disabled');
+    await page.waitForSelector('[data-testid="review-empty"]', { timeout: 15_000 });
+    await page.keyboard.press('Escape');
+    await selectWorkspace(page, 'shop app');
+    await page.keyboard.press('Control+Shift+P');
+    await page.keyboard.type('Review task changes');
+    const item = await page.waitForSelector('[role="option"]:has-text("Review task changes")');
+    if ((await item.getAttribute('aria-disabled')) !== 'true') throw new Error('enabled outside a task');
+    await page.keyboard.press('Escape');
   });
 
   await step('a name that is taken gets the next free one', async () => {

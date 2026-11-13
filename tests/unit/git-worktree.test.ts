@@ -5,6 +5,10 @@ import {
   parseGitVersion,
   parseLeftRight,
   parseWorktreeList,
+  parseNameStatus,
+  parseNumstat,
+  parsePaths,
+  isSafeRelative,
   removeRefusal,
   samePath,
   suffixed,
@@ -154,5 +158,33 @@ describe('Git output', () => {
     expect(parseLeftRight('2\t5\n')).toEqual([2, 5]);
     expect(parseLeftRight('0 0')).toEqual([0, 0]);
     expect(parseLeftRight('x')).toBeNull();
+  });
+});
+
+describe('review output', () => {
+  it('name-status with renames and copies', () => {
+    expect(parseNameStatus(['M', 'a.txt', 'R087', 'old name.txt', 'new name.txt', 'D', 'gone', 'C100', 'x', 'y', 'A', 'src/n.js', ''].join('\0'))).toEqual([
+      { status: 'M', path: 'a.txt' },
+      { status: 'R', path: 'new name.txt', oldPath: 'old name.txt' },
+      { status: 'D', path: 'gone' },
+      { status: 'C', path: 'y', oldPath: 'x' },
+      { status: 'A', path: 'src/n.js' },
+    ]);
+  });
+
+  it('numstat: counts, binary files, renames', () => {
+    const m = parseNumstat(['1\t0\ta.txt', '-\t-\tlogo.bin', '0\t0\t', 'old name.txt', 'new name.txt', '3\t2\tsrc/n.js', ''].join('\0'));
+    expect([...m.entries()]).toEqual([
+      ['a.txt', { added: 1, removed: 0 }],
+      ['logo.bin', { added: null, removed: null }],
+      ['new name.txt', { added: 0, removed: 0 }],
+      ['src/n.js', { added: 3, removed: 2 }],
+    ]);
+  });
+
+  it('path lists and which paths may go back to Git', () => {
+    expect(parsePaths('a\0b c\0\0')).toEqual(['a', 'b c']);
+    for (const ok of ['a.txt', 'src/x y.js', '*.txt', '.github/ci.yml']) expect(isSafeRelative(ok)).toBe(true);
+    for (const bad of ['', '/etc', 'C:/x', 'a\\b', '../x', 'a/../b', 'a//b', './a', 'a/', ':(glob)x', 'a\0b']) expect(isSafeRelative(bad)).toBe(false);
   });
 });

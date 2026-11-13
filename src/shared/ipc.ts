@@ -1,7 +1,7 @@
 import type { AgentResume } from './agent-resume';
 import type { AgentId } from './agents';
 import type { UpdatePrefs, UpdateStatus } from './updates';
-import type { TaskPreview, TaskProgress, TaskRecord, TaskResult } from './tasks';
+import type { TaskChanges, TaskDiff, TaskPreview, TaskProgress, TaskRecord, TaskResult } from './tasks';
 import type { AgentNotice, NoticeDelivery, NoticeTarget } from './notifications';
 import type {
   AppInfo,
@@ -70,6 +70,8 @@ export const IPC = {
   taskPreview: 'tw:task:preview',
   taskCreate: 'tw:task:create',
   taskProgress: 'tw:task:progress',
+  taskChanges: 'tw:task:changes',
+  taskDiff: 'tw:task:diff',
 } as const;
 
 export interface PickFolderResult {
@@ -168,4 +170,8 @@ export interface AppApi {
   createTask(workspaceId: string, name: string): Promise<TaskResult<{ task: TaskRecord }>>;
   /** A task workspace's branch against its base branch (read-only Git). */
   taskProgress(workspaceId: string): Promise<TaskResult<{ progress: TaskProgress }>>;
+  /** Review: the files a task changed against where it left its base branch (read-only Git). */
+  taskChanges(workspaceId: string): Promise<TaskResult<{ changes: TaskChanges }>>;
+  /** Review: one of those files' diff (`path` as listed by taskChanges; anything else is refused). */
+  taskDiff(workspaceId: string, path: string): Promise<TaskResult<{ diff: TaskDiff }>>;
 }

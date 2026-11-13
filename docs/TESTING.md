@@ -2,6 +2,13 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Agent tasks, M3: review (2026-11-14)
+
+- **E2E** (`run-tasks.mjs`, now 15 / 15): Review lists a committed file and new uncommitted ones (marked), shows each diff with added lines, picks up a file made while it is open after *Refresh*, closes with Escape; a task without changes says so; the palette command is disabled outside a task.
+- **Real Git** (`task-service-real.test.ts`, 27): every kind of change (edit, add, delete, rename, binary, untracked, uncommitted on top of a commit), the base branch's own later change left out, untracked file shown as added lines, paths not in the listing refused (`README.md`, `../`, `C:\`, `/etc`, `src/../a.txt`, pathspec magic, non-strings), `[ab].txt` taken literally, a 1.5 MB diff cut at 1 MB on a line boundary, a repository filter refused, and reviewing leaves the index and lock files unchanged.
+- **Unit:** diff rows with line numbers, CRLF, renames, row cap (`diff-lines.test.ts`); name-status, numstat and safe paths (`git-worktree.test.ts`).
+- **Regressions:** unit 499 / 499; `run-e2e.mjs` 36 / 36. Type check and lint are clean.
+
 ## Agent tasks, M2: create and run (2026-11-13)
 
 - **E2E, dev build** (`node tests/e2e/run-tasks.mjs`, 13 / 13). Stand-in `claude.exe`/`codex.exe` (copies of cmd.exe) first on PATH, checked before each step that types an agent's name; temporary repository, profile and agent home.

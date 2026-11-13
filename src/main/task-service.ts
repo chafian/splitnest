@@ -17,14 +17,18 @@
 // - Operations that change a repository run one at a time per repository (two tasks created at
 //   once never pick the same name). Different repositories don't wait for each other.
 // - Nothing about repositories is logged; error messages name no path, branch or Git output.
-import { access, lstat, readdir, rmdir } from 'node:fs/promises';
+import { access, lstat, readdir, readFile, realpath, rmdir } from 'node:fs/promises';
 import path from 'node:path';
-import { isWslRoot } from './git-status';
+import { isWslRoot, repositoryFilterKeys } from './git-status';
 import type { GitResult, GitRunner } from './git-runner';
 import {
   fromGitPath,
+  isSafeRelative,
   isStrictlyInside,
   parseLeftRight,
+  parseNameStatus,
+  parseNumstat,
+  parsePaths,
   parseWorktreeList,
   removeRefusal,
   samePath,
@@ -41,6 +45,10 @@ import {
   TASK_LIMITS,
   type BranchOutcome,
   type TaskBase,
+  type TaskChange,
+  type TaskChangeKind,
+  type TaskChanges,
+  type TaskDiff,
   type TaskError,
   type TaskErrorCode,
   type TaskPreview,
@@ -57,7 +65,7 @@ export const ADD_TIMEOUT_MS = 5 * 60_000;
 export const REMOVE_TIMEOUT_MS = 2 * 60_000;
 
 const MESSAGES: Record<TaskErrorCode, string> = {
-  DISABLED: 'Agent tasks are off. Turn them on in Settings › Experimental.',
+  DISABLED: 'Agent tasks are off. Turn them on in Settings › Workspaces › Agent tasks (preview).',
   WORKSPACE_NOT_FOUND: 'That workspace no longer exists.',
   GIT_NOT_FOUND: 'Git isn’t installed (git.exe wasn’t found on PATH).',
   NOT_A_REPOSITORY: 'This workspace folder isn’t in a Git repository, or Git refused to open it.',
@@ -74,6 +82,8 @@ const MESSAGES: Record<TaskErrorCode, string> = {
   FOLDER_IN_USE: 'The task folder couldn’t be deleted completely, probably because a program is using it. Close that program and try again.',
   LEFTOVER_FILES: 'Git no longer lists this folder as the task’s worktree, but it still contains files. SplitNest doesn’t delete files Git doesn’t track: check them and delete the folder yourself.',
   TIMEOUT: 'Git took too long and was stopped.',
+  CHANGES_NOT_CHECKED: 'This repository’s own Git configuration names a filter program, which Git would start to compare files, so SplitNest doesn’t compare them here. Review the changes with Git yourself.',
+  NOT_CHANGED: 'That file isn’t among the task’s changes (anymore).',
   GIT_FAILED: 'Git couldn’t complete the operation.',
 };
 
@@ -195,6 +205,86 @@ export class TaskService {
       if (!options.deleteBranch) return { ok: true, branch: 'kept' };
       return { ok: true, branch: await this.deleteMergedBranch(task) };
     });
+  }
+
+  /**
+   * Review: every file the task changed against the commit where its branch left the base branch
+   * (what merging it would bring), committed or not, plus new files Git doesn't track yet. Read-only:
+   * like the sidebar's Git status, no index refresh or lock, no file-system monitor, external diff or
+   * text conversion, no submodules, and nothing at all when the repository's own configuration names a
+   * filter program (Git would start it to compare files).
+   */
+  async changes(task: TaskRecord): Promise<TaskResult<{ changes: TaskChanges }>> {
+    const cwd = task.worktreePath;
+    if (!(await this.deps.isDirectory(cwd))) return fail('NOT_A_TASK');
+    const cfg = await this.read(cwd, ['config', '--show-scope', '--includes', '--null', '--get-regexp', '^filter\\..*\\.(clean|process)$']);
+    if (cfg === null) return fail('GIT_NOT_FOUND');
+    if (cfg.code !== 0 && cfg.code !== 1) return gitFailure(cfg);
+    if (cfg.code === 0 && repositoryFilterKeys(cfg.stdout).length > 0) return fail('CHANGES_NOT_CHECKED');
+    // Where the task branch left the base branch; the recorded start if the base branch is gone.
+    const mb = (await this.refId(cwd, task.baseBranch)) ? await this.read(cwd, ['merge-base', `refs/heads/${task.baseBranch}`, 'HEAD']) : null;
+    const mergeBase = mb?.code === 0 && /^[0-9a-f]{40,64}$/.test(mb.stdout.trim()) ? mb.stdout.trim() : task.baseCommit;
+    const diff = ['diff', '-M', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--ignore-submodules=all'];
+    const [names, nums, dirty, others] = await Promise.all([
+      this.read(cwd, [...diff, '--name-status', mergeBase]),
+      this.read(cwd, [...diff, '--numstat', mergeBase]),
+      this.read(cwd, [...diff, '--name-only', 'HEAD']),
+      this.read(cwd, ['ls-files', '--others', '--exclude-standard', '--full-name', '-z']),
+    ]);
+    for (const r of [names, nums, dirty, others]) if (r === null || r.code !== 0) return gitFailure(r);
+    const counts = parseNumstat(nums!.stdout);
+    const uncommitted = new Set(parsePaths(dirty!.stdout));
+    const files: TaskChange[] = [];
+    for (const n of parseNameStatus(names!.stdout)) {
+      if (!isSafeRelative(n.path) || (n.oldPath !== undefined && !isSafeRelative(n.oldPath))) continue;
+      const c = counts.get(n.path) ?? { added: null, removed: null };
+      files.push({
+        path: n.path,
+        ...(n.oldPath !== undefined ? { oldPath: n.oldPath } : {}),
+        kind: changeKind(n.status),
+        added: c.added,
+        removed: c.removed,
+        binary: c.added === null && c.removed === null && n.status !== 'D',
+        uncommitted: uncommitted.has(n.path) || (n.oldPath !== undefined && uncommitted.has(n.oldPath)),
+      });
+    }
+    for (const p of parsePaths(others!.stdout)) {
+      if (isSafeRelative(p)) files.push({ path: p, kind: 'untracked', added: null, removed: null, binary: false, uncommitted: true });
+    }
+    files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    const truncated = files.length > TASK_LIMITS.maxChangedFiles || !!names!.overflow || !!others!.overflow;
+    return { ok: true, changes: { baseBranch: task.baseBranch, mergeBase, files: files.slice(0, TASK_LIMITS.maxChangedFiles), truncated } };
+  }
+
+  /** Review: one changed file's diff against the merge base (only a file `changes` lists). */
+  async diff(task: TaskRecord, file: unknown): Promise<TaskResult<{ diff: TaskDiff }>> {
+    if (typeof file !== 'string' || !isSafeRelative(file)) return fail('NOT_CHANGED');
+    const listed = await this.changes(task);
+    if (!listed.ok) return listed;
+    const entry = listed.changes.files.find((f) => f.path === file);
+    if (!entry) return fail('NOT_CHANGED');
+    if (entry.kind === 'untracked') return { ok: true, diff: await untrackedDiff(task.worktreePath, entry.path) };
+    if (entry.binary) return { ok: true, diff: { text: '', binary: true, truncated: false } };
+    const paths = entry.oldPath !== undefined ? [entry.oldPath, entry.path] : [entry.path];
+    const r = await this.read(task.worktreePath, [
+      'diff',
+      '-M',
+      '-U3',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--ignore-submodules=all',
+      listed.changes.mergeBase,
+      '--',
+      ...paths.map((p) => `:(literal)${p}`),
+    ]);
+    if (r === null || (r.code !== 0 && !r.overflow)) return gitFailure(r);
+    return { ok: true, diff: capDiff(r.stdout, !!r.overflow) };
+  }
+
+  /** A read-only Git command (no optional locks). */
+  private read(cwd: string, args: string[]): Promise<GitResult | null> {
+    return this.deps.git.run(cwd, ['--no-optional-locks', ...args]);
   }
 
   /** Deletes the task branch only if the base branch has all its commits and nothing checks it out. */
@@ -334,4 +424,53 @@ export async function removeEmptyFolders(dir: string): Promise<'removed' | 'file
     }
   }
   return 'removed';
+}
+
+function changeKind(status: string): TaskChangeKind {
+  switch (status) {
+    case 'A':
+      return 'added';
+    case 'D':
+      return 'deleted';
+    case 'R':
+      return 'renamed';
+    case 'C':
+      return 'copied';
+    case 'T':
+      return 'typechange';
+    default:
+      return 'modified';
+  }
+}
+
+/** Diff text cut at the review limit, on a line boundary. */
+export function capDiff(text: string, alreadyCut: boolean): TaskDiff {
+  if (text.length <= TASK_LIMITS.maxDiffBytes && !alreadyCut) return { text, binary: false, truncated: false };
+  const cut = text.slice(0, TASK_LIMITS.maxDiffBytes);
+  const nl = cut.lastIndexOf('\n');
+  return { text: nl > 0 ? cut.slice(0, nl + 1) : cut, binary: false, truncated: true };
+}
+
+/**
+ * A new file Git doesn't track yet, shown as all added lines. Only a regular file inside the task
+ * folder (no link, nothing outside it), at most TASK_LIMITS.maxUntrackedBytes.
+ */
+export async function untrackedDiff(folder: string, rel: string): Promise<TaskDiff> {
+  const full = win.join(folder, ...rel.split('/'));
+  try {
+    const st = await lstat(full);
+    if (!st.isFile()) return { text: '', binary: true, truncated: false };
+    const [realFolder, realFile] = await Promise.all([realpath(folder), realpath(full)]);
+    if (!isStrictlyInside(realFile, realFolder)) return { text: '', binary: true, truncated: false };
+    if (st.size > TASK_LIMITS.maxUntrackedBytes) return { text: '', binary: false, truncated: true };
+    const bytes = await readFile(full);
+    if (bytes.subarray(0, 8000).includes(0)) return { text: '', binary: true, truncated: false };
+    const text = bytes.toString('utf8');
+    const lines = text.split(/\r?\n/);
+    if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+    const body = lines.map((l) => `+${l}`).join('\n');
+    return { text: `@@ -0,0 +1,${lines.length} @@\n${body}${body ? '\n' : ''}`, binary: false, truncated: false };
+  } catch {
+    return { text: '', binary: true, truncated: false };
+  }
 }

@@ -17,6 +17,8 @@ export interface GitResult {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  /** Output went past 1 MB and was cut off. */
+  overflow?: boolean;
 }
 
 export interface GitRunner {
@@ -51,7 +53,7 @@ export function createWindowsGitRunner(deps: WindowsGitDeps): GitRunner {
       timeoutMs: options?.timeoutMs ?? GIT_TIMEOUT_MS,
       env: withCeiling(base, cwd, deps.home),
     });
-    return { code: r.code, stdout: r.stdout.toString('utf8'), stderr: r.stderr.toString('utf8'), timedOut: r.timedOut };
+    return { code: r.code, stdout: r.stdout.toString('utf8'), stderr: r.stderr.toString('utf8'), timedOut: r.timedOut, ...(r.overflow ? { overflow: true } : {}) };
   };
 
   return {

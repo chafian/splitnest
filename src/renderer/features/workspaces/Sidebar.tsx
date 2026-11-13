@@ -32,6 +32,8 @@ interface Props {
   /** Each task's commits against its base branch. */
   taskProgress: ReadonlyMap<string, TaskProgress>;
   onNewTask(id: string): void;
+  /** A task's Review dialog (its changes against its base branch). */
+  onReviewTask(id: string): void;
   onWidthChange(width: number): void;
   onSettings(): void;
   onShortcuts(): void;
@@ -161,7 +163,10 @@ export function Sidebar(props: Props) {
               </button>
               {!collapsed && (
                 <span className="ws-item__actions">
-                  {props.tasksEnabled && gitStatus && (
+                  {props.tasksEnabled && w.task && (
+                    <IconButton icon="files" label={`Review changes in ${w.name}`} description="Files the task changed and their diffs." size="sm" onClick={() => props.onReviewTask(w.id)} />
+                  )}
+                  {props.tasksEnabled && gitStatus && !w.task && (
                     <IconButton
                       icon="gitBranch"
                       label={`New agent task from ${w.name}`}

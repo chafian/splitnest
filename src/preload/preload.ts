@@ -124,6 +124,8 @@ const api: AppApi = {
   previewTask: (workspaceId, name) => ipcRenderer.invoke(IPC.taskPreview, workspaceId, name),
   createTask: (workspaceId, name) => ipcRenderer.invoke(IPC.taskCreate, workspaceId, name),
   taskProgress: (workspaceId) => ipcRenderer.invoke(IPC.taskProgress, workspaceId),
+  taskChanges: (workspaceId) => ipcRenderer.invoke(IPC.taskChanges, workspaceId),
+  taskDiff: (workspaceId, path) => ipcRenderer.invoke(IPC.taskDiff, workspaceId, path),
   onGitStatus: (listener) => {
     gitListeners.add(listener);
     return () => {

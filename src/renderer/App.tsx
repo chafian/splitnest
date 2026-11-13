@@ -38,6 +38,7 @@ import { Sidebar } from './features/workspaces/Sidebar';
 import { WorkspaceView } from './features/workspaces/WorkspaceView';
 import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
 import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialog';
+import { ReviewDialog } from './features/tasks/ReviewDialog';
 import type { TaskError, TaskProgress } from '../shared/tasks';
 import { canAddPane, canAddTab, initialState, reducer } from './features/workspaces/workspace-state';
 
@@ -96,6 +97,8 @@ export function App() {
   const [gitStatuses, setGitStatuses] = useState<ReadonlyMap<string, GitStatus>>(() => new Map());
   /** Agent tasks: the workspace the New task dialog is open for, and each task's commits against its base. */
   const [taskFor, setTaskFor] = useState<string | null>(null);
+  /** The task workspace whose Review dialog is open. */
+  const [reviewFor, setReviewFor] = useState<string | null>(null);
   const [taskProgress, setTaskProgress] = useState<ReadonlyMap<string, TaskProgress>>(() => new Map());
 
   const progressFor = useRef(new Map<string, GitStatus | undefined>());
@@ -305,7 +308,7 @@ export function App() {
 
   // Switching workspace (sidebar, palette, shortcuts) always shows that workspace.
   useEffect(() => setView('workspace'), [state.activeWorkspaceId]);
-  const anyDialogOpen = paletteOpen || shortcutsOpen || !!renameId || !!confirm || !!renamingTabId || !!taskFor;
+  const anyDialogOpen = paletteOpen || shortcutsOpen || !!renameId || !!confirm || !!renamingTabId || !!taskFor || !!reviewFor;
 
   // Keep keyboard focus on the active pane's active tab.
   const activePaneId = activeWorkspace?.activePaneId ?? null;
@@ -1131,7 +1134,12 @@ export function App() {
     });
     const list: PaletteCommand[] = [
       cmd('ws-new', 'Workspace', 'New workspace from folder…', () => void addWorkspace(), 'newWorkspace'),
-      ...(state.settings.agentTasks ? [cmd('ws-task', 'Workspace', 'New agent task…', () => ws && newTask(ws.id), undefined, !ws)] : []),
+      ...(state.settings.agentTasks
+        ? [
+            cmd('ws-task', 'Workspace', 'New agent task…', () => ws && newTask(ws.id), undefined, !ws),
+            cmd('ws-task-review', 'Workspace', 'Review task changes…', () => ws?.task && setReviewFor(ws.id), undefined, !ws?.task),
+          ]
+        : []),
       cmd('term-new', 'Terminal', 'New terminal in current pane (default shell)', () => newTerminal(), 'newTerminal', !ws),
       ...(discovery?.profiles ?? []).flatMap((p) => {
         const name = p.kind === 'wsl' ? `WSL · ${p.label}` : p.label;
@@ -1271,6 +1279,7 @@ export function App() {
         tasksEnabled={state.settings.agentTasks}
         taskProgress={taskProgress}
         onNewTask={newTask}
+        onReviewTask={setReviewFor}
         onWidthChange={(sidebarWidth) => dispatch({ type: 'updateSettings', patch: { sidebarWidth } })}
         onSettings={openSettings}
         onShortcuts={() => setShortcutsOpen(true)}
@@ -1401,6 +1410,7 @@ export function App() {
         onCreate={(choice) => (taskFor ? createTask(taskFor, choice) : Promise.resolve(null))}
         onClose={() => setTaskFor(null)}
       />
+      <ReviewDialog open={!!reviewFor} workspace={state.workspaces.find((w) => w.id === reviewFor && w.task) ?? null} onClose={() => setReviewFor(null)} />
       <Toasts
         toasts={toasts}
         onDismiss={(id) => {

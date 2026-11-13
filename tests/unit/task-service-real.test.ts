@@ -45,6 +45,8 @@ async function newRepo(name = 'my app'): Promise<string> {
   const repo = path.join(work, `${n++}`, name);
   mkdirSync(repo, { recursive: true });
   await g(repo, 'init', '-q', '-b', 'main');
+  // The same line endings on every machine (task folders follow the repository's configuration).
+  await g(repo, 'config', 'core.autocrlf', 'false');
   writeFileSync(path.join(repo, 'a.txt'), 'one\n');
   await g(repo, 'add', '.');
   await g(repo, 'commit', '-q', '-m', 'first');
@@ -308,5 +310,106 @@ describe.skipIf(!git)('agent tasks with real Git', { timeout: 60_000 }, () => {
     expect(await service.remove(t, { deleteBranch: true })).toMatchObject({ ok: false, error: { code: 'LEFTOVER_FILES' } });
     expect(existsSync(path.join(t.worktreePath, 'a', 'b', 'kept.log'))).toBe(true);
     expect(await branches(repo)).toContain('splitnest/leftover');
+  });
+
+  describe('review: what a task changed', () => {
+    /** A task with every kind of change: committed and not, added, deleted, renamed, binary, untracked. */
+    async function busyTask() {
+      writeFileSync(path.join(repo, 'old name.txt'), 'rename me\nline 2\nline 3\nline 4\n');
+      writeFileSync(path.join(repo, 'gone.txt'), 'delete me\n');
+      writeFileSync(path.join(repo, 'base-only.txt'), 'one\n');
+      await g(repo, 'add', '.');
+      await g(repo, 'commit', '-q', '-m', 'files');
+      const t = await created(repo, 'review');
+      const w = (f: string, text: string | Buffer) => writeFileSync(path.join(t.worktreePath, ...f.split('/')), text);
+      w('a.txt', 'one\ntwo\n'); // committed edit: +1
+      mkdirSync(path.join(t.worktreePath, 'src'));
+      w('src/new.js', 'export const x = 1;\n');
+      w('logo.bin', Buffer.from([0, 1, 2, 3, 0, 255]));
+      await g(t.worktreePath, 'mv', 'old name.txt', 'new name.txt');
+      await g(t.worktreePath, 'rm', '-q', 'gone.txt');
+      await g(t.worktreePath, 'add', '.');
+      await g(t.worktreePath, 'commit', '-q', '-m', 'task work');
+      w('src/new.js', 'export const x = 2;\nexport const y = 3;\n'); // uncommitted edit on top
+      w('notes.md', '# notes\nfirst\n'); // untracked
+      // The base branch moves on: its own change is not part of the task.
+      writeFileSync(path.join(repo, 'base-only.txt'), 'one\ntwo\n');
+      await g(repo, 'commit', '-q', '-am', 'base work');
+      return t;
+    }
+
+    it('lists every change against where the task left its base branch, committed or not', async () => {
+      const t = await busyTask();
+      const r = await service.changes(t);
+      if (!r.ok) throw new Error(r.error.code);
+      const byPath = Object.fromEntries(r.changes.files.map((f) => [f.path, f]));
+      expect(Object.keys(byPath)).toEqual(['a.txt', 'gone.txt', 'logo.bin', 'new name.txt', 'notes.md', 'src/new.js']);
+      expect(byPath['a.txt']).toMatchObject({ kind: 'modified', added: 1, removed: 0, uncommitted: false });
+      expect(byPath['gone.txt']).toMatchObject({ kind: 'deleted', added: 0, removed: 1, binary: false });
+      expect(byPath['logo.bin']).toMatchObject({ kind: 'added', binary: true, added: null });
+      expect(byPath['new name.txt']).toMatchObject({ kind: 'renamed', oldPath: 'old name.txt' });
+      expect(byPath['notes.md']).toMatchObject({ kind: 'untracked', uncommitted: true });
+      expect(byPath['src/new.js']).toMatchObject({ kind: 'added', added: 2, removed: 0, uncommitted: true });
+      expect(r.changes).toMatchObject({ baseBranch: 'main', mergeBase: t.baseCommit, truncated: false });
+    });
+
+    it('diffs: a hunk for a changed file, all lines for a new untracked one, nothing for a binary', async () => {
+      const t = await busyTask();
+      const a = await service.diff(t, 'a.txt');
+      expect(a.ok && a.diff.text).toMatch(/@@ -1 \+1,2 @@[\s\S]*\n \s*one\r?\n\+two/);
+      const renamed = await service.diff(t, 'new name.txt');
+      expect(renamed.ok && renamed.diff.text).toMatch(/rename from old name\.txt[\s\S]*rename to new name\.txt/);
+      const notes = await service.diff(t, 'notes.md');
+      expect(notes).toEqual({ ok: true, diff: { text: '@@ -0,0 +1,2 @@\n+# notes\n+first\n', binary: false, truncated: false } });
+      expect(await service.diff(t, 'logo.bin')).toEqual({ ok: true, diff: { text: '', binary: true, truncated: false } });
+    });
+
+    it('only files the task changed: nothing else in the folder, nothing outside it', async () => {
+      const t = await busyTask();
+      for (const f of ['README.md', 'base-only.txt', '../my app/a.txt', '..\\x', 'C:\\Windows\\win.ini', '/etc/passwd', 'src/../a.txt', ':(glob)*', 42, null]) {
+        expect(await service.diff(t, f)).toMatchObject({ ok: false, error: { code: 'NOT_CHANGED' } });
+      }
+    });
+
+    it('a pathspec-like file name is taken literally', async () => {
+      const t = await created(repo, 'literal');
+      // As a glob, `[ab].txt` would match a.txt; taken literally it is only this file.
+      writeFileSync(path.join(t.worktreePath, '[ab].txt'), 'star\n');
+      await g(t.worktreePath, 'add', '.');
+      await g(t.worktreePath, 'commit', '-q', '-m', 'star');
+      const d = await service.diff(t, '[ab].txt');
+      expect(d.ok && d.diff.text).toContain('+star');
+      expect(d.ok && d.diff.text).not.toContain('a.txt');
+    });
+
+    it('a large diff is cut off on a line boundary and says so', async () => {
+      const t = await created(repo, 'big');
+      writeFileSync(path.join(t.worktreePath, 'big.txt'), `${'x'.repeat(99)}\n`.repeat(15_000)); // 1.5 MB
+      await g(t.worktreePath, 'add', '.');
+      await g(t.worktreePath, 'commit', '-q', '-m', 'big');
+      const d = await service.diff(t, 'big.txt');
+      if (!d.ok) throw new Error(d.error.code);
+      expect(d.diff.truncated).toBe(true);
+      expect(d.diff.text.length).toBeLessThanOrEqual(1024 * 1024);
+      expect(d.diff.text.endsWith('\n')).toBe(true);
+    });
+
+    it('nothing is compared when the repository’s own configuration names a filter program', async () => {
+      const t = await created(repo, 'filtered');
+      await g(repo, 'config', 'filter.sneaky.clean', 'sneaky-program');
+      expect(await service.changes(t)).toMatchObject({ ok: false, error: { code: 'CHANGES_NOT_CHECKED' } });
+      expect(await service.diff(t, 'a.txt')).toMatchObject({ ok: false, error: { code: 'CHANGES_NOT_CHECKED' } });
+      await g(repo, 'config', '--unset', 'filter.sneaky.clean');
+    });
+
+    it('reviewing writes nothing into the repository', async () => {
+      const t = await busyTask();
+      const gitDir = path.join(repo, '.git');
+      const stamp = () => JSON.stringify([readFileSync(path.join(gitDir, 'index')).length, existsSync(path.join(gitDir, 'index.lock')), readFileSync(path.join(gitDir, 'worktrees', 'review', 'index')).toString('base64')]);
+      const before = stamp();
+      await service.changes(t);
+      await service.diff(t, 'a.txt');
+      expect(stamp()).toBe(before);
+    });
   });
 });

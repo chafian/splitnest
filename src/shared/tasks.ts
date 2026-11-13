@@ -9,6 +9,12 @@ export const TASK_LIMITS = {
   maxSlugLength: 40,
   /** `-2` … `-99` are tried when a branch or folder with that name exists. */
   maxSuffix: 99,
+  /** Review: files listed. */
+  maxChangedFiles: 2000,
+  /** Review: one file's diff (the rest is cut off). */
+  maxDiffBytes: 1024 * 1024,
+  /** Review: an untracked file larger than this is listed but not shown. */
+  maxUntrackedBytes: 512 * 1024,
 } as const;
 
 /** The branch prefix of every task branch: `splitnest/<slug>`. */
@@ -32,6 +38,8 @@ export type TaskErrorCode =
   | 'FOLDER_IN_USE'
   | 'LEFTOVER_FILES'
   | 'TIMEOUT'
+  | 'CHANGES_NOT_CHECKED'
+  | 'NOT_CHANGED'
   | 'GIT_FAILED';
 
 export interface TaskError {
@@ -83,6 +91,40 @@ export interface TaskProgress {
   ahead: number | null;
   /** Commits on the base branch since the task branched off (null: unknown, e.g. base deleted). */
   behind: number | null;
+}
+
+export type TaskChangeKind = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'typechange' | 'untracked';
+
+/** One file a task changed, against the point where its branch left the base branch. */
+export interface TaskChange {
+  /** Relative to the task folder's top, `/`-separated. */
+  path: string;
+  /** Renames and copies: where it came from. */
+  oldPath?: string;
+  kind: TaskChangeKind;
+  /** Lines added and removed (null: binary, or a new untracked file whose lines aren't counted). */
+  added: number | null;
+  removed: number | null;
+  binary: boolean;
+  /** Not committed yet in the task folder (it would still need a commit before merging). */
+  uncommitted: boolean;
+}
+
+export interface TaskChanges {
+  /** The branch the task is compared with, and the commit where they split (what a merge would bring). */
+  baseBranch: string;
+  mergeBase: string;
+  files: TaskChange[];
+  /** More files than listed (at most TASK_LIMITS.maxChangedFiles are). */
+  truncated: boolean;
+}
+
+export interface TaskDiff {
+  /** A unified diff (`@@` hunks with `+`, `-` and ` ` lines); empty for a binary file. */
+  text: string;
+  binary: boolean;
+  /** Cut off at TASK_LIMITS.maxDiffBytes. */
+  truncated: boolean;
 }
 
 /** What happened to the branch when a task was removed. */

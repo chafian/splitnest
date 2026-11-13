@@ -280,6 +280,16 @@ export function registerIpc(ctx: IpcContext): void {
     if (!p.ok) return p;
     return p.workspace.task ? ctx.tasks.progress(p.workspace.task) : taskFailure('NOT_A_TASK');
   });
+  handle(IPC.taskChanges, async (_event, workspaceId) => {
+    const p = taskParent(workspaceId);
+    if (!p.ok) return p;
+    return p.workspace.task ? ctx.tasks.changes(p.workspace.task) : taskFailure('NOT_A_TASK');
+  });
+  handle(IPC.taskDiff, async (_event, workspaceId, file) => {
+    const p = taskParent(workspaceId);
+    if (!p.ok) return p;
+    return p.workspace.task ? ctx.tasks.diff(p.workspace.task, file) : taskFailure('NOT_A_TASK');
+  });
 
   // Agent notifications: the page sends ids and the event; main writes the text (notifications.ts).
   handle(IPC.notifyAgent, (_event, notice) => ctx.notifications.notify(notice));

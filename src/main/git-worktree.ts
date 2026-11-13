@@ -143,3 +143,63 @@ export function parseLeftRight(stdout: string): [number, number] | null {
   const m = /^(\d+)\s+(\d+)\s*$/.exec(stdout.trim());
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
+
+// ------------------------------------------------------------------ review
+
+export interface NameStatus {
+  /** First letter of Git's status (A, M, D, R, C, T, U…). */
+  status: string;
+  path: string;
+  oldPath?: string;
+}
+
+/** `git diff --name-status -z` output (renames and copies carry two paths). */
+export function parseNameStatus(stdout: string): NameStatus[] {
+  const f = stdout.split('\0');
+  const out: NameStatus[] = [];
+  for (let i = 0; i < f.length; ) {
+    const s = f[i++];
+    if (!s) continue;
+    const status = s[0]!;
+    if (status === 'R' || status === 'C') {
+      const oldPath = f[i++];
+      const path = f[i++];
+      if (oldPath !== undefined && path) out.push({ status, path, oldPath });
+    } else {
+      const path = f[i++];
+      if (path) out.push({ status, path });
+    }
+  }
+  return out;
+}
+
+/** `git diff --numstat -z` output: lines added/removed per path (null for binary files). */
+export function parseNumstat(stdout: string): Map<string, { added: number | null; removed: number | null }> {
+  const f = stdout.split('\0');
+  const out = new Map<string, { added: number | null; removed: number | null }>();
+  for (let i = 0; i < f.length; ) {
+    const s = f[i++];
+    if (!s) continue;
+    const m = /^(-|\d+)\t(-|\d+)\t(.*)$/s.exec(s);
+    if (!m) continue;
+    const added = m[1] === '-' ? null : Number(m[1]);
+    const removed = m[2] === '-' ? null : Number(m[2]);
+    // A rename or copy: the path field is empty and the old and new paths follow.
+    let path = m[3]!;
+    if (path === '') {
+      i++; // old path
+      path = f[i++] ?? '';
+    }
+    if (path) out.set(path, { added, removed });
+  }
+  return out;
+}
+
+/** NUL-separated paths (`--name-only -z`, `ls-files -z`). */
+export const parsePaths = (stdout: string): string[] => stdout.split('\0').filter((p) => p.length > 0);
+
+/** A path from Git's own listing that is safe to pass back as a literal pathspec and to join to the folder. */
+export function isSafeRelative(p: string): boolean {
+  if (!p || p.length > 4096 || p.startsWith('/') || /^[A-Za-z]:/.test(p) || p.includes('\\') || p.includes('\0') || p.includes(':')) return false;
+  return p.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
+}
