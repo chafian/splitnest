@@ -52,9 +52,8 @@ export function WelcomeGuide() {
             {t.keys
               .map(([id, label]) => [id, label, shortcutLabel(id)] as const)
               .filter(([, , key]) => key)
-              .map(([id, label, key], i) => (
+              .map(([id, label, key]) => (
                 <span key={id}>
-                  {i > 0 && ' · '}
                   <kbd className="kbd">{key}</kbd> {label}
                 </span>
               ))}

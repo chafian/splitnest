@@ -226,6 +226,18 @@ async function main() {
     if (tips.join() !== 'Workspaces,Split panes,Agents') throw new Error(`welcome tips: ${tips}`);
     const keys = await page.textContent('[data-testid="welcome-tips"]');
     for (const k of ['Ctrl+Shift+D', 'Ctrl+Shift+A']) if (!keys.includes(k)) throw new Error(`welcome tips without ${k}`);
+    // Nothing spills out of a card (every shortcut stays inside its card's box).
+    const spill = () =>
+      page.$$eval('.welcome-tip', (cards) =>
+        cards.flatMap((c) => {
+          const box = c.getBoundingClientRect();
+          return [...c.querySelectorAll('kbd, .welcome-tip__keys > span, .welcome-tip__text')]
+            .map((e) => e.getBoundingClientRect())
+            .filter((r) => r.right > box.right + 0.5 || r.left < box.left - 0.5)
+            .map(() => c.querySelector('strong')?.textContent);
+        }),
+      );
+    if ((await spill()).length) throw new Error(`welcome card content spills out: ${await spill()}`);
     await shot(page, '01-welcome.png');
     // Narrow window: one column, nothing cut off sideways.
     const before = page.viewportSize();
@@ -233,6 +245,7 @@ async function main() {
     await page.waitForTimeout(200);
     const overflow = await page.$eval('.welcome', (e) => e.scrollWidth > e.clientWidth + 1);
     if (overflow) throw new Error('welcome screen overflows sideways when narrow');
+    if ((await spill()).length) throw new Error(`welcome card content spills out when narrow: ${await spill()}`);
     await shot(page, '01b-welcome-narrow.png');
     await page.setViewportSize(before ?? { width: 1360, height: 860 });
     return { tips: tips.length };
