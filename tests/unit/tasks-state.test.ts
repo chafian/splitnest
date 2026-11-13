@@ -74,8 +74,11 @@ describe('saved tasks', () => {
     expect(validateSettings({ agentTasks: true }).agentTasks).toBe(true);
   });
 
-  it('the key main checks saved tasks against covers every path and the branch, ignoring letter case', () => {
-    expect(taskRecordKey(task)).toBe(taskRecordKey({ ...task, worktreePath: task.worktreePath.toUpperCase() }));
+  it('the key main checks saved tasks against covers every path and the branch; only folders ignore letter case', () => {
+    expect(taskRecordKey(task)).toBe(taskRecordKey({ ...task, worktreePath: task.worktreePath.toUpperCase(), taskRoot: task.taskRoot.toUpperCase(), repoRoot: task.repoRoot.toLowerCase() }));
+    // Git branch names are case-sensitive: another case is another branch.
+    expect(taskRecordKey({ ...task, branch: 'splitnest/FIX-LOGIN' })).not.toBe(taskRecordKey(task));
+    expect(taskRecordKey({ ...task, baseBranch: 'Main' })).not.toBe(taskRecordKey(task));
     for (const k of ['repoRoot', 'subPath', 'baseBranch', 'baseCommit', 'branch', 'worktreePath', 'taskRoot'] as const) {
       expect(taskRecordKey({ ...task, [k]: `${task[k]}x` })).not.toBe(taskRecordKey(task));
     }

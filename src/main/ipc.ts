@@ -276,9 +276,9 @@ export function registerIpc(ctx: IpcContext): void {
     return r;
   });
   handle(IPC.taskProgress, async (_event, workspaceId) => {
-    const w = isId(workspaceId) ? ctx.store.getWorkspace(workspaceId) : undefined;
-    if (!w?.task) return taskFailure('NOT_A_TASK');
-    return ctx.tasks.progress(w.task);
+    const p = taskParent(workspaceId);
+    if (!p.ok) return p;
+    return p.workspace.task ? ctx.tasks.progress(p.workspace.task) : taskFailure('NOT_A_TASK');
   });
 
   // Agent notifications: the page sends ids and the event; main writes the text (notifications.ts).

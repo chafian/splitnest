@@ -116,9 +116,14 @@ export interface WorkspaceTask extends TaskRecord {
   createdAt: number;
 }
 
-/** The part of a task main created and checks again when the page saves it (see ipc.ts). */
+/**
+ * The part of a task main created and checks again when the page saves it (see ipc.ts). Folders
+ * ignore letter case, as Windows does; branch names and the commit must match exactly, since Git
+ * branch names are case-sensitive (`splitnest/Fix` is another branch than `splitnest/fix`).
+ */
 export function taskRecordKey(t: TaskRecord): string {
-  return JSON.stringify([t.repoRoot, t.subPath, t.baseBranch, t.baseCommit, t.branch, t.worktreePath, t.taskRoot].map((v) => v.toLowerCase()));
+  const folder = (p: string) => p.toLowerCase();
+  return JSON.stringify([folder(t.repoRoot), folder(t.subPath), t.baseBranch, t.baseCommit, t.branch, folder(t.worktreePath), folder(t.taskRoot)]);
 }
 
 const WIN_ABS = /^(?:[A-Za-z]:\\|\\\\[^\\/:*?"<>|]+\\[^\\/:*?"<>|]+)/;
