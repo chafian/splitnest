@@ -69,6 +69,13 @@
 - Workspaces inside WSL (`\\wsl$\…`, `\\wsl.localhost\…`) are skipped: Windows Git over that share is slow and refuses those
   repositories as owned by another user. The terminal's shell does not matter.
 
+## Agent tasks (Git worktrees; in progress, not in the app yet)
+
+- **Model.** A task is a Git worktree on its own branch, opened as a workspace of its own (from M2). Its folder is `<main worktree>.worktrees\<slug>`, next to the repository, on `splitnest/<slug>` from the base branch's current commit. Taken names (case-insensitive, and refs that would clash as folders) get `-2`, `-3`…; a workspace that is a folder inside the repository maps to the same folder in the task.
+- **`TaskService`** (`src/main/task-service.ts`): `preview`, `create`, `progress` (commits ahead of / behind the base branch), `remove`. Operations that change a repository run one at a time per repository. Names come from `git-worktree.ts` (pure: slugs, paths, `worktree list` parsing, with and without `-z`).
+- **No lost work.** Nothing is forced: `git worktree remove` refuses uncommitted or untracked files and locked worktrees; a branch is deleted only when the base branch contains all its commits and nothing checks it out, with `update-ref -d <old id>` so it can't have moved in between. When a program has the folder open, Git deletes the files and the worktree registration but not that folder; SplitNest then deletes leftover folders only while they contain no file and no link (`FOLDER_IN_USE` until then, `LEFTOVER_FILES` when files remain). A folder Git doesn't list as the task's worktree is otherwise never touched. Git's `worktree remove` also deletes ignored files (build output, `.env`), which the finishing step has to say.
+- **`GitRunner`** (`src/main/git-runner.ts`): `git -C <folder>` with the Git status environment (English messages, no prompts, no redirecting variables, ceilings), so tasks in WSL can later use the distribution's Git behind the same interface. Unlike the status check, task commands run the repository's hooks, as the same command in a terminal would.
+
 ## Agent inbox
 
 - **State.** `AgentNotifier` keeps one inbox item per tab next to its notices (`TabState.pending`), from the same events: a "needs you" item lasts while the agent is blocked (seeing the tab doesn't clear it); a finished turn or an error lasts until `reviewSeen()` finds the user looking at the tab, or the agent works again. `inbox()` returns them sorted by `sortInbox` (needs you, errors, finished; oldest first). Nothing is persisted.
