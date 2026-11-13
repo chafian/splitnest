@@ -144,6 +144,8 @@ export interface AppSettings {
   updateCheck: boolean;
   /** The first-run notice about update checks was acknowledged; no update request happens before. */
   updateNoticeSeen: boolean;
+  /** The newest SplitNest version that has started (the "What's new" notice is shown once per newer version). */
+  lastVersionSeen: string | null;
   /** Notifications: an agent needs permission, has a question, needs sign-in, or otherwise waits for you. */
   notifyNeedsYou: boolean;
   /** Notifications: an agent reported that it finished. */
@@ -258,6 +260,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   resumeAutomatically: false,
   updateCheck: true,
   updateNoticeSeen: false,
+  lastVersionSeen: null,
   notifyNeedsYou: true,
   notifyFinished: true,
   notifyErrors: true,

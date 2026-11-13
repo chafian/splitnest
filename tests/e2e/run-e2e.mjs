@@ -865,6 +865,12 @@ async function main() {
       return app.evaluate(() => globalThis.__twOpened ?? []);
     })();
     if (afterPalette[3] !== expected[0]) throw new Error(`palette bug link: ${JSON.stringify(afterPalette)}`);
+    // Version row: this version's release notes. No "What's new" notice on a first start.
+    await page.click('[data-testid="release-notes"]');
+    await page.waitForTimeout(200);
+    const notes = (await app.evaluate(() => globalThis.__twOpened ?? []))[4];
+    if (notes !== `https://github.com/chafian/splitnest/releases/tag/v${version}`) throw new Error(`release notes link: ${notes}`);
+    if (await page.$('[data-testid="whats-new"]')) throw new Error("What's new shown on a first start");
     if ((await running()) !== runningBefore) throw new Error('terminals stopped while settings was shown');
     // Back to the workspace by clicking it; the Settings row stays until closed.
     await page.click('.ws-item:not(.ws-item--page) .ws-item__main');
@@ -918,8 +924,23 @@ async function main() {
   });
 
   // ------------------------------------------------------------- run 2: restore
+  // The first start recorded its version silently; pretend the previous run was an older version.
+  const run1State = JSON.parse(readFileSync(path.join(userData, 'workspace-state.json'), 'utf8'));
+  if (!/^\d+\.\d+\.\d+/.test(run1State.settings.lastVersionSeen ?? '')) throw new Error(`lastVersionSeen not recorded: ${run1State.settings.lastVersionSeen}`);
+  const appVersion = run1State.settings.lastVersionSeen;
+  run1State.settings.lastVersionSeen = '0.1.0';
+  writeFileSync(path.join(userData, 'workspace-state.json'), JSON.stringify(run1State, null, 2));
   ({ app, page, launchMs } = await launch());
   report.metrics.relaunchToWindowMs = launchMs;
+  await step("What's new after an update: shown once, opens this version's release notes", async () => {
+    await page.waitForSelector('[data-testid="whats-new"]');
+    if (!(await page.textContent('[data-testid="whats-new"]')).includes(appVersion)) throw new Error("What's new does not name the version");
+    await shot(page, '09b-whats-new.png');
+    await page.click('[data-testid="whats-new-open"]');
+    await page.waitForSelector('[data-testid="whats-new"]', { state: 'detached' });
+    const opened = await app.evaluate(() => globalThis.__twOpened ?? []);
+    if (JSON.stringify(opened) !== JSON.stringify([`https://github.com/chafian/splitnest/releases/tag/v${appVersion}`])) throw new Error(`What's new link: ${JSON.stringify(opened)}`);
+  });
   await step('layout restored with placeholders, no processes started', async () => {
     await page.waitForSelector('.workspace:not([hidden]) .pane');
     await page.click('.ws-item:nth-child(1) .ws-item__main');
@@ -1093,12 +1114,14 @@ async function main() {
   // ------------------------------------------------------------- run 3: missing folder + missing shell
   const stateFile = path.join(userData, 'workspace-state.json');
   const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  if (state.settings.lastVersionSeen !== appVersion) throw new Error(`What's new not remembered: ${state.settings.lastVersionSeen}`);
   const firstPane = (node) => (node.type === 'pane' ? node : firstPane(node.children[0]));
   firstPane(state.workspaces[0].layout).tabs[0].profileId = 'wsl:Not-Installed-Distro';
   writeFileSync(stateFile, JSON.stringify(state, null, 2));
   renameSync(beta, `${beta}-moved`);
   ({ app, page } = await launch());
   await step('restored sidebar width persisted; dismissing the notice starts and removes nothing', async () => {
+    if (await page.$('[data-testid="whats-new"]')) throw new Error("What's new shown again");
     await page.waitForSelector('.workspace:not([hidden]) .notice');
     const sidebar = await page.$eval('.sidebar', (e) => Math.round(e.getBoundingClientRect().width));
     if (sidebar < 260) throw new Error(`sidebar width not persisted: ${sidebar}`);

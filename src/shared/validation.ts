@@ -1,6 +1,7 @@
 // Runtime validation for untrusted data: persisted state files and IPC payloads.
 import { parseAgentResume } from './agent-resume';
 import { layoutDepth, listPanes, normalizeSizes } from './layout';
+import { isVersion } from './version';
 import {
   DARK_THEME_IDS,
   DEFAULT_SETTINGS,
@@ -186,6 +187,7 @@ export function validateSettings(value: unknown): AppSettings {
     resumeAutomatically: s.resumeAutomatically === true,
     updateCheck: s.updateCheck !== false,
     updateNoticeSeen: s.updateNoticeSeen === true,
+    lastVersionSeen: isVersion(s.lastVersionSeen) ? s.lastVersionSeen : null,
     notifyNeedsYou: s.notifyNeedsYou !== false,
     notifyFinished: s.notifyFinished !== false,
     notifyErrors: s.notifyErrors !== false,

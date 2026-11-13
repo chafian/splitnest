@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { UpdateStatus } from '../../../shared/updates';
 import { api } from '../../api';
 import { Icon } from '../../components/Icon';
+import { releaseNotesUrl } from './whats-new';
 
 export const PRIVACY_URL = 'https://splitnest.dev/privacy/';
 
@@ -76,4 +77,32 @@ export function UpdateNotices({ status, onChoose }: Props) {
     );
   }
   return null;
+}
+
+/** After an update: one notice per newer version, offering its release notes on GitHub. */
+export function WhatsNewNotice({ version, onDone }: { version: string; onDone(): void }) {
+  return (
+    <div className="notice notice--update" role="region" aria-label="What's new" data-testid="whats-new">
+      <div className="notice__row">
+        <Icon name="check" size={16} className="notice__icon" />
+        <span className="notice__text">
+          <strong>SplitNest was updated to {version}.</strong> <span className="notice__meta">See what changed in this version's release notes on GitHub.</span>
+        </span>
+        <button
+          type="button"
+          className="button button--small button--primary"
+          data-testid="whats-new-open"
+          onClick={() => {
+            void api.openExternal(releaseNotesUrl(version));
+            onDone();
+          }}
+        >
+          What's new
+        </button>
+        <button type="button" className="button button--small" data-testid="whats-new-dismiss" onClick={onDone}>
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
 }

@@ -8,6 +8,7 @@ import { THEMES, themeById, type Theme } from '../appearance/themes';
 import { api } from '../../api';
 import { updateStatusText, type UpdateStatus } from '../../../shared/updates';
 import { PRIVACY_URL } from '../updates/UpdateNotices';
+import { releaseNotesUrl } from '../updates/whats-new';
 import { bugReportUrl, DISCUSSIONS_URL, FEATURE_REQUEST_URL } from '../feedback/links';
 import { Icon } from '../../components/Icon';
 import { wslGuidance } from '../../components/ProfileMenu';
@@ -544,7 +545,11 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
                   <Row
                     title="Version"
                     hint={`${info.productName} ${info.version} (Electron ${info.electron})${info.isPackaged ? '' : ' — development build'}`}
-                    control={null}
+                    control={
+                      <button type="button" className="button button--small" data-testid="release-notes" onClick={() => void api.openExternal(releaseNotesUrl(info.version))}>
+                        Release notes
+                      </button>
+                    }
                   />
                   <Row
                     title="Saved state"

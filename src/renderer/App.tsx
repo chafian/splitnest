@@ -28,7 +28,8 @@ import { flushSave, onSaveError, scheduleSave } from './features/workspaces/pers
 import { computeChrome, toggleExplorer, toggleFocusMode, toggleSidebar } from './features/workspaces/chrome';
 import { effectiveMaximized } from './features/workspaces/maximize';
 import { useAgentNotifications } from './features/notifications/useAgentNotifications';
-import { UpdateNotices, useUpdateStatus } from './features/updates/UpdateNotices';
+import { UpdateNotices, useUpdateStatus, WhatsNewNotice } from './features/updates/UpdateNotices';
+import { whatsNewDecision } from './features/updates/whats-new';
 import { bugReportUrl, DISCUSSIONS_URL, FEATURE_REQUEST_URL } from './features/feedback/links';
 import { nextInboxItem } from './features/notifications/agent-notifier';
 import type { InboxRow } from './features/notifications/AgentInbox';
@@ -938,6 +939,23 @@ export function App() {
     dispatch({ type: 'updateSettings', patch: { updateCheck, updateNoticeSeen: true } });
     api.setUpdatePrefs({ updateCheck, updateNoticeSeen: true });
   };
+  // "What's new": decided once, from the settings as loaded (before this run records its version).
+  const [whatsNew, setWhatsNew] = useState<string | null>(null);
+  const whatsNewChecked = useRef(false);
+  useEffect(() => {
+    if (!loaded || whatsNewChecked.current) return;
+    whatsNewChecked.current = true;
+    const settings = state.settings;
+    void api.getAppInfo().then((info) => {
+      const d = whatsNewDecision(settings, info.version);
+      if (d.kind === 'show') setWhatsNew(d.version);
+      else if (d.kind === 'record') dispatch({ type: 'updateSettings', patch: { lastVersionSeen: d.version } });
+    });
+  }, [loaded, state.settings]);
+  const whatsNewDone = () => {
+    if (whatsNew) dispatch({ type: 'updateSettings', patch: { lastVersionSeen: whatsNew } });
+    setWhatsNew(null);
+  };
 
   const runRef = useRef(runCommand);
   runRef.current = runCommand;
@@ -1176,6 +1194,7 @@ export function App() {
       />
       <main className="main">
         <UpdateNotices status={updateStatus} onChoose={(updateCheck) => chooseUpdates(updateCheck)} />
+        {whatsNew && <WhatsNewNotice version={whatsNew} onDone={whatsNewDone} />}
         <div className="main__views">
         {settingsShown && (
           <SettingsView
