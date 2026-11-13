@@ -103,6 +103,13 @@ export class SessionBroker {
     return n;
   }
 
+  /** Sessions (starting or running) in one workspace: finishing a task waits until there are none. */
+  liveInWorkspace(workspaceId: string): number {
+    let n = 0;
+    for (const s of this.sessions.values()) if (s.workspaceId === workspaceId) n++;
+    return n;
+  }
+
   async create(ownerId: number, raw: unknown): Promise<CreateSessionResult> {
     let request: CreateSessionRequest;
     try {

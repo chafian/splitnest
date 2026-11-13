@@ -47,6 +47,10 @@ async function newRepo(name = 'my app'): Promise<string> {
   await g(repo, 'init', '-q', '-b', 'main');
   // The same line endings on every machine (task folders follow the repository's configuration).
   await g(repo, 'config', 'core.autocrlf', 'false');
+  // Commit all and merges commit with the repository's identity (CI runners have none set globally).
+  await g(repo, 'config', 'user.name', 'Test');
+  await g(repo, 'config', 'user.email', 'test@example.invalid');
+  await g(repo, 'config', 'commit.gpgsign', 'false');
   writeFileSync(path.join(repo, 'a.txt'), 'one\n');
   await g(repo, 'add', '.');
   await g(repo, 'commit', '-q', '-m', 'first');
@@ -410,6 +414,171 @@ describe.skipIf(!git)('agent tasks with real Git', { timeout: 60_000 }, () => {
       await service.changes(t);
       await service.diff(t, 'a.txt');
       expect(stamp()).toBe(before);
+    });
+  });
+
+  describe('finishing: commit, merge, bring in the base, discard', () => {
+    const w = (dir: string, f: string, text: string) => writeFileSync(path.join(dir, ...f.split('/')), text);
+    const head = (dir: string) => g(dir, 'rev-parse', 'HEAD');
+    const state = async (dir: string) => [await head(dir), await g(dir, 'status', '--porcelain'), existsSync(path.join(dir, '.git', 'MERGE_HEAD'))];
+    async function check(t: TaskRecord) {
+      const r = await service.finishCheck(t);
+      if (!r.ok) throw new Error(r.error.code);
+      return r.check;
+    }
+
+    it('a fresh task: nothing to merge, merges into the workspace folder, lists what Git ignores there', async () => {
+      w(repo, '.gitignore', 'node_modules/\n.env\n');
+      await g(repo, 'add', '.');
+      await g(repo, 'commit', '-q', '-m', 'ignore');
+      const t = await created(repo, 'fresh');
+      mkdirSync(path.join(t.worktreePath, 'node_modules', 'x'), { recursive: true });
+      w(t.worktreePath, 'node_modules/x/i.js', '//');
+      w(t.worktreePath, '.env', 'SECRET=1');
+      const c = await check(t);
+      expect(c).toMatchObject({ commitsToMerge: 0, preview: 'nothing', mergeFolder: repo, mergeFolderDirty: false, inProgress: null, uncommittedCount: 0, unresolved: [] });
+      expect([...c.ignored].sort()).toEqual(['.env', 'node_modules/']);
+      expect(c.head).toBe(t.baseCommit);
+    });
+
+    it('Commit all stages new and changed files and commits them with the message', async () => {
+      const t = await created(repo, 'commit');
+      expect(await service.commitAll(t, 'x')).toMatchObject({ ok: false, error: { code: 'NOTHING_TO_COMMIT' } });
+      for (const bad of ['', '   ', 'a\u0000b', 'x'.repeat(1001), 42]) expect(await service.commitAll(t, bad)).toMatchObject({ ok: false, error: { code: 'INVALID_MESSAGE' } });
+      w(t.worktreePath, 'a.txt', 'one\ntwo\n');
+      w(t.worktreePath, 'new.txt', 'new\n');
+      expect((await check(t)).uncommittedCount).toBe(2);
+      const r = await service.commitAll(t, 'Task work\n\nwith a body');
+      expect(r.ok).toBe(true);
+      expect(await g(t.worktreePath, 'log', '-1', '--format=%B')).toBe('Task work\n\nwith a body');
+      expect(await g(t.worktreePath, 'status', '--porcelain')).toBe('');
+      expect(await check(t)).toMatchObject({ uncommittedCount: 0, commitsToMerge: 1, preview: 'clean' });
+    });
+
+    it('merge: brings the task into the base branch where it is checked out', async () => {
+      const t = await created(repo, 'merge');
+      w(t.worktreePath, 'feature.txt', 'feature\n');
+      await service.commitAll(t, 'feature');
+      // The base branch moves on without touching the same lines: still a clean merge.
+      w(repo, 'other.txt', 'other\n');
+      await g(repo, 'add', '.');
+      await g(repo, 'commit', '-q', '-m', 'other');
+      // Untracked files in the workspace folder don't stop it.
+      w(repo, 'scratch.txt', 'mine\n');
+      const r = await service.merge(t);
+      expect(r).toMatchObject({ ok: true, result: { outcome: 'merged' } });
+      expect(readFileSync(path.join(repo, 'feature.txt'), 'utf8')).toBe('feature\n');
+      expect(await g(repo, 'merge-base', '--is-ancestor', 'splitnest/merge', 'main').then(() => 'yes')).toBe('yes');
+      expect(readFileSync(path.join(repo, 'scratch.txt'), 'utf8')).toBe('mine\n');
+      expect(await check(t)).toMatchObject({ commitsToMerge: 0, preview: 'nothing' });
+      // Then cleanup deletes the folder and the merged branch.
+      expect(await service.remove(t, { deleteBranch: true })).toEqual({ ok: true, branch: 'deleted' });
+    });
+
+    it('merge is refused while the task has uncommitted work, the base folder has changes, or the base isn’t checked out', async () => {
+      const t = await created(repo, 'refused');
+      w(t.worktreePath, 'f.txt', 'f\n');
+      expect(await service.merge(t)).toMatchObject({ ok: false, error: { code: 'TASK_UNCOMMITTED' } });
+      await service.commitAll(t, 'f');
+      w(repo, 'a.txt', 'local edit\n');
+      const before = await state(repo);
+      expect(await service.merge(t)).toMatchObject({ ok: false, error: { code: 'BASE_DIRTY' } });
+      expect(await state(repo)).toEqual(before);
+      await g(repo, 'checkout', '-q', '--', 'a.txt');
+      await g(repo, 'switch', '-q', '-c', 'elsewhere');
+      expect(await check(t)).toMatchObject({ mergeFolder: null });
+      expect(await service.merge(t)).toMatchObject({ ok: false, error: { code: 'BASE_NOT_CHECKED_OUT' } });
+    });
+
+    it('conflicts: the preview names them, and a merge anyway is undone, leaving the base exactly as before', async () => {
+      const t = await created(repo, 'conflict');
+      w(t.worktreePath, 'a.txt', 'task version\n');
+      await service.commitAll(t, 'task side');
+      w(repo, 'a.txt', 'base version\n');
+      await g(repo, 'commit', '-q', '-am', 'base side');
+      expect(await check(t)).toMatchObject({ preview: 'conflicts', conflicts: ['a.txt'], behind: 1 });
+      const before = await state(repo);
+      expect(await service.merge(t)).toEqual({ ok: true, result: { outcome: 'conflicts', conflicts: ['a.txt'] } });
+      expect(await state(repo)).toEqual(before);
+      expect(readFileSync(path.join(repo, 'a.txt'), 'utf8')).toBe('base version\n');
+    });
+
+    it('bring in the base: conflicts stay in the task to resolve; Commit all refuses markers, then concludes it; then the merge is clean', async () => {
+      const t = await created(repo, 'update');
+      w(t.worktreePath, 'a.txt', 'task version\n');
+      await service.commitAll(t, 'task side');
+      w(repo, 'a.txt', 'base version\n');
+      await g(repo, 'commit', '-q', '-am', 'base side');
+      const baseBefore = await state(repo);
+      expect(await service.updateFromBase(t)).toEqual({ ok: true, result: { outcome: 'conflicts', conflicts: ['a.txt'] } });
+      expect(await state(repo)).toEqual(baseBefore); // the workspace the task came from is untouched
+      expect(await check(t)).toMatchObject({ inProgress: 'task', unresolved: ['a.txt'] });
+      expect(await service.merge(t)).toMatchObject({ ok: false });
+      expect(await service.commitAll(t, 'resolve')).toMatchObject({ ok: false, error: { code: 'CONFLICTS_UNRESOLVED' } });
+      w(t.worktreePath, 'a.txt', 'both versions\n');
+      expect((await service.commitAll(t, 'Bring in main')).ok).toBe(true);
+      expect(await check(t)).toMatchObject({ inProgress: null, unresolved: [], preview: 'clean', behind: 0 });
+      expect(await service.merge(t)).toMatchObject({ ok: true, result: { outcome: 'merged' } });
+      expect(readFileSync(path.join(repo, 'a.txt'), 'utf8')).toBe('both versions\n');
+    });
+
+    it('bring in the base when nothing changed there, and when it merges cleanly', async () => {
+      const t = await created(repo, 'up');
+      expect(await service.updateFromBase(t)).toEqual({ ok: true, result: { outcome: 'up-to-date' } });
+      w(repo, 'later.txt', 'later\n');
+      await g(repo, 'add', '.');
+      await g(repo, 'commit', '-q', '-m', 'later');
+      expect(await service.updateFromBase(t)).toEqual({ ok: true, result: { outcome: 'updated' } });
+      expect(existsSync(path.join(t.worktreePath, 'later.txt'))).toBe(true);
+    });
+
+    it('a merge already in progress in the workspace folder blocks finishing and is left alone', async () => {
+      const t = await created(repo, 'busy-base');
+      w(t.worktreePath, 'f.txt', 'f\n');
+      await service.commitAll(t, 'f');
+      await g(repo, 'switch', '-q', '-c', 'side');
+      w(repo, 'a.txt', 'side\n');
+      await g(repo, 'commit', '-q', '-am', 'side');
+      await g(repo, 'switch', '-q', 'main');
+      w(repo, 'a.txt', 'main\n');
+      await g(repo, 'commit', '-q', '-am', 'main');
+      await g(repo, 'merge', 'side').catch(() => undefined); // conflicts: MERGE_HEAD stays
+      expect(await check(t)).toMatchObject({ inProgress: 'base' });
+      expect(await service.merge(t)).toMatchObject({ ok: false, error: { code: 'OPERATION_IN_PROGRESS' } });
+      expect(existsSync(path.join(repo, '.git', 'MERGE_HEAD'))).toBe(true);
+    });
+
+    it.skipIf(process.platform !== 'win32')('a hook that refuses the merge commit: nothing changes in the base folder', async () => {
+      const t = await created(repo, 'hooked');
+      w(t.worktreePath, 'f.txt', 'f\n');
+      await service.commitAll(t, 'f');
+      w(repo, 'other.txt', 'other\n'); // diverge, so a merge commit (and its hook) is needed
+      await g(repo, 'add', '.');
+      await g(repo, 'commit', '-q', '-m', 'other');
+      w(repo, '.git/hooks/pre-merge-commit', '#!/bin/sh\nexit 1\n');
+      const before = await state(repo);
+      expect(await service.merge(t)).toMatchObject({ ok: false, error: { code: 'MERGE_FAILED' } });
+      expect(await state(repo)).toEqual(before);
+    });
+
+    it('discard deletes the folder with uncommitted work and the unmerged branch, but only for what was shown', async () => {
+      const t = await created(repo, 'throwaway');
+      w(t.worktreePath, 'f.txt', 'f\n');
+      await service.commitAll(t, 'f');
+      w(t.worktreePath, 'draft.txt', 'uncommitted\n');
+      const shown = (await check(t)).head!;
+      // New commits after the list was shown: refused.
+      w(t.worktreePath, 'g.txt', 'g\n');
+      await g(t.worktreePath, 'add', 'g.txt');
+      await g(t.worktreePath, 'commit', '-q', '-m', 'g');
+      expect(await service.discard(t, shown)).toMatchObject({ ok: false, error: { code: 'STALE' } });
+      expect(existsSync(path.join(t.worktreePath, 'draft.txt'))).toBe(true);
+      expect(await service.discard(t, 'not-a-commit')).toMatchObject({ ok: false, error: { code: 'STALE' } });
+      expect(await service.discard(t, (await check(t)).head)).toEqual({ ok: true });
+      expect(existsSync(t.worktreePath)).toBe(false);
+      expect(await branches(repo)).toEqual(['main']);
+      // Never anything that isn't a task.
+      expect(await service.discard({ ...t, worktreePath: repo }, 'a'.repeat(40))).toMatchObject({ ok: false, error: { code: 'NOT_A_TASK' } });
     });
   });
 });

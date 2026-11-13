@@ -39,6 +39,7 @@ import { WorkspaceView } from './features/workspaces/WorkspaceView';
 import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
 import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialog';
 import { ReviewDialog } from './features/tasks/ReviewDialog';
+import { FinishTaskDialog, type FinishOutcome } from './features/tasks/FinishTaskDialog';
 import type { TaskError, TaskProgress } from '../shared/tasks';
 import { canAddPane, canAddTab, initialState, reducer } from './features/workspaces/workspace-state';
 
@@ -99,6 +100,10 @@ export function App() {
   const [taskFor, setTaskFor] = useState<string | null>(null);
   /** The task workspace whose Review dialog is open. */
   const [reviewFor, setReviewFor] = useState<string | null>(null);
+  /** The task workspace whose Finish dialog is open. */
+  const [finishFor, setFinishFor] = useState<string | null>(null);
+  /** Re-render after saving editors from Finish (their dirty state lives outside React). */
+  const [, setEditorsSaved] = useState(0);
   const [taskProgress, setTaskProgress] = useState<ReadonlyMap<string, TaskProgress>>(() => new Map());
 
   const progressFor = useRef(new Map<string, GitStatus | undefined>());
@@ -308,7 +313,7 @@ export function App() {
 
   // Switching workspace (sidebar, palette, shortcuts) always shows that workspace.
   useEffect(() => setView('workspace'), [state.activeWorkspaceId]);
-  const anyDialogOpen = paletteOpen || shortcutsOpen || !!renameId || !!confirm || !!renamingTabId || !!taskFor || !!reviewFor;
+  const anyDialogOpen = paletteOpen || shortcutsOpen || !!renameId || !!confirm || !!renamingTabId || !!taskFor || !!reviewFor || !!finishFor;
 
   // Keep keyboard focus on the active pane's active tab.
   const activePaneId = activeWorkspace?.activePaneId ?? null;
@@ -606,7 +611,7 @@ export function App() {
       message: `Remove “${ws.name}” from ${PRODUCT.name}?`,
       detail:
         (ws.task
-          ? `The task’s folder ${ws.task.worktreePath} and its branch ${ws.task.branch} are kept as they are (finishing tasks comes in a later version).`
+          ? `The task’s folder ${ws.task.worktreePath} and its branch ${ws.task.branch} are kept as they are. To merge it and delete them, use Finish task instead.`
           : `The folder ${ws.rootPath} and its files are not deleted.`) +
         (live > 0 ? ` ${live} running ${live === 1 ? 'session' : 'sessions'} in this workspace will be ended.` : '') +
         (dirty > 0 ? ` ${dirty} ${dirty === 1 ? 'file has' : 'files have'} unsaved changes: save them first, or discard them.` : ''),
@@ -659,6 +664,41 @@ export function App() {
     dispatch({ type: 'addPane', workspaceId, paneId, tabId, splitId: uid(), profileId: choice.profileId });
     setView('workspace');
     return null;
+  };
+
+  /** Finish: the task's terminals end before its folder is deleted (main waits until none runs). */
+  const endTaskTerminals = (workspaceId: string) => {
+    const ws = stateRef.current.workspaces.find((w) => w.id === workspaceId);
+    if (!ws) return;
+    for (const t of listTerminalTabs(ws.layout)) {
+      // Not "new" anymore: its pane would otherwise start a fresh shell right after this one ends.
+      freshTabs.delete(t.id);
+      registry.dispose(t.id);
+    }
+  };
+
+  /** Finish: the task's folder is gone, so its workspace leaves the list (no question: the user just chose it). */
+  const taskFinished = (workspaceId: string, outcome: FinishOutcome) => {
+    const ws = stateRef.current.workspaces.find((w) => w.id === workspaceId);
+    if (!ws?.task) return;
+    for (const t of listTabs(ws.layout)) {
+      registry.dispose(t.id);
+      editors.dispose(t.id);
+    }
+    dispatch({ type: 'removeWorkspace', workspaceId });
+    setFinishFor(null);
+    const parent = stateRef.current.workspaces.find((w) => w.id === ws.task!.parentId);
+    if (parent) {
+      dispatch({ type: 'activateWorkspace', workspaceId: parent.id });
+      api.refreshGit(parent.id);
+    }
+    const what = {
+      merged: `“${ws.name}” was merged into ${ws.task.baseBranch}; its folder and branch were deleted.`,
+      removed: `“${ws.name}” had nothing to merge; its folder and branch were deleted.`,
+      'kept-branch': `The folder of “${ws.name}” was deleted; its branch ${ws.task.branch} was kept.`,
+      discarded: `“${ws.name}” was discarded: its folder and branch were deleted.`,
+    }[outcome];
+    pushToast('info', what);
   };
 
   const relinkWorkspace = async (workspaceId: string) => {
@@ -1138,6 +1178,7 @@ export function App() {
         ? [
             cmd('ws-task', 'Workspace', 'New agent task…', () => ws && newTask(ws.id), undefined, !ws),
             cmd('ws-task-review', 'Workspace', 'Review task changes…', () => ws?.task && setReviewFor(ws.id), undefined, !ws?.task),
+            cmd('ws-task-finish', 'Workspace', 'Finish task (commit, merge, clean up)…', () => ws?.task && setFinishFor(ws.id), undefined, !ws?.task),
           ]
         : []),
       cmd('term-new', 'Terminal', 'New terminal in current pane (default shell)', () => newTerminal(), 'newTerminal', !ws),
@@ -1410,7 +1451,33 @@ export function App() {
         onCreate={(choice) => (taskFor ? createTask(taskFor, choice) : Promise.resolve(null))}
         onClose={() => setTaskFor(null)}
       />
-      <ReviewDialog open={!!reviewFor} workspace={state.workspaces.find((w) => w.id === reviewFor && w.task) ?? null} onClose={() => setReviewFor(null)} />
+      <ReviewDialog
+        open={!!reviewFor}
+        workspace={state.workspaces.find((w) => w.id === reviewFor && w.task) ?? null}
+        onFinish={() => {
+          setFinishFor(reviewFor);
+          setReviewFor(null);
+        }}
+        onClose={() => setReviewFor(null)}
+      />
+      {(() => {
+        const ws = state.workspaces.find((w) => w.id === finishFor && w.task) ?? null;
+        const tabIds = ws ? listTabs(ws.layout).map((t) => t.id) : [];
+        return (
+          <FinishTaskDialog
+            open={!!ws}
+            workspace={ws}
+            dirtyEditors={editors.dirtyCount(tabIds)}
+            onSaveEditors={async () => {
+              await Promise.all(tabIds.map((id) => editors.get(id)).filter((e) => e?.isDirty).map((e) => e!.save()));
+              setEditorsSaved((n) => n + 1);
+            }}
+            onEndTerminals={() => ws && endTaskTerminals(ws.id)}
+            onDone={(outcome) => ws && taskFinished(ws.id, outcome)}
+            onClose={() => setFinishFor(null)}
+          />
+        );
+      })()}
       <Toasts
         toasts={toasts}
         onDismiss={(id) => {

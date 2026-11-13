@@ -40,6 +40,7 @@ import {
   type WorktreeEntry,
 } from './git-worktree';
 import {
+  isCommitMessage,
   isTaskName,
   TASK_BRANCH_PREFIX,
   TASK_LIMITS,
@@ -51,6 +52,9 @@ import {
   type TaskDiff,
   type TaskError,
   type TaskErrorCode,
+  type TaskFinishCheck,
+  type TaskMergeResult,
+  type TaskUpdateResult,
   type TaskPreview,
   type TaskProgress,
   type TaskRecord,
@@ -61,6 +65,8 @@ const win = path.win32;
 
 /** A checkout can take a while in a large repository (and hooks run after it). */
 export const ADD_TIMEOUT_MS = 5 * 60_000;
+/** A merge (and its hooks) in a large repository. */
+export const MERGE_TIMEOUT_MS = 5 * 60_000;
 /** Deleting a large folder (node_modules) can take a while too. */
 export const REMOVE_TIMEOUT_MS = 2 * 60_000;
 
@@ -84,6 +90,18 @@ const MESSAGES: Record<TaskErrorCode, string> = {
   TIMEOUT: 'Git took too long and was stopped.',
   CHANGES_NOT_CHECKED: 'This repository’s own Git configuration names a filter program, which Git would start to compare files, so SplitNest doesn’t compare them here. Review the changes with Git yourself.',
   NOT_CHANGED: 'That file isn’t among the task’s changes (anymore).',
+  TERMINALS_RUNNING: 'Terminals are still running in this task. They are ended first; try again in a moment.',
+  BASE_NOT_CHECKED_OUT: 'The branch the task came from isn’t checked out in any folder, so there is nowhere to merge it. Check it out (for example in the workspace the task came from) and try again.',
+  BASE_DIRTY: 'The folder where the task would be merged has uncommitted changes. Commit or stash them there first, so the merge can’t mix with them.',
+  OPERATION_IN_PROGRESS: 'A merge, rebase, cherry-pick or revert is in progress there. Finish or abort it first.',
+  TASK_UNCOMMITTED: 'The task has changes that aren’t committed. Commit them first (Commit all), so the merge brings everything you reviewed.',
+  CONFLICTS_UNRESOLVED: 'Some files in the task still contain conflict markers (<<<<<<<). Resolve them first, in the task folder.',
+  NOTHING_TO_COMMIT: 'There is nothing to commit in the task folder.',
+  INVALID_MESSAGE: 'Write a commit message (up to 1000 characters).',
+  COMMIT_FAILED: 'Git couldn’t commit. Check that your Git name and email are set (git config user.name / user.email) and that no commit hook refused it.',
+  MERGE_FAILED: 'Git couldn’t merge (for example because it would overwrite untracked files there, or a hook refused). Nothing was changed.',
+  MERGE_NOT_UNDONE: 'The merge stopped and SplitNest couldn’t undo it. Run `git merge --abort` in the folder it was merged in, then check that folder.',
+  STALE: 'The task changed since this was shown (new commits). Look at it again before discarding it.',
   GIT_FAILED: 'Git couldn’t complete the operation.',
 };
 
@@ -282,6 +300,223 @@ export class TaskService {
     return { ok: true, diff: capDiff(r.stdout, !!r.overflow) };
   }
 
+  // ---------------------------------------------------------------- finishing (M4)
+  //
+  // Everything here runs on the user's explicit action (Finish). Commands that change the repository
+  // run the repository's hooks, as the same command typed in a terminal would. Nothing is forced
+  // except Discard, which the user confirms with the list of what is lost, and which is refused when
+  // the task got new commits since that list was shown.
+
+  /** What Finish shows before it offers to merge or clean up (read-only). */
+  async finishCheck(task: TaskRecord): Promise<TaskResult<{ check: Omit<TaskFinishCheck, 'runningTerminals'> }>> {
+    const listed = await this.changes(task);
+    if (!listed.ok) return listed;
+    const uncommitted = listed.changes.files.filter((f) => f.uncommitted).map((f) => f.path);
+    const head = await this.refId(task.repoRoot, task.branch);
+    const progress = await this.progress(task);
+    const commitsToMerge = progress.ok ? (progress.progress.ahead ?? 0) : 0;
+    const behind = progress.ok ? (progress.progress.behind ?? 0) : 0;
+    const mergeFolder = await this.mergeFolder(task);
+    const mergeFolderDirty = mergeFolder ? await this.trackedChanges(mergeFolder) : false;
+    const inProgress = (await this.operationInProgress(task.worktreePath)) ? 'task' : mergeFolder && (await this.operationInProgress(mergeFolder)) ? 'base' : null;
+    const unresolved = await this.unmerged(task.worktreePath);
+    let preview: TaskFinishCheck['preview'] = commitsToMerge === 0 ? 'nothing' : 'unknown';
+    let conflicts: string[] = [];
+    if (commitsToMerge > 0 && head && versionAtLeast(await this.deps.git.version(), [2, 38])) {
+      // Computes the merge without touching any folder or branch (it only adds Git objects).
+      const r = await this.read(task.repoRoot, ['merge-tree', '--write-tree', '--name-only', '--no-messages', '-z', `refs/heads/${task.baseBranch}`, `refs/heads/${task.branch}`]);
+      if (r?.code === 0) preview = 'clean';
+      else if (r?.code === 1) {
+        preview = 'conflicts';
+        conflicts = [...new Set(parsePaths(r.stdout).slice(1))].filter(isSafeRelative);
+      }
+    }
+    const ig = await this.read(task.worktreePath, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z']);
+    const ignoredAll = ig?.code === 0 ? parsePaths(ig.stdout) : [];
+    return {
+      ok: true,
+      check: {
+        head,
+        uncommitted: uncommitted.slice(0, 50),
+        uncommittedCount: uncommitted.length,
+        commitsToMerge,
+        behind,
+        mergeFolder,
+        mergeFolderDirty,
+        inProgress,
+        unresolved,
+        preview,
+        conflicts,
+        ignored: ignoredAll.slice(0, 20),
+        ignoredCount: ignoredAll.length,
+      },
+    };
+  }
+
+  /**
+   * "Commit all" in the task folder: stage everything (as `git add -A`: new files too, ignored ones
+   * not) and commit with the user's message. It also concludes a merge of the base branch whose
+   * conflicts were resolved; files still containing conflict markers are refused.
+   */
+  async commitAll(task: TaskRecord, message: unknown): Promise<TaskResult<{ commit: string }>> {
+    if (!isCommitMessage(message)) return fail('INVALID_MESSAGE');
+    if (!(await this.isTaskFolder(task))) return fail('NOT_A_TASK');
+    return this.serial(task.repoRoot, async () => {
+      const unresolved = await this.unmerged(task.worktreePath);
+      if (unresolved.length > 0 && (await withMarkers(task.worktreePath, unresolved)).length > 0) return fail('CONFLICTS_UNRESOLVED');
+      const add = await this.deps.git.run(task.worktreePath, ['add', '-A']);
+      if (add === null || add.code !== 0) return gitFailure(add);
+      const staged = await this.deps.git.run(task.worktreePath, ['diff', '--cached', '--quiet', '--ignore-submodules=all']);
+      const merging = await this.operationInProgress(task.worktreePath);
+      if (staged?.code === 0 && !merging) return fail('NOTHING_TO_COMMIT');
+      const commit = await this.deps.git.run(task.worktreePath, ['commit', '--quiet', '-m', message.trim()], { timeoutMs: MERGE_TIMEOUT_MS });
+      if (commit === null || commit.timedOut) return gitFailure(commit);
+      if (commit.code !== 0) return fail('COMMIT_FAILED');
+      const id = await this.refId(task.repoRoot, task.branch);
+      return id ? { ok: true, commit: id } : fail('GIT_FAILED');
+    });
+  }
+
+  /**
+   * Merges the task branch into the base branch, in the folder where the base branch is checked out.
+   * Only when that folder has no changes to tracked files, nothing is in progress anywhere, and the
+   * task has nothing uncommitted. If Git stops with conflicts (or any other way mid-merge), the merge
+   * is aborted at once and the folder is checked to be exactly as before.
+   */
+  async merge(task: TaskRecord): Promise<TaskResult<{ result: TaskMergeResult }>> {
+    if (!(await this.isTaskFolder(task))) return fail('NOT_A_TASK');
+    return this.serial(task.repoRoot, async () => {
+      const listed = await this.changes(task);
+      if (!listed.ok) return listed;
+      if (listed.changes.files.some((f) => f.uncommitted)) return fail('TASK_UNCOMMITTED');
+      if (await this.operationInProgress(task.worktreePath)) return fail('OPERATION_IN_PROGRESS');
+      const folder = await this.mergeFolder(task);
+      if (!folder) return fail('BASE_NOT_CHECKED_OUT');
+      if (await this.operationInProgress(folder)) return fail('OPERATION_IN_PROGRESS');
+      if (await this.trackedChanges(folder)) return fail('BASE_DIRTY');
+      const before = await this.refId(folder, task.baseBranch);
+      if (!before) return fail('BASE_NOT_CHECKED_OUT');
+      const r = await this.deps.git.run(folder, ['merge', '--no-edit', '--no-stat', `refs/heads/${task.branch}`], { timeoutMs: MERGE_TIMEOUT_MS });
+      if (r !== null && r.code === 0 && !r.timedOut) {
+        const after = await this.refId(folder, task.baseBranch);
+        return after ? { ok: true, result: { outcome: 'merged', commit: after } } : fail('GIT_FAILED');
+      }
+      if (r === null) return fail('GIT_NOT_FOUND');
+      // Stopped: undo whatever it left.
+      const conflicts = await this.unmerged(folder);
+      if (await this.operationInProgress(folder)) {
+        const abort = await this.deps.git.run(folder, ['merge', '--abort'], { timeoutMs: MERGE_TIMEOUT_MS });
+        if (abort === null || abort.code !== 0) return fail('MERGE_NOT_UNDONE');
+      }
+      const now = await this.refId(folder, task.baseBranch);
+      if (now !== before || (await this.trackedChanges(folder)) || (await this.operationInProgress(folder))) return fail('MERGE_NOT_UNDONE');
+      return conflicts.length > 0 ? { ok: true, result: { outcome: 'conflicts', conflicts } } : fail(r.timedOut ? 'TIMEOUT' : 'MERGE_FAILED');
+    });
+  }
+
+  /**
+   * Brings the base branch's newer commits into the task folder (a merge there). Conflicts stay in
+   * the task folder, where you or the agent resolve them and then commit (Commit all); the base
+   * branch and the workspace it came from are not touched.
+   */
+  async updateFromBase(task: TaskRecord): Promise<TaskResult<{ result: TaskUpdateResult }>> {
+    if (!(await this.isTaskFolder(task))) return fail('NOT_A_TASK');
+    return this.serial(task.repoRoot, async () => {
+      if (await this.operationInProgress(task.worktreePath)) return fail('OPERATION_IN_PROGRESS');
+      if (await this.trackedChanges(task.worktreePath)) return fail('TASK_UNCOMMITTED');
+      if (!(await this.refId(task.repoRoot, task.baseBranch))) return fail('BASE_NOT_CHECKED_OUT');
+      const before = await this.refId(task.repoRoot, task.branch);
+      const r = await this.deps.git.run(task.worktreePath, ['merge', '--no-edit', '--no-stat', `refs/heads/${task.baseBranch}`], { timeoutMs: MERGE_TIMEOUT_MS });
+      if (r === null) return fail('GIT_NOT_FOUND');
+      if (r.code === 0 && !r.timedOut) {
+        const after = await this.refId(task.repoRoot, task.branch);
+        return { ok: true, result: { outcome: after === before ? 'up-to-date' : 'updated' } };
+      }
+      const conflicts = await this.unmerged(task.worktreePath);
+      if (conflicts.length > 0) return { ok: true, result: { outcome: 'conflicts', conflicts } };
+      // Stopped another way: undo it in the task folder too.
+      if (await this.operationInProgress(task.worktreePath)) await this.deps.git.run(task.worktreePath, ['merge', '--abort']);
+      return fail(r.timedOut ? 'TIMEOUT' : 'MERGE_FAILED');
+    });
+  }
+
+  /**
+   * Discard: deletes the task folder with whatever is in it, and its branch, even if not merged.
+   * The user confirmed with the list of what is lost; `head` is the branch commit that list was
+   * made for, and anything newer is refused (STALE). A locked worktree is still refused.
+   */
+  async discard(task: TaskRecord, head: unknown): Promise<TaskResult<object>> {
+    const dir = worktreesDir(task.repoRoot);
+    if (!dir || !isStrictlyInside(task.worktreePath, dir) || !task.branch.startsWith(TASK_BRANCH_PREFIX)) return fail('NOT_A_TASK');
+    if (typeof head !== 'string' || !/^[0-9a-f]{40,64}$/.test(head)) return fail('STALE');
+    return this.serial(task.repoRoot, async () => {
+      const list = await this.list(task.repoRoot);
+      if (!list || !list[0] || !samePath(list[0].path, task.repoRoot)) return fail('NOT_A_TASK');
+      const now = await this.refId(task.repoRoot, task.branch);
+      if (now !== null && now !== head) return fail('STALE');
+      const entry = list.find((e) => samePath(e.path, task.worktreePath));
+      if (entry) {
+        if (entry.branch !== task.branch) return fail('NOT_A_TASK');
+        if (entry.locked) return fail('TASK_LOCKED');
+        const r = await this.deps.git.run(task.repoRoot, ['worktree', 'remove', '--force', task.worktreePath], { timeoutMs: REMOVE_TIMEOUT_MS });
+        if (r === null || r.code !== 0) {
+          const after = r && !r.timedOut ? await this.list(task.repoRoot) : null;
+          if (!after || after.some((e) => samePath(e.path, task.worktreePath))) return gitFailure(r);
+          const left = await removeEmptyFolders(task.worktreePath);
+          if (left !== 'removed') return fail('FOLDER_IN_USE');
+        }
+      } else if (await this.deps.isDirectory(task.worktreePath)) {
+        const left = await removeEmptyFolders(task.worktreePath);
+        if (left !== 'removed') return fail(left === 'files' ? 'LEFTOVER_FILES' : 'FOLDER_IN_USE');
+      }
+      if (now !== null) {
+        const others = await this.list(task.repoRoot);
+        // Checked out somewhere else (by the user): the branch stays.
+        if (others && !others.some((e) => e.branch === task.branch)) await this.deps.git.run(task.repoRoot, ['update-ref', '-d', `refs/heads/${task.branch}`, now]);
+      }
+      return { ok: true };
+    });
+  }
+
+  /** The folder where the base branch is checked out (from Git's own worktree list), never the task's. */
+  private async mergeFolder(task: TaskRecord): Promise<string | null> {
+    const list = await this.list(task.repoRoot);
+    const e = list?.find((x) => x.branch === task.baseBranch && !x.bare && !samePath(x.path, task.worktreePath));
+    return e && (await this.deps.isDirectory(e.path)) ? e.path : null;
+  }
+
+  /** Changes to tracked files (staged or not) in a folder. */
+  private async trackedChanges(cwd: string): Promise<boolean> {
+    const r = await this.read(cwd, ['status', '--porcelain=v2', '-z', '--untracked-files=no', '--ignore-submodules=all']);
+    return r === null || r.code !== 0 || r.stdout.length > 0;
+  }
+
+  /** Files Git lists as unmerged (conflicts) in a folder. */
+  private async unmerged(cwd: string): Promise<string[]> {
+    const r = await this.read(cwd, ['diff', '--name-only', '--diff-filter=U', '-z', '--no-ext-diff', '--no-textconv', '--ignore-submodules=all']);
+    return r?.code === 0 ? [...new Set(parsePaths(r.stdout))].filter(isSafeRelative) : [];
+  }
+
+  /** A merge, rebase, cherry-pick or revert is in progress in that folder's worktree. */
+  private async operationInProgress(cwd: string): Promise<boolean> {
+    const names = ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply'];
+    const r = await this.read(cwd, ['rev-parse', ...names.flatMap((n) => ['--git-path', n])]);
+    if (r === null || r.code !== 0) return true;
+    for (const line of r.stdout.split('\n').map((l) => l.trim()).filter(Boolean)) {
+      const full = win.isAbsolute(fromGitPath(line)) ? fromGitPath(line) : win.join(cwd, fromGitPath(line));
+      if (await pathExists(full)) return true;
+    }
+    return false;
+  }
+
+  /** The task folder is there and Git lists it as this task's worktree. */
+  private async isTaskFolder(task: TaskRecord): Promise<boolean> {
+    const dir = worktreesDir(task.repoRoot);
+    if (!dir || !isStrictlyInside(task.worktreePath, dir) || !task.branch.startsWith(TASK_BRANCH_PREFIX)) return false;
+    const list = await this.list(task.repoRoot);
+    return !!list?.some((e) => samePath(e.path, task.worktreePath) && e.branch === task.branch) && (await this.deps.isDirectory(task.worktreePath));
+  }
+
   /** A read-only Git command (no optional locks). */
   private read(cwd: string, args: string[]): Promise<GitResult | null> {
     return this.deps.git.run(cwd, ['--no-optional-locks', ...args]);
@@ -473,4 +708,19 @@ export async function untrackedDiff(folder: string, rel: string): Promise<TaskDi
   } catch {
     return { text: '', binary: true, truncated: false };
   }
+}
+
+/** Of these files in a folder, those that still contain a conflict marker line. */
+async function withMarkers(folder: string, files: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const f of files) {
+    try {
+      const text = (await readFile(win.join(folder, ...f.split('/')))).toString('utf8');
+      // The opening and closing markers (a line of seven `=` alone can be a Markdown heading underline).
+      if (/^(<{7}|>{7})( |\r?$)/m.test(text)) out.push(f);
+    } catch {
+      // Deleted in the resolution: nothing to check.
+    }
+  }
+  return out;
 }

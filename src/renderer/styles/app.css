@@ -3576,3 +3576,103 @@ dialog::backdrop {
   padding-top: 2px;
   padding-bottom: 2px;
 }
+
+/* Finish: three numbered steps, each done, ready or blocked. */
+.finish__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: finish;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.finish__step {
+  counter-increment: finish;
+  position: relative;
+  padding: 10px 12px 10px 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-sidebar);
+  font-size: var(--text-sm);
+}
+
+.finish__step::before {
+  content: counter(finish);
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.finish__step--done::before {
+  content: '✓';
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.finish__step--blocked::before {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.finish__step p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.finish__files {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.finish__commit {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.finish__commit .input {
+  flex: 1;
+}
+
+.finish__step .button {
+  margin-top: 8px;
+}
+
+.finish__discard {
+  margin-right: auto;
+}
+
+.finish__note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--warning-soft);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.finish__list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.finish__list li + li {
+  margin-top: 4px;
+}
+
+.finish-dialog .dialog__footer {
+  align-items: center;
+}

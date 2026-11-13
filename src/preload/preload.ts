@@ -126,6 +126,12 @@ const api: AppApi = {
   taskProgress: (workspaceId) => ipcRenderer.invoke(IPC.taskProgress, workspaceId),
   taskChanges: (workspaceId) => ipcRenderer.invoke(IPC.taskChanges, workspaceId),
   taskDiff: (workspaceId, path) => ipcRenderer.invoke(IPC.taskDiff, workspaceId, path),
+  taskFinishCheck: (workspaceId) => ipcRenderer.invoke(IPC.taskFinishCheck, workspaceId),
+  taskCommit: (workspaceId, message) => ipcRenderer.invoke(IPC.taskCommit, workspaceId, message),
+  taskMerge: (workspaceId) => ipcRenderer.invoke(IPC.taskMerge, workspaceId),
+  taskUpdate: (workspaceId) => ipcRenderer.invoke(IPC.taskUpdate, workspaceId),
+  taskRemove: (workspaceId, deleteBranch) => ipcRenderer.invoke(IPC.taskRemove, workspaceId, deleteBranch),
+  taskDiscard: (workspaceId, head) => ipcRenderer.invoke(IPC.taskDiscard, workspaceId, head),
   onGitStatus: (listener) => {
     gitListeners.add(listener);
     return () => {

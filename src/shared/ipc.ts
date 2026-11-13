@@ -1,7 +1,7 @@
 import type { AgentResume } from './agent-resume';
 import type { AgentId } from './agents';
 import type { UpdatePrefs, UpdateStatus } from './updates';
-import type { TaskChanges, TaskDiff, TaskPreview, TaskProgress, TaskRecord, TaskResult } from './tasks';
+import type { BranchOutcome, TaskChanges, TaskDiff, TaskFinishCheck, TaskMergeResult, TaskPreview, TaskProgress, TaskRecord, TaskResult, TaskUpdateResult } from './tasks';
 import type { AgentNotice, NoticeDelivery, NoticeTarget } from './notifications';
 import type {
   AppInfo,
@@ -72,6 +72,12 @@ export const IPC = {
   taskProgress: 'tw:task:progress',
   taskChanges: 'tw:task:changes',
   taskDiff: 'tw:task:diff',
+  taskFinishCheck: 'tw:task:finish-check',
+  taskCommit: 'tw:task:commit',
+  taskMerge: 'tw:task:merge',
+  taskUpdate: 'tw:task:update',
+  taskRemove: 'tw:task:remove',
+  taskDiscard: 'tw:task:discard',
 } as const;
 
 export interface PickFolderResult {
@@ -174,4 +180,16 @@ export interface AppApi {
   taskChanges(workspaceId: string): Promise<TaskResult<{ changes: TaskChanges }>>;
   /** Review: one of those files' diff (`path` as listed by taskChanges; anything else is refused). */
   taskDiff(workspaceId: string, path: string): Promise<TaskResult<{ diff: TaskDiff }>>;
+  /** Finish: what merging and cleaning up would involve (read-only Git, plus main's count of running terminals). */
+  taskFinishCheck(workspaceId: string): Promise<TaskResult<{ check: TaskFinishCheck }>>;
+  /** Finish: stage everything in the task folder and commit it with this message. */
+  taskCommit(workspaceId: string, message: string): Promise<TaskResult<{ commit: string }>>;
+  /** Finish: merge the task branch into its base branch (undone at once if it stops with conflicts). */
+  taskMerge(workspaceId: string): Promise<TaskResult<{ result: TaskMergeResult }>>;
+  /** Finish: bring the base branch's newer commits into the task folder (conflicts stay there). */
+  taskUpdate(workspaceId: string): Promise<TaskResult<{ result: TaskUpdateResult }>>;
+  /** Finish: delete the task folder (refused with uncommitted files) and, if asked, its branch once merged. */
+  taskRemove(workspaceId: string, deleteBranch: boolean): Promise<TaskResult<{ branch: BranchOutcome }>>;
+  /** Finish: delete the task folder and branch whatever they contain; `head` is the commit the user confirmed for. */
+  taskDiscard(workspaceId: string, head: string): Promise<TaskResult<object>>;
 }

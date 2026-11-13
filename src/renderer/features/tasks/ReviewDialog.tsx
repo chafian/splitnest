@@ -29,10 +29,12 @@ const KIND_TITLE: Record<TaskChange['kind'], string> = {
 interface Props {
   open: boolean;
   workspace: Workspace | null;
+  /** Opens Finish (commit, merge, clean up) for this task. */
+  onFinish(): void;
   onClose(): void;
 }
 
-export function ReviewDialog({ open, workspace, onClose }: Props) {
+export function ReviewDialog({ open, workspace, onFinish, onClose }: Props) {
   const [changes, setChanges] = useState<TaskChanges | null>(null);
   const [error, setError] = useState<TaskError | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -102,12 +104,15 @@ export function ReviewDialog({ open, workspace, onClose }: Props) {
       className="review-dialog"
       footer={
         <>
-          <span className="review__footnote">Read-only. Merging a task from SplitNest comes in a later version.</span>
+          <span className="review__footnote">Read-only: nothing is changed here.</span>
           <button type="button" className="button" data-testid="review-refresh" onClick={() => void load()} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
-          <button type="button" className="button button--primary" onClick={onClose}>
+          <button type="button" className="button" onClick={onClose}>
             Close
+          </button>
+          <button type="button" className="button button--primary" data-testid="review-finish" onClick={onFinish}>
+            Finish task…
           </button>
         </>
       }

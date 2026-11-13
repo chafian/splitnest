@@ -291,6 +291,53 @@ export function registerIpc(ctx: IpcContext): void {
     return p.workspace.task ? ctx.tasks.diff(p.workspace.task, file) : taskFailure('NOT_A_TASK');
   });
 
+  // Finishing a task: each one acts on main's own copy of the task, never on paths from the page.
+  const taskOf = (workspaceId: unknown) => {
+    const p = taskParent(workspaceId);
+    if (!p.ok) return p;
+    return p.workspace.task ? { ok: true as const, id: p.workspace.id, task: p.workspace.task } : taskFailure('NOT_A_TASK');
+  };
+  handle(IPC.taskFinishCheck, async (_event, workspaceId) => {
+    const t = taskOf(workspaceId);
+    if (!t.ok) return t;
+    const r = await ctx.tasks.finishCheck(t.task);
+    return r.ok ? { ok: true, check: { ...r.check, runningTerminals: ctx.broker.liveInWorkspace(t.id) } } : r;
+  });
+  handle(IPC.taskCommit, async (_event, workspaceId, message) => {
+    const t = taskOf(workspaceId);
+    return t.ok ? ctx.tasks.commitAll(t.task, message) : t;
+  });
+  handle(IPC.taskMerge, async (_event, workspaceId) => {
+    const t = taskOf(workspaceId);
+    if (!t.ok) return t;
+    const r = await ctx.tasks.merge(t.task);
+    ctx.log.info(`agent task merge: ${r.ok ? r.result.outcome : r.error.code}`);
+    // The base branch moved: check the sidebar's Git status again (one check at a time, a rare action).
+    if (r.ok) for (const w of ctx.store.state.workspaces) ctx.gitStatus.request(w.id);
+    return r;
+  });
+  handle(IPC.taskUpdate, async (_event, workspaceId) => {
+    const t = taskOf(workspaceId);
+    return t.ok ? ctx.tasks.updateFromBase(t.task) : t;
+  });
+  // Deleting the folder waits until no terminal runs in the task (the page ends them first).
+  handle(IPC.taskRemove, async (_event, workspaceId, deleteBranch) => {
+    const t = taskOf(workspaceId);
+    if (!t.ok) return t;
+    if (ctx.broker.liveInWorkspace(t.id) > 0) return taskFailure('TERMINALS_RUNNING');
+    const r = await ctx.tasks.remove(t.task, { deleteBranch: deleteBranch === true });
+    ctx.log.info(`agent task removed: ${r.ok ? r.branch : r.error.code}`);
+    return r;
+  });
+  handle(IPC.taskDiscard, async (_event, workspaceId, head) => {
+    const t = taskOf(workspaceId);
+    if (!t.ok) return t;
+    if (ctx.broker.liveInWorkspace(t.id) > 0) return taskFailure('TERMINALS_RUNNING');
+    const r = await ctx.tasks.discard(t.task, head);
+    ctx.log.info(`agent task discarded: ${r.ok ? 'ok' : r.error.code}`);
+    return r;
+  });
+
   // Agent notifications: the page sends ids and the event; main writes the text (notifications.ts).
   handle(IPC.notifyAgent, (_event, notice) => ctx.notifications.notify(notice));
   on(IPC.notifyWithdraw, (_event, tabIds) => ctx.notifications.withdraw(tabIds));

@@ -40,6 +40,18 @@ export type TaskErrorCode =
   | 'TIMEOUT'
   | 'CHANGES_NOT_CHECKED'
   | 'NOT_CHANGED'
+  | 'TERMINALS_RUNNING'
+  | 'BASE_NOT_CHECKED_OUT'
+  | 'BASE_DIRTY'
+  | 'OPERATION_IN_PROGRESS'
+  | 'TASK_UNCOMMITTED'
+  | 'CONFLICTS_UNRESOLVED'
+  | 'NOTHING_TO_COMMIT'
+  | 'INVALID_MESSAGE'
+  | 'COMMIT_FAILED'
+  | 'MERGE_FAILED'
+  | 'MERGE_NOT_UNDONE'
+  | 'STALE'
   | 'GIT_FAILED';
 
 export interface TaskError {
@@ -125,6 +137,50 @@ export interface TaskDiff {
   binary: boolean;
   /** Cut off at TASK_LIMITS.maxDiffBytes. */
   truncated: boolean;
+}
+
+/** Everything Finish needs to know before it offers to merge or clean up. */
+export interface TaskFinishCheck {
+  /** The task branch's commit right now (Discard refuses if it moved since). */
+  head: string | null;
+  /** Files changed or new in the task folder that aren't committed (first 50), and how many. */
+  uncommitted: string[];
+  uncommittedCount: number;
+  /** Commits the merge would bring into the base branch, and commits the base branch got since the task started. */
+  commitsToMerge: number;
+  behind: number;
+  /** Where the base branch is checked out (the merge happens there), or null when nowhere. */
+  mergeFolder: string | null;
+  /** That folder has changes to tracked files (a merge there is refused). */
+  mergeFolderDirty: boolean;
+  /** A merge, rebase, cherry-pick or revert is in progress in the task folder or the merge folder. */
+  inProgress: 'task' | 'base' | null;
+  /** In the task folder: files with conflicts from bringing in the base branch, still unresolved. */
+  unresolved: string[];
+  /** What merging would do: clean, conflicts (in `conflicts`), unknown (Git before 2.38), nothing to merge. */
+  preview: 'clean' | 'conflicts' | 'unknown' | 'nothing';
+  conflicts: string[];
+  /** Entries Git ignores in the task folder (first 20), deleted with the folder (`node_modules/`, `.env`). */
+  ignored: string[];
+  ignoredCount: number;
+  /** Terminals running in the task's workspace (main's count). */
+  runningTerminals: number;
+}
+
+export type TaskMergeResult =
+  /** Merged into the base branch. */
+  | { outcome: 'merged'; commit: string }
+  /** Conflicts: the merge was undone and the base branch is exactly as before. */
+  | { outcome: 'conflicts'; conflicts: string[] };
+
+/** Bringing the base branch into the task folder: merged, or conflicts left there to resolve. */
+export type TaskUpdateResult = { outcome: 'updated' } | { outcome: 'up-to-date' } | { outcome: 'conflicts'; conflicts: string[] };
+
+/** A commit message as typed: 1–1000 characters after trimming, no control characters but line breaks and tabs. */
+export function isCommitMessage(v: unknown): v is string {
+  if (typeof v !== 'string') return false;
+  const t = v.trim();
+  return t.length > 0 && t.length <= 1000 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(t);
 }
 
 /** What happened to the branch when a task was removed. */

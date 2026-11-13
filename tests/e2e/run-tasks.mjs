@@ -30,6 +30,11 @@ copyFileSync(path.join(sys32, 'cmd.exe'), fakeCodex);
 const git = (cwd, ...args) =>
   execFileSync('git', ['-C', cwd, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' }).trim();
 git(proj, 'init', '-q', '-b', 'main');
+// Commit all and merges in the app commit as the repository's own (test) identity, not the user's.
+git(proj, 'config', 'user.name', 'Test');
+git(proj, 'config', 'user.email', 'test@example.invalid');
+git(proj, 'config', 'commit.gpgsign', 'false');
+git(proj, 'config', 'core.autocrlf', 'false');
 writeFileSync(path.join(proj, 'README.md'), '# shop\n');
 git(proj, 'add', '.');
 git(proj, 'commit', '-q', '-m', 'first');
@@ -332,6 +337,93 @@ try {
     await page.click('dialog[open] button:has-text("Remove workspace")');
     await until(async () => !(await page.$('.ws-item__label:text-is("Add tests")')), 'row removed');
     if (!existsSync(testsRoot) || git(testsRoot, 'symbolic-ref', '--short', 'HEAD') !== 'splitnest/add-tests') throw new Error('worktree touched');
+  });
+
+  // ---- Finish (M4)
+  const stepText = (name) => page.textContent(`[data-testid="finish-step-${name}"]`);
+  const openFinish = async (name) => {
+    await selectWorkspace(page, name);
+    if (!(await palette(page, 'Finish task'))) throw new Error('Finish disabled');
+    await page.waitForSelector('[data-testid="finish-step-commit"]', { timeout: 20_000 });
+  };
+  const createTask = async (name) => {
+    await selectWorkspace(page, 'shop app');
+    await page.click('[aria-label="New agent task from shop app"]');
+    await page.fill('[data-testid="task-name"]', name);
+    await page.click('[data-testid="task-agent-none"]');
+    await until(async () => (await page.$eval('[data-testid="task-create"]', (b) => !b.disabled)) === true, 'create enabled');
+    await page.click('[data-testid="task-create"]');
+    await page.waitForSelector('[data-testid="task-name"]', { state: 'detached', timeout: 30_000 });
+    return path.join(`${proj}.worktrees`, name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+  };
+
+  await step('Finish names uncommitted files and the running terminal; Commit all commits them', async () => {
+    await openFinish('Fix login');
+    const c = await stepText('commit');
+    if (!c.includes('3 files aren’t committed') || !c.includes('later.txt')) throw new Error(c);
+    if (!(await stepText('clean')).includes('Its terminal is ended first')) throw new Error(await stepText('clean'));
+    if (!(await page.$eval('[data-testid="finish-merge"]', (b) => b.disabled))) throw new Error('merge enabled with uncommitted files');
+    await page.fill('[data-testid="finish-message"]', 'Fix login: logout and notes');
+    await page.click('[data-testid="finish-commit"]');
+    await until(async () => (await page.textContent('[data-testid="finish-note"]').catch(() => ''))?.startsWith('Committed'), 'committed');
+    if (git(fixRoot, 'log', '-1', '--format=%s') !== 'Fix login: logout and notes') throw new Error('commit message');
+    if (git(fixRoot, 'status', '--porcelain') !== '') throw new Error('not everything committed');
+    await until(async () => (await stepText('merge'))?.includes('2 commits merge cleanly into main'), 'merge ready');
+    if (process.env.TW_TASK_SHOTS) await page.screenshot({ path: path.join(process.env.TW_TASK_SHOTS, 'task-finish.png') });
+  });
+
+  await step('Merge into main and clean up: main has the work; the folder, branch, terminal and workspace are gone', async () => {
+    await page.click('[data-testid="finish-merge"]');
+    await page.waitForSelector('[data-testid="finish-step-commit"]', { state: 'detached', timeout: 60_000 });
+    if (!readFileSync(path.join(proj, 'login.js'), 'utf8').includes('logout')) throw new Error('not merged into main');
+    if (git(proj, 'symbolic-ref', '--short', 'HEAD') !== 'main') throw new Error('main changed branch');
+    if (existsSync(fixRoot)) throw new Error('task folder still there');
+    if (git(proj, 'branch', '--list', 'splitnest/fix-login') !== '') throw new Error('branch still there');
+    if (await page.$('.ws-item__label:text-is("Fix login")')) throw new Error('still listed');
+    if (fakes(fakeClaude).length > 0) throw new Error('the task’s agent still runs');
+    // The workspace's own uncommitted file was never touched.
+    if (readFileSync(path.join(proj, 'notes.txt'), 'utf8') !== 'draft\n') throw new Error('notes.txt changed');
+  });
+
+  await step('conflicts with main: Finish names them; Bring in main leaves them in the task; resolved and committed, it merges', async () => {
+    const root = await createTask('Conflict');
+    writeFileSync(path.join(root, 'README.md'), '# shop (task)\n');
+    git(root, 'commit', '-q', '-am', 'task readme');
+    writeFileSync(path.join(proj, 'README.md'), '# shop (main)\n');
+    git(proj, 'commit', '-q', '-am', 'main readme');
+    await openFinish('Conflict');
+    await until(async () => (await stepText('merge'))?.includes('would conflict with main'), 'conflict preview');
+    if (!(await stepText('merge')).includes('README.md')) throw new Error(await stepText('merge'));
+    if (!(await page.$eval('[data-testid="finish-merge"]', (b) => b.disabled))) throw new Error('merge enabled despite conflicts');
+    await page.click('[data-testid="finish-update"]');
+    await until(async () => (await page.textContent('[data-testid="finish-note"]').catch(() => ''))?.includes('Conflicts are now in the task folder'), 'conflicts in task');
+    if (git(proj, 'status', '--porcelain', '--untracked-files=no') !== '' || readFileSync(path.join(proj, 'README.md'), 'utf8') !== '# shop (main)\n') throw new Error('main touched');
+    if (!(await stepText('commit')).includes('conflicts from bringing in main')) throw new Error(await stepText('commit'));
+    writeFileSync(path.join(root, 'README.md'), '# shop (both)\n');
+    await page.fill('[data-testid="finish-message"]', 'Bring in main');
+    await page.click('[data-testid="finish-commit"]');
+    await until(async () => (await stepText('merge'))?.includes('merge cleanly into main'), 'clean after resolving', 20_000);
+    await page.click('[data-testid="finish-merge"]');
+    await page.waitForSelector('[data-testid="finish-step-commit"]', { state: 'detached', timeout: 60_000 });
+    if (readFileSync(path.join(proj, 'README.md'), 'utf8') !== '# shop (both)\n') throw new Error('resolution not merged');
+    if (existsSync(root)) throw new Error('folder left');
+  });
+
+  await step('Discard lists what is lost, then deletes the folder and the unmerged branch', async () => {
+    const root = await createTask('Throwaway');
+    writeFileSync(path.join(root, 'idea.txt'), 'maybe\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'idea');
+    writeFileSync(path.join(root, 'draft.txt'), 'uncommitted\n');
+    await openFinish('Throwaway');
+    await page.click('[data-testid="finish-discard"]');
+    const box = await page.textContent('[data-testid="finish-discard-box"]');
+    if (!box.includes('draft.txt') || !box.includes('1 commit that main doesn’t have') || !box.includes('splitnest/throwaway')) throw new Error(box);
+    await page.click('[data-testid="finish-discard-confirm"]');
+    await page.waitForSelector('[data-testid="finish-discard-box"]', { state: 'detached', timeout: 60_000 });
+    if (existsSync(root)) throw new Error('folder left');
+    if (git(proj, 'branch', '--list', 'splitnest/throwaway') !== '') throw new Error('branch left');
+    if (existsSync(path.join(proj, 'idea.txt'))) throw new Error('discarded work reached main');
   });
 } catch (e) {
   results.push({ name: 'script error', ok: false });

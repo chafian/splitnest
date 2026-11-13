@@ -2,6 +2,18 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Agent tasks, M4: finish (2026-11-14)
+
+- **E2E** (`run-tasks.mjs`, now 19 / 19):
+  - Finish names 3 uncommitted files and the running terminal; *Commit all* commits them with the message; the merge step then says 2 commits merge cleanly.
+  - *Merge into main and clean up*: main has the work, the folder and branch are gone, the task's agent process ended, the workspace left the list, and the parent's own uncommitted file is untouched.
+  - Conflicts: Finish names `README.md` and keeps Merge disabled; *Bring in latest main* leaves the conflict in the task while main is untouched; resolving and *Commit all* make the merge clean; the merged result reaches main.
+  - Discard lists the uncommitted file, the unmerged commit and the branch, then deletes folder and branch; nothing reaches main.
+- **Found by the E2E and fixed:** a newly created task's terminal was still marked to start automatically, so after Finish ended it, its pane started a new shell and the folder stayed in use; ending a task's terminals now clears that mark. And the result note could show before the steps were re-read; the steps are now refreshed first.
+- **Real Git** (`task-service-real.test.ts`, now 37): fresh task and its ignored entries; Commit all (messages refused, new and changed files, body kept); merge with a diverged base and untracked files in the parent; refusals (uncommitted task, dirty base unchanged, base not checked out); conflicts previewed and an attempted merge undone with the base byte-for-byte as before; bring in the base with conflicts left in the task, markers refused, resolution committed, then merged; up-to-date and clean updates; a merge in progress in the parent blocks and is left alone; a refusing `pre-merge-commit` hook leaves the base unchanged; discard refused for newer commits and non-tasks, then deletes folder and unmerged branch.
+- **Unit:** the Finish plan's steps and buttons for each state (`finish-plan.test.ts`, 8).
+- **Regressions:** unit 517 / 517; `run-resume.mjs` 12 / 12; `run-e2e.mjs` 36 / 36. Type check and lint are clean.
+
 ## Agent tasks, M3: review (2026-11-14)
 
 - **E2E** (`run-tasks.mjs`, now 15 / 15): Review lists a committed file and new uncommitted ones (marked), shows each diff with added lines, picks up a file made while it is open after *Refresh*, closes with Escape; a task without changes says so; the palette command is disabled outside a task.
