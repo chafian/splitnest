@@ -40,7 +40,8 @@ function snapshot(dir = path.join(repo, '.git')): string {
   return out.sort().join('\n');
 }
 
-describe.skipIf(!git)('Git status against a real repository', () => {
+// Each test runs several real Git commands (and some start a .cmd); 5 s is too tight on a busy CI runner.
+describe.skipIf(!git)('Git status against a real repository', { timeout: 30_000 }, () => {
   beforeAll(async () => {
     repo = mkdtempSync(path.join(tmpdir(), 'tw-git-'));
     await g('init', '-q', '-b', 'main');
