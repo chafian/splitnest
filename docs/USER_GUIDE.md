@@ -6,6 +6,7 @@ Contents: [Using it](#using-it) · [Keyboard shortcuts](#keyboard-shortcuts) · 
 
 ## Using it
 
+- **First start**: with no workspace yet, SplitNest shows **Open folder…** and a short guide in three cards: workspaces, split panes, and agents (tab state and the inbox), each with its shortcuts.
 - **Workspaces** (left sidebar): one project folder each. **New workspace from folder…** is the folder button at the top of the sidebar (**Ctrl+Shift+O**). The current workspace has a mint bar and bold name. Rename and remove workspaces with the buttons that appear on hover. **Removing a workspace never deletes files**; it only removes the entry and ends its sessions after confirmation.
 - **Sidebars**: the workspace sidebar and the file explorer are independent.
   - **Collapse / expand the workspace sidebar** to an icon rail with **Ctrl+Shift+B** or the first title-bar button. **Show / hide the explorer** with **Ctrl+Shift+E** or the second.

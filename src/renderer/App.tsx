@@ -36,6 +36,7 @@ import type { InboxRow } from './features/notifications/AgentInbox';
 import { noticeBody, noticeTitle } from '../shared/notifications';
 import { Sidebar } from './features/workspaces/Sidebar';
 import { WorkspaceView } from './features/workspaces/WorkspaceView';
+import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
 import { canAddPane, canAddTab, initialState, reducer } from './features/workspaces/workspace-state';
 
 const uid = () => crypto.randomUUID();
@@ -1232,6 +1233,7 @@ export function App() {
               <button type="button" className="button button--primary button--large" onClick={() => void addWorkspace()}>
                 <Icon name="folderPlus" /> Open folder…
               </button>
+              <WelcomeGuide />
               <p className="welcome__meta">
                 <kbd className="kbd">{shortcutLabel('newWorkspace')}</kbd> open folder · <kbd className="kbd">{shortcutLabel('palette')}</kbd>{' '}
                 commands · <kbd className="kbd">{shortcutLabel('shortcuts')}</kbd> all shortcuts

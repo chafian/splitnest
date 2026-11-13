@@ -221,7 +221,21 @@ async function main() {
   await page.waitForTimeout(300);
   await step('welcome screen', async () => {
     await page.waitForSelector('text=Open a project folder');
+    // The guide for new users: workspaces, splits and agents, with their shortcuts.
+    const tips = await page.$$eval('[data-testid="welcome-tips"] .welcome-tip strong', (els) => els.map((e) => e.textContent));
+    if (tips.join() !== 'Workspaces,Split panes,Agents') throw new Error(`welcome tips: ${tips}`);
+    const keys = await page.textContent('[data-testid="welcome-tips"]');
+    for (const k of ['Ctrl+Shift+D', 'Ctrl+Shift+A']) if (!keys.includes(k)) throw new Error(`welcome tips without ${k}`);
     await shot(page, '01-welcome.png');
+    // Narrow window: one column, nothing cut off sideways.
+    const before = page.viewportSize();
+    await page.setViewportSize({ width: 820, height: 760 });
+    await page.waitForTimeout(200);
+    const overflow = await page.$eval('.welcome', (e) => e.scrollWidth > e.clientWidth + 1);
+    if (overflow) throw new Error('welcome screen overflows sideways when narrow');
+    await shot(page, '01b-welcome-narrow.png');
+    await page.setViewportSize(before ?? { width: 1360, height: 860 });
+    return { tips: tips.length };
   });
 
   let ps, wsl, wsl2;

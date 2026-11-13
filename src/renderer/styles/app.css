@@ -2408,6 +2408,70 @@ button {
   line-height: 1.8;
 }
 
+/* The welcome guide: three short cards (workspaces, splits, agents); one column when narrow. */
+.welcome__inner:has(.welcome__tips) {
+  max-width: 760px;
+}
+
+.welcome__tips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .welcome__tips {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 480px;
+  }
+}
+
+.welcome-tip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.welcome-tip__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--text-md);
+}
+
+.welcome-tip__icon {
+  color: var(--accent);
+  flex: none;
+}
+
+.welcome-tip__text {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.welcome-tip__keys {
+  margin-top: auto;
+  font-size: var(--text-xs);
+  line-height: 1.9;
+  color: var(--text-faint);
+}
+
+/* A key stays on the same line as what it does. */
+.welcome-tip__keys > span {
+  white-space: nowrap;
+}
+
 .empty {
   display: flex;
   flex-direction: column;
