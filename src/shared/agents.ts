@@ -74,9 +74,13 @@ export function detectAgent(processes: readonly ProcessInfo[], shellPid: number)
 /** The agent and the process it was recognised by (its pid is what the agent's own records use). */
 export function findAgent(processes: readonly ProcessInfo[], shellPid: number): { id: AgentId; process: ProcessInfo } | null {
   for (const p of descendants(processes, shellPid)) {
-    for (const a of AGENTS) {
-      if ((a.name && a.name.test(p.name)) || (a.cmd && a.cmd.test(p.cmd))) return { id: a.id, process: p };
-    }
+    const a = agentOfProcess(p);
+    if (a) return { id: a.id, process: p };
   }
   return null;
+}
+
+/** The agent a process is, by its image name or command line. */
+export function agentOfProcess(p: Pick<ProcessInfo, 'name' | 'cmd'>): AgentDef | undefined {
+  return AGENTS.find((a) => (a.name && a.name.test(p.name)) || (a.cmd && a.cmd.test(p.cmd)));
 }

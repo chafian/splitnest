@@ -146,6 +146,7 @@ const agentMonitor = new AgentMonitor({
     if (contents && !contents.isDestroyed()) contents.send(IPC.sessionAgent, { sessionId, agent });
   },
   powershellPath: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+  wslPath: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe'),
   log: (message) => log.warn(message),
   resume: {
     tracker: new AgentSessionTracker({

@@ -96,7 +96,8 @@
 - **Text (main).** `src/main/notifications.ts` writes all Windows notification text from the event kind, the agent id, and the workspace and tab names in main's saved state (`shared/notifications.ts`, shared with the in-app notice).
   - **Agent's own text:** session title and message are used only with *Include what the agent wrote*.
   - **Validation:** the page's request is checked whole (ids, kind, agent id, app name, lengths).
-- **Identity.** A Windows notification needs `AgentView.confirmed`: process detection found the agent the reports name, or detection isn't available (WSL). An unconfirmed "needs you" waits for confirmation; other unconfirmed events stay in-app.
+- **WSL processes.** Each WSL session gets `SPLITNEST_TERMINAL=<16 hex>` (via `WSLENV`, `/u`), inherited by its Linux processes. `wsl-processes.ts` keeps one `sh` per distribution in use (`wsl.exe --distribution <name> --exec sh -c <script>`); each scan greps `/proc/*/environ` for the marker and prints pid, parent, marker, name and command line of those processes, and `findWslAgent` searches below each terminal's shell. No answer means "no information" (the last result stays).
+- **Identity.** A Windows notification needs `AgentView.confirmed`: process detection found the agent the reports name, or the terminal is WSL (where an agent's report still counts on its own). An unconfirmed "needs you" waits for confirmation; other unconfirmed events stay in-app.
 - **Clicks.**
   - **Routing:** each notification's `click` event, through main's notification → tab map. Windows' activation arguments are empty for Electron notifications (measured).
   - **Effect:** main restores and focuses the window and sends `IPC.notifyActivate`; the page checks the tab still exists and shows it.

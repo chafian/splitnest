@@ -4,22 +4,29 @@
 // started per check. Command lines never leave this module and are not
 // logged; only an agent id per session is reported.
 //
-// WSL sessions are skipped: their Linux processes are not visible to Windows
-// (only wsl.exe is). For those, the renderer relies on the agent's own
-// OSC 7501 status reports and terminal title.
+// WSL sessions: their Linux processes are not visible to Windows (only wsl.exe
+// is), so a helper inside each distribution in use lists the processes that
+// carry the terminal's marker (wsl-processes.ts). The renderer also keeps using
+// the agent's own OSC 7501 reports and terminal title there. Which conversation
+// runs is not tracked for WSL (Resume opens the agent's own list there).
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentResume } from '../shared/agent-resume';
 import { findAgent, type AgentId, type ProcessInfo } from '../shared/agents';
 import type { AgentSessionTracker } from './agent-sessions';
 import type { SessionProcess } from './session-broker';
+import { findWslAgent, parseWslSnapshot, WslScanHelper } from './wsl-processes';
 
 export interface AgentMonitorDeps {
   sessions(): SessionProcess[];
   report(ownerId: number, sessionId: string, agent: AgentId | null): void;
   powershellPath: string;
   log(message: string): void;
+  /** wsl.exe, for the helper that lists processes inside a distribution. */
+  wslPath?: string;
   /** Injected for tests. */
   snapshot?(): Promise<ProcessInfo[]>;
+  /** Injected for tests: one distribution's scan output (see WSL_SCAN_SCRIPT), or null for no answer. */
+  wslSnapshot?(distro: string): Promise<string | null>;
   /** Which conversation each agent runs, for resuming it after a restart (see agent-sessions.ts). */
   resume?: { tracker: AgentSessionTracker; report(ownerId: number, sessionId: string, resume: AgentResume | null): void };
 }
@@ -67,6 +74,7 @@ export class AgentMonitor {
   private scanning = false;
   private stopped = false;
   private readonly last = new Map<string, AgentId | null>();
+  private readonly wslHelpers = new Map<string, WslScanHelper>();
 
   constructor(private readonly deps: AgentMonitorDeps) {}
 
@@ -85,6 +93,8 @@ export class AgentMonitor {
     if (this.timer) clearTimeout(this.timer);
     this.helper?.kill();
     this.helper = null;
+    for (const h of this.wslHelpers.values()) h.stop();
+    this.wslHelpers.clear();
   }
 
   /** Forget a session that ended. */
@@ -100,12 +110,15 @@ export class AgentMonitor {
   }
 
   private async tick(): Promise<void> {
-    const sessions = this.deps.sessions().filter((s) => !s.wsl);
+    const all = this.deps.sessions();
+    const sessions = all.filter((s) => !s.wsl);
+    const wslSessions = all.filter((s) => s.wsl && s.distro && s.marker);
     for (const id of [...this.last.keys()]) {
-      if (sessions.some((s) => s.sessionId === id)) continue;
+      if (all.some((s) => s.sessionId === id)) continue;
       this.last.delete(id);
       this.deps.resume?.tracker.forget(id);
     }
+    if (wslSessions.length > 0 || this.wslHelpers.size > 0) await this.scanWsl(wslSessions);
     if (sessions.length > 0) {
       this.scanning = true;
       try {
@@ -130,6 +143,46 @@ export class AgentMonitor {
       }
     }
     this.schedule(Date.now() < this.activeUntil ? ACTIVE_MS : QUIET_MS);
+  }
+
+  /** WSL terminals, one helper per distribution in use; helpers of distributions no longer in use stop. */
+  private async scanWsl(sessions: SessionProcess[]): Promise<void> {
+    const distros = new Set(sessions.map((s) => s.distro!));
+    for (const [d, h] of this.wslHelpers) {
+      if (distros.has(d)) continue;
+      h.stop();
+      this.wslHelpers.delete(d);
+    }
+    for (const distro of distros) {
+      let text: string | null;
+      try {
+        text = await (this.deps.wslSnapshot ?? ((d: string) => this.wslHelper(d)?.scan() ?? Promise.resolve(null)))(distro);
+      } catch {
+        text = null;
+      }
+      if (this.stopped) return;
+      const byMarker = parseWslSnapshot(text ?? '');
+      for (const s of sessions.filter((x) => x.distro === distro)) {
+        // The terminal's own shell always carries its marker: none at all means no answer, not "no agent".
+        const processes = byMarker.get(s.marker!);
+        if (!processes?.length) continue;
+        const agent = findWslAgent(processes)?.id ?? null;
+        if (!this.last.has(s.sessionId) || this.last.get(s.sessionId) !== agent) {
+          this.last.set(s.sessionId, agent);
+          this.deps.report(s.ownerId, s.sessionId, agent);
+        }
+      }
+    }
+  }
+
+  private wslHelper(distro: string): WslScanHelper | null {
+    if (!this.deps.wslPath) return null;
+    let h = this.wslHelpers.get(distro);
+    if (!h) {
+      h = new WslScanHelper(this.deps.wslPath, distro, this.deps.log);
+      this.wslHelpers.set(distro, h);
+    }
+    return h;
   }
 
   private ensureHelper(): ChildProcessWithoutNullStreams | null {

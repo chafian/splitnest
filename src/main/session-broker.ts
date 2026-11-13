@@ -13,6 +13,7 @@ import {
 } from '../shared/types';
 import { isId, isInt, validateCreateSessionRequest, ValidationError } from '../shared/validation';
 import type { LaunchSpec } from './shells';
+import { newWslMarker, withWslMarker } from './wsl-processes';
 
 export interface HostTransport {
   send(request: HostRequest): void;
@@ -38,6 +39,9 @@ interface SessionRecord {
   pid?: number;
   /** WSL sessions: Linux processes are not visible as Windows processes. */
   wsl?: boolean;
+  /** WSL sessions: the distribution, and the marker its processes inherit (wsl-processes.ts). */
+  distro?: string;
+  marker?: string;
   /** The folder the shell was started in. */
   cwd?: string;
 }
@@ -49,6 +53,9 @@ export interface SessionProcess {
   wsl: boolean;
   /** The folder the shell started in (Windows path; for WSL, what was passed to wsl.exe). */
   cwd: string;
+  /** WSL sessions: the distribution and the marker its Linux processes carry. */
+  distro?: string;
+  marker?: string;
 }
 
 interface PendingSpawn {
@@ -114,6 +121,10 @@ export class SessionBroker {
       const resolved = await this.resolveLaunch(request);
       if (!resolved.ok) return resolved;
       const sessionId = this.idFactory();
+      // WSL: a marker every Linux process of this terminal inherits, so agents can be found there.
+      const distro = request.profileId.startsWith('wsl:') ? request.profileId.slice(4) : undefined;
+      const marker = distro ? newWslMarker() : undefined;
+      const env = marker ? withWslMarker(marker, resolved.launch.env) : resolved.launch.env;
       const record: SessionRecord = {
         id: sessionId,
         ownerId,
@@ -136,7 +147,7 @@ export class SessionBroker {
             file: resolved.launch.file,
             args: resolved.launch.args,
             cwd: resolved.launch.cwd,
-            ...(resolved.launch.env ? { env: resolved.launch.env } : {}),
+            ...(env ? { env } : {}),
             cols: request.cols,
             rows: request.rows,
           },
@@ -155,6 +166,7 @@ export class SessionBroker {
         record.status = 'running';
         record.pid = spawned.pid;
         record.wsl = request.profileId.startsWith('wsl:');
+        if (distro && marker) Object.assign(record, { distro, marker });
       }
       this.log.info(`session started (${resolved.profileLabel})`);
       return { ok: true, sessionId, cwdLabel: resolved.launch.cwdLabel, profileLabel: resolved.profileLabel, repaintsOnResize: spawned.repaintsOnResize };
@@ -213,7 +225,9 @@ export class SessionBroker {
   runningProcesses(): SessionProcess[] {
     const out: SessionProcess[] = [];
     for (const s of this.sessions.values()) {
-      if (s.status === 'running' && s.pid) out.push({ sessionId: s.id, ownerId: s.ownerId, pid: s.pid, wsl: s.wsl === true, cwd: s.cwd ?? '' });
+      if (s.status === 'running' && s.pid) {
+        out.push({ sessionId: s.id, ownerId: s.ownerId, pid: s.pid, wsl: s.wsl === true, cwd: s.cwd ?? '', ...(s.distro && s.marker ? { distro: s.distro, marker: s.marker } : {}) });
+      }
     }
     return out;
   }

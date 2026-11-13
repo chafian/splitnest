@@ -345,6 +345,24 @@ async function main() {
     return { hasWsl };
   });
 
+  if (wsl) {
+    await step('WSL: an agent that does not report itself is found among the Linux processes, and its end too', async () => {
+      // A stand-in: a copy of `sleep` named `gemini` in a temporary folder inside the distribution.
+      const tab = await page.getAttribute(`[data-pane-id="${wsl}"]`, 'data-active-tab');
+      const agentOf = () => page.getAttribute(`[role="tab"][data-tab-id="${tab}"]`, 'data-agent');
+      if (await agentOf()) throw new Error(`agent before start: ${await agentOf()}`);
+      await typeIn(page, wsl, 'mkdir -p /tmp/tw-e2e-agent && cp /bin/sleep /tmp/tw-e2e-agent/gemini && /tmp/tw-e2e-agent/gemini 120');
+      const t0 = Date.now();
+      await page.waitForFunction((t) => document.querySelector(`[role="tab"][data-tab-id="${t}"]`)?.getAttribute('data-agent') === 'gemini', tab, { timeout: 20_000 });
+      const foundMs = Date.now() - t0;
+      await page.click(`.tabview[data-tab-id="${tab}"] .pane__terminal`, { position: { x: 40, y: 20 } });
+      await page.keyboard.press('Control+c');
+      await page.waitForFunction((t) => !document.querySelector(`[role="tab"][data-tab-id="${t}"]`)?.getAttribute('data-agent'), tab, { timeout: 20_000 });
+      await typeIn(page, wsl, 'rm -rf /tmp/tw-e2e-agent');
+      return { foundMs };
+    });
+  }
+
   await step('terminal tabs: new tab, switch, drag to another pane, close', async () => {
     const tabsOf = (paneId) => page.$$eval(`[data-pane-id="${paneId}"] [role="tab"]`, (els) => els.map((e) => e.getAttribute('data-tab-id')));
     const activeOf = (paneId) => page.getAttribute(`[data-pane-id="${paneId}"]`, 'data-active-tab');
