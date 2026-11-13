@@ -8,6 +8,7 @@ import { THEMES, themeById, type Theme } from '../appearance/themes';
 import { api } from '../../api';
 import { updateStatusText, type UpdateStatus } from '../../../shared/updates';
 import { PRIVACY_URL } from '../updates/UpdateNotices';
+import { bugReportUrl, DISCUSSIONS_URL, FEATURE_REQUEST_URL } from '../feedback/links';
 import { Icon } from '../../components/Icon';
 import { wslGuidance } from '../../components/ProfileMenu';
 
@@ -227,6 +228,40 @@ function NotificationsSection({ settings, onChange }: { settings: AppSettings; o
           </button>
         }
       />
+    </section>
+  );
+}
+
+/** Settings › About › Feedback: opens the GitHub issue forms and Discussions in the browser. */
+function FeedbackBlock({ version }: { version?: string }) {
+  const open = (url: string) => void api.openExternal(url);
+  const link = (label: string, url: string, testId: string) => (
+    <button type="button" className="button button--small" data-testid={testId} onClick={() => open(url)}>
+      {label}
+    </button>
+  );
+  return (
+    <section className="settings-block" aria-labelledby="feedback-heading">
+      <h2 className="settings-block__title" id="feedback-heading">
+        Feedback
+      </h2>
+      <div className="settings-group">
+        <Row
+          title="Report a bug"
+          hint="Opens the bug report form on GitHub in your browser, with your SplitNest version filled in. Nothing is sent until you submit it. Don't paste tokens, passwords or private terminal output."
+          control={link('Report a bug', bugReportUrl(version), 'feedback-bug')}
+        />
+        <Row
+          title="Suggest a feature"
+          hint="Opens the feature request form on GitHub. Describe what you're trying to do; the solution can come later."
+          control={link('Suggest a feature', FEATURE_REQUEST_URL, 'feedback-feature')}
+        />
+        <Row
+          title="Questions and ideas"
+          hint="GitHub Discussions: ask a question, share how you use SplitNest, or talk through an idea before opening an issue."
+          control={link('Open Discussions', DISCUSSIONS_URL, 'feedback-discussions')}
+        />
+      </div>
     </section>
   );
 }
@@ -525,6 +560,8 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
               )}
             </section>
           )}
+
+          {section === 'about' && <FeedbackBlock version={info?.version} />}
         </div>
       </div>
     </div>

@@ -838,6 +838,33 @@ async function main() {
     await page.click('.settings-nav__item:has-text("Terminal")');
     await page.waitForSelector('.setting:has-text("Short folder names") [role="switch"]');
     await shot(page, '07-settings.png');
+    // About › Feedback: GitHub issue forms and Discussions (recorded, not opened, in E2E runs).
+    await page.click('.settings-nav__item:has-text("About")');
+    await page.waitForSelector('#feedback-heading');
+    await shot(page, '07c-settings-feedback.png');
+    for (const id of ['feedback-bug', 'feedback-feature', 'feedback-discussions']) await page.click(`[data-testid="${id}"]`);
+    const version = await app.evaluate(({ app: a }) => a.getVersion());
+    const opened = await app.evaluate(() => globalThis.__twOpened ?? []);
+    const expected = [
+      `https://github.com/chafian/splitnest/issues/new?template=bug_report.yml&version=${version}`,
+      'https://github.com/chafian/splitnest/issues/new?template=feature_request.yml',
+      'https://github.com/chafian/splitnest/discussions',
+    ];
+    if (JSON.stringify(opened) !== JSON.stringify(expected)) throw new Error(`feedback links: ${JSON.stringify(opened)}`);
+    // The same links from the command palette.
+    await page.keyboard.press('Control+Shift+P');
+    await page.waitForSelector('.palette__input');
+    await page.keyboard.type('report a bug');
+    await page.keyboard.press('Enter');
+    const afterPalette = await (async () => {
+      for (let i = 0; i < 20; i++) {
+        const o = await app.evaluate(() => globalThis.__twOpened ?? []);
+        if (o.length === 4) return o;
+        await page.waitForTimeout(100);
+      }
+      return app.evaluate(() => globalThis.__twOpened ?? []);
+    })();
+    if (afterPalette[3] !== expected[0]) throw new Error(`palette bug link: ${JSON.stringify(afterPalette)}`);
     if ((await running()) !== runningBefore) throw new Error('terminals stopped while settings was shown');
     // Back to the workspace by clicking it; the Settings row stays until closed.
     await page.click('.ws-item:not(.ws-item--page) .ws-item__main');

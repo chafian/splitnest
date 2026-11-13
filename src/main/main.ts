@@ -2,7 +2,7 @@
 // shell discovery and session authorization.
 // First: Squirrel's install/update/uninstall launches do their job and exit before anything else runs.
 import { INSTALLED_APP_ID, INSTALLED_TOAST_CLSID, updateExePath } from './squirrel';
-import { app, autoUpdater, BrowserWindow, dialog, Menu, nativeImage, Notification, session, webContents } from 'electron';
+import { app, autoUpdater, BrowserWindow, dialog, Menu, nativeImage, Notification, session, shell, webContents } from 'electron';
 import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -583,6 +583,13 @@ void app.whenReady().then(async () => {
       logFilePath: log.filePath,
       isPackaged: app.isPackaged,
     }),
+    // E2E runs record the links instead of opening the browser (development builds only).
+    openExternal: e2eMode
+      ? async (url) => {
+          const g = globalThis as Record<string, unknown>;
+          g.__twOpened = [...((g.__twOpened as string[] | undefined) ?? []), url];
+        }
+      : (url) => shell.openExternal(url),
     e2ePickFolder: !app.isPackaged ? process.env.TW_E2E_PICK_FOLDER : undefined,
   });
   host.start();

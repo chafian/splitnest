@@ -35,6 +35,8 @@ export interface IpcContext {
   broker: SessionBroker;
   log: Logger;
   appInfo(): AppInfo;
+  /** Opens an already validated http(s) URL in the default browser (recorded instead in E2E runs). */
+  openExternal(url: string): Promise<void>;
   isDirectory(p: string): Promise<boolean>;
   /** Number of editor tabs with unsaved changes, reported by the renderer. */
   setUnsavedEditors(count: number): void;
@@ -166,7 +168,7 @@ export function registerIpc(ctx: IpcContext): void {
       ctx.log.warn('blocked external URL with disallowed scheme');
       return false;
     }
-    await shell.openExternal(url);
+    await ctx.openExternal(url);
     return true;
   });
 

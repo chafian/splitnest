@@ -29,6 +29,7 @@ import { computeChrome, toggleExplorer, toggleFocusMode, toggleSidebar } from '.
 import { effectiveMaximized } from './features/workspaces/maximize';
 import { useAgentNotifications } from './features/notifications/useAgentNotifications';
 import { UpdateNotices, useUpdateStatus } from './features/updates/UpdateNotices';
+import { bugReportUrl, DISCUSSIONS_URL, FEATURE_REQUEST_URL } from './features/feedback/links';
 import { nextInboxItem } from './features/notifications/agent-notifier';
 import type { InboxRow } from './features/notifications/AgentInbox';
 import { noticeBody, noticeTitle } from '../shared/notifications';
@@ -1099,6 +1100,14 @@ export function App() {
       cmd('app-shortcuts', 'App', 'Keyboard shortcuts', () => setShortcutsOpen(true), 'shortcuts'),
       cmd('app-refresh-shells', 'App', 'Refresh shell list', () => void refreshShells()),
       cmd('app-state-file', 'App', 'Show saved state file in Explorer', () => void api.revealStateFile()),
+      cmd('help-bug', 'Help', 'Report a bug (opens GitHub)', () =>
+        void api
+          .getAppInfo()
+          .then((i) => i.version, () => undefined)
+          .then((v) => api.openExternal(bugReportUrl(v))),
+      ),
+      cmd('help-feature', 'Help', 'Suggest a feature (opens GitHub)', () => void api.openExternal(FEATURE_REQUEST_URL)),
+      cmd('help-discussions', 'Help', 'Questions and ideas: GitHub Discussions', () => void api.openExternal(DISCUSSIONS_URL)),
     ];
     return list;
   };

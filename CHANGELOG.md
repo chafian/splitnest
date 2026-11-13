@@ -2,6 +2,10 @@
 
 All notable changes to SplitNest. Release notes on GitHub are taken from the section for each version.
 
+## Unreleased
+
+- **Feedback links**: Settings → About → Feedback, and the command palette (*Report a bug*, *Suggest a feature*, *Questions and ideas*), open the GitHub issue forms and Discussions in your browser. The bug form arrives with your SplitNest version filled in; nothing is sent until you submit it.
+
 ## 0.2.0 (2026-11-12)
 
 First public release with an installer.
