@@ -121,6 +121,9 @@ const api: AppApi = {
   setWindowTheme: (colors) => ipcRenderer.send(IPC.windowTheme, colors),
   refreshGit: (workspaceId) => ipcRenderer.send(IPC.gitRefresh, workspaceId),
   getGitStatuses: () => ipcRenderer.invoke(IPC.gitStatuses),
+  previewTask: (workspaceId, name) => ipcRenderer.invoke(IPC.taskPreview, workspaceId, name),
+  createTask: (workspaceId, name) => ipcRenderer.invoke(IPC.taskCreate, workspaceId, name),
+  taskProgress: (workspaceId) => ipcRenderer.invoke(IPC.taskProgress, workspaceId),
   onGitStatus: (listener) => {
     gitListeners.add(listener);
     return () => {

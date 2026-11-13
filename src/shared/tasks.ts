@@ -15,6 +15,8 @@ export const TASK_LIMITS = {
 export const TASK_BRANCH_PREFIX = 'splitnest/';
 
 export type TaskErrorCode =
+  | 'DISABLED'
+  | 'WORKSPACE_NOT_FOUND'
   | 'GIT_NOT_FOUND'
   | 'NOT_A_REPOSITORY'
   | 'BARE_REPOSITORY'
@@ -93,6 +95,58 @@ export type BranchOutcome =
   | 'unmerged'
   /** There was no such branch anymore. */
   | 'missing';
+
+/** Agents a task can start in its first terminal. */
+export const TASK_AGENTS = ['claude', 'codex', 'gemini'] as const;
+export type TaskAgent = (typeof TASK_AGENTS)[number];
+export const isTaskAgent = (v: unknown): v is TaskAgent => (TASK_AGENTS as readonly unknown[]).includes(v);
+
+/** What is typed at the new terminal's prompt to start the agent (nothing from the user is added). */
+export function taskAgentCommand(agent: TaskAgent): string {
+  return agent;
+}
+
+/** A task as saved with its workspace (the workspace's folder is `taskRoot`). */
+export interface WorkspaceTask extends TaskRecord {
+  /** The workspace the task was created from (it may have been removed since). */
+  parentId: string;
+  /** The agent started when the task was created (null: none). */
+  agent: TaskAgent | null;
+  /** When it was created (ms since epoch). */
+  createdAt: number;
+}
+
+/** The part of a task main created and checks again when the page saves it (see ipc.ts). */
+export function taskRecordKey(t: TaskRecord): string {
+  return JSON.stringify([t.repoRoot, t.subPath, t.baseBranch, t.baseCommit, t.branch, t.worktreePath, t.taskRoot].map((v) => v.toLowerCase()));
+}
+
+const WIN_ABS = /^(?:[A-Za-z]:\\|\\\\[^\\/:*?"<>|]+\\[^\\/:*?"<>|]+)/;
+const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** A saved task, or null when anything about it is off (the workspace then loads without it). */
+export function parseWorkspaceTask(v: unknown, rootPath: string): WorkspaceTask | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const t = v as Record<string, unknown>;
+  const str = (k: string, max = 1024) => (typeof t[k] === 'string' && (t[k] as string).length <= max ? (t[k] as string) : null);
+  const repoRoot = str('repoRoot');
+  const worktreePath = str('worktreePath');
+  const taskRoot = str('taskRoot');
+  const subPath = str('subPath');
+  const branch = str('branch', 255);
+  const baseBranch = str('baseBranch', 255);
+  const baseCommit = str('baseCommit', 64);
+  const parentId = str('parentId', 64);
+  if (!repoRoot || !worktreePath || !taskRoot || subPath === null || !branch || !baseBranch || !baseCommit || !parentId) return null;
+  if (![repoRoot, worktreePath, taskRoot].every((p) => WIN_ABS.test(p))) return null;
+  if (subPath.split(/[\\/]/).some((p) => p === '..' || p === '.') || WIN_ABS.test(subPath)) return null;
+  if (!branch.startsWith(TASK_BRANCH_PREFIX) || !COMMIT.test(baseCommit) || !ID.test(parentId)) return null;
+  if (taskRoot !== rootPath) return null;
+  const agent = t.agent === null || t.agent === undefined ? null : isTaskAgent(t.agent) ? t.agent : null;
+  const createdAt = typeof t.createdAt === 'number' && Number.isFinite(t.createdAt) && t.createdAt > 0 ? t.createdAt : 0;
+  return { repoRoot, subPath, baseBranch, baseCommit, branch, worktreePath, taskRoot, parentId, agent, createdAt };
+}
 
 /** A task name as typed: 1–80 characters after trimming, no control characters. */
 export function isTaskName(v: unknown): v is string {

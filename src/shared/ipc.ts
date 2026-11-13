@@ -1,6 +1,7 @@
 import type { AgentResume } from './agent-resume';
 import type { AgentId } from './agents';
 import type { UpdatePrefs, UpdateStatus } from './updates';
+import type { TaskPreview, TaskProgress, TaskRecord, TaskResult } from './tasks';
 import type { AgentNotice, NoticeDelivery, NoticeTarget } from './notifications';
 import type {
   AppInfo,
@@ -66,6 +67,9 @@ export const IPC = {
   updateCheckNow: 'tw:update:check',
   updateRestart: 'tw:update:restart',
   windowFocus: 'tw:window:focus',
+  taskPreview: 'tw:task:preview',
+  taskCreate: 'tw:task:create',
+  taskProgress: 'tw:task:progress',
 } as const;
 
 export interface PickFolderResult {
@@ -155,4 +159,13 @@ export interface AppApi {
   checkForUpdates(): Promise<UpdateStatus>;
   /** "Restart now" for a downloaded update: runs the normal quit flow, then installs and restarts. */
   restartToUpdate(): Promise<boolean>;
+  /** Agent tasks: what a task created from this workspace with this name would be (nothing is created). */
+  previewTask(workspaceId: string, name: string): Promise<TaskResult<{ preview: TaskPreview }>>;
+  /**
+   * Creates the task's Git worktree and branch from this workspace. The page then adds the task's
+   * workspace with this record; main accepts a saved task only if it created it.
+   */
+  createTask(workspaceId: string, name: string): Promise<TaskResult<{ task: TaskRecord }>>;
+  /** A task workspace's branch against its base branch (read-only Git). */
+  taskProgress(workspaceId: string): Promise<TaskResult<{ progress: TaskProgress }>>;
 }

@@ -57,6 +57,8 @@ export const ADD_TIMEOUT_MS = 5 * 60_000;
 export const REMOVE_TIMEOUT_MS = 2 * 60_000;
 
 const MESSAGES: Record<TaskErrorCode, string> = {
+  DISABLED: 'Agent tasks are off. Turn them on in Settings › Experimental.',
+  WORKSPACE_NOT_FOUND: 'That workspace no longer exists.',
   GIT_NOT_FOUND: 'Git isn’t installed (git.exe wasn’t found on PATH).',
   NOT_A_REPOSITORY: 'This workspace folder isn’t in a Git repository, or Git refused to open it.',
   BARE_REPOSITORY: 'Tasks need a repository with a working folder; this one is bare.',
@@ -76,6 +78,9 @@ const MESSAGES: Record<TaskErrorCode, string> = {
 };
 
 const fail = (code: TaskErrorCode): { ok: false; error: TaskError } => ({ ok: false, error: { code, message: MESSAGES[code] } });
+
+/** A task error with its standard message (for callers that refuse before reaching the service). */
+export const taskFailure = fail;
 
 /** A failed Git run as a task error (null result: Git isn't installed). */
 const gitFailure = (r: GitResult | null, otherwise: TaskErrorCode = 'GIT_FAILED') => fail(r === null ? 'GIT_NOT_FOUND' : r.timedOut ? 'TIMEOUT' : otherwise);

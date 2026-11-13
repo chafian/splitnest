@@ -1,5 +1,6 @@
 // Keeps terminal controllers alive independently of React components and
 // routes session events from the backend to the right controller.
+import type { TaskAgent } from '../../../shared/tasks';
 import type { SessionEvent } from '../../../shared/types';
 import type { AgentResume } from '../../../shared/agent-resume';
 import type { AgentId } from '../../../shared/agents';
@@ -76,12 +77,23 @@ export class TerminalRegistry {
     return this.controllers.get(paneId);
   }
 
+  /** New agent tasks: the agent to start in a tab once its terminal is created (and auto-started). */
+  private readonly agentStarts = new Map<string, TaskAgent>();
+
+  /** Before the tab is shown: its terminal starts the shell and then this agent. */
+  startAgentOnCreate(tabId: string, agent: TaskAgent): void {
+    this.agentStarts.set(tabId, agent);
+  }
+
   getOrCreate(paneId: string, workspaceId: string, autoStart: boolean): TerminalController {
     const existing = this.controllers.get(paneId);
     if (existing) return existing;
+    const autoAgent = autoStart ? this.agentStarts.get(paneId) : undefined;
+    this.agentStarts.delete(paneId);
     const controller = new TerminalController({
       paneId,
       workspaceId,
+      ...(autoAgent ? { autoAgent } : {}),
       fontSize: this.settings.fontSize,
       scrollback: this.settings.scrollback,
       theme: this.theme,

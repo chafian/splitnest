@@ -21,6 +21,8 @@ import { OpenFileWatcher } from './file-watch';
 import { AgentMonitor } from './agent-monitor';
 import { AgentSessionTracker } from './agent-sessions';
 import { GitStatusService } from './git-status';
+import { createWindowsGitRunner } from './git-runner';
+import { TaskService } from './task-service';
 import { NotificationService, notifyIdPrefix, showAgainOnceRegistered, type NativeNotification } from './notifications';
 import { githubFeedUrl, Updater, type AutoUpdaterLike } from './updater';
 import type { UpdatePrefs } from '../shared/updates';
@@ -200,6 +202,11 @@ const gitStatus = new GitStatusService({
     const contents = mainWindow?.webContents;
     if (contents && !contents.isDestroyed()) contents.send(IPC.gitStatus, { workspaceId, status });
   },
+});
+// Agent tasks: a Git worktree and branch per task (see task-service.ts).
+const tasks = new TaskService({
+  git: createWindowsGitRunner({ run: runFile, findGit: () => findOnPath('git.exe', process.env, fileExists), env: process.env, home: os.homedir() }),
+  isDirectory,
 });
 // Development-only: E2E checks count Git checks (how often terminal output causes one).
 if (!app.isPackaged && process.env.TW_E2E === '1') (globalThis as Record<string, unknown>).__twGitRuns = () => gitStatus.runs;
@@ -568,6 +575,7 @@ void app.whenReady().then(async () => {
     fileWatcher,
     agentMonitor,
     gitStatus,
+    tasks,
     notifications,
     updates: {
       status: () => updater.status(),

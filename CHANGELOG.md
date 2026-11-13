@@ -2,6 +2,10 @@
 
 All notable changes to SplitNest. Release notes on GitHub are taken from the section for each version.
 
+## Unreleased
+
+- **Agent tasks (preview, off by default)**: with *Settings → Workspaces → Agent tasks (preview)* on, *New agent task* creates a Git worktree next to the repository on a new branch `splitnest/<name>`, opens it as a workspace under the one it came from, and starts Claude Code, Codex or Gemini CLI there, so several agents can work on one repository without changing each other's files. The sidebar shows each task's branch and commits. PowerShell only for now; reviewing and merging tasks in SplitNest comes later.
+
 ## 0.2.2 (2026-11-13)
 
 Exact Resume in WSL tabs, a welcome guide on the first screen, and release notes before you restart for an update.

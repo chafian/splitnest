@@ -37,6 +37,8 @@ import { noticeBody, noticeTitle } from '../shared/notifications';
 import { Sidebar } from './features/workspaces/Sidebar';
 import { WorkspaceView } from './features/workspaces/WorkspaceView';
 import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
+import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialog';
+import type { TaskError, TaskProgress } from '../shared/tasks';
 import { canAddPane, canAddTab, initialState, reducer } from './features/workspaces/workspace-state';
 
 const uid = () => crypto.randomUUID();
@@ -92,6 +94,34 @@ export function App() {
   const registryVersion = useSyncExternalStore(registry.subscribe, registry.getVersion);
   /** Git branch and changed lines per workspace (main checks; see src/main/git-status.ts). */
   const [gitStatuses, setGitStatuses] = useState<ReadonlyMap<string, GitStatus>>(() => new Map());
+  /** Agent tasks: the workspace the New task dialog is open for, and each task's commits against its base. */
+  const [taskFor, setTaskFor] = useState<string | null>(null);
+  const [taskProgress, setTaskProgress] = useState<ReadonlyMap<string, TaskProgress>>(() => new Map());
+
+  const progressFor = useRef(new Map<string, GitStatus | undefined>());
+  useEffect(() => {
+    for (const w of state.workspaces) {
+      if (!w.task) continue;
+      const status = gitStatuses.get(w.id);
+      if (progressFor.current.has(w.id) && progressFor.current.get(w.id) === status) continue;
+      progressFor.current.set(w.id, status);
+      void api.taskProgress(w.id).then((r) => {
+        if (r.ok) setTaskProgress((m) => new Map(m).set(w.id, r.progress));
+      });
+    }
+  }, [state.workspaces, gitStatuses]);
+  // Also when a task is selected: a commit leaves the folder as clean as before, so its Git status
+  // (above) doesn't change, but the number of commits does.
+  useEffect(() => {
+    const w = state.workspaces.find((x) => x.id === state.activeWorkspaceId);
+    if (!w?.task) return;
+    const id = w.id;
+    void api.taskProgress(id).then((r) => {
+      if (r.ok) setTaskProgress((m) => new Map(m).set(id, r.progress));
+    });
+    // Only on selection; the effect above follows Git status changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.activeWorkspaceId]);
 
   const toastSeq = useRef(0);
   const pushToast = useCallback((kind: Toast['kind'], message: string, detail?: string) => {
@@ -275,7 +305,7 @@ export function App() {
 
   // Switching workspace (sidebar, palette, shortcuts) always shows that workspace.
   useEffect(() => setView('workspace'), [state.activeWorkspaceId]);
-  const anyDialogOpen = paletteOpen || shortcutsOpen || !!renameId || !!confirm || !!renamingTabId;
+  const anyDialogOpen = paletteOpen || shortcutsOpen || !!renameId || !!confirm || !!renamingTabId || !!taskFor;
 
   // Keep keyboard focus on the active pane's active tab.
   const activePaneId = activeWorkspace?.activePaneId ?? null;
@@ -572,7 +602,9 @@ export function App() {
       title: 'Remove workspace?',
       message: `Remove “${ws.name}” from ${PRODUCT.name}?`,
       detail:
-        `The folder ${ws.rootPath} and its files are not deleted.` +
+        (ws.task
+          ? `The task’s folder ${ws.task.worktreePath} and its branch ${ws.task.branch} are kept as they are (finishing tasks comes in a later version).`
+          : `The folder ${ws.rootPath} and its files are not deleted.`) +
         (live > 0 ? ` ${live} running ${live === 1 ? 'session' : 'sessions'} in this workspace will be ended.` : '') +
         (dirty > 0 ? ` ${dirty} ${dirty === 1 ? 'file has' : 'files have'} unsaved changes: save them first, or discard them.` : ''),
       ...(dirty > 0
@@ -583,6 +615,47 @@ export function App() {
           }
         : { confirmLabel: 'Remove workspace', danger: true, onConfirm: remove }),
     });
+  };
+
+  /** Opens the New agent task dialog for a workspace (preview setting on). */
+  const newTask = (workspaceId: string) => {
+    if (!stateRef.current.settings.agentTasks) return;
+    if (stateRef.current.workspaces.length >= LIMITS.maxWorkspaces) {
+      pushToast('warning', `At most ${LIMITS.maxWorkspaces} workspaces are supported, and each task is one.`);
+      return;
+    }
+    setTaskFor(workspaceId);
+  };
+
+  /**
+   * Main creates the worktree and branch; the task then opens as a workspace listed under its parent,
+   * with one terminal that starts the shell and types the agent's command.
+   */
+  const createTask = async (parentId: string, choice: NewTaskChoice): Promise<TaskError | null> => {
+    // Main checks the setting and the parent in its own copy of the state.
+    await flushSave();
+    const r = await api.createTask(parentId, choice.name);
+    if (!r.ok) return r.error;
+    const workspaceId = uid();
+    dispatch({
+      type: 'addWorkspace',
+      after: parentId,
+      workspace: {
+        id: workspaceId,
+        name: choice.name,
+        rootPath: r.task.taskRoot,
+        layout: null,
+        activePaneId: null,
+        task: { ...r.task, parentId, agent: choice.agent, createdAt: Date.now() },
+      },
+    });
+    const paneId = uid();
+    const tabId = uid();
+    freshTabs.add(tabId);
+    if (choice.agent) registry.startAgentOnCreate(tabId, choice.agent);
+    dispatch({ type: 'addPane', workspaceId, paneId, tabId, splitId: uid(), profileId: choice.profileId });
+    setView('workspace');
+    return null;
   };
 
   const relinkWorkspace = async (workspaceId: string) => {
@@ -1058,6 +1131,7 @@ export function App() {
     });
     const list: PaletteCommand[] = [
       cmd('ws-new', 'Workspace', 'New workspace from folder…', () => void addWorkspace(), 'newWorkspace'),
+      ...(state.settings.agentTasks ? [cmd('ws-task', 'Workspace', 'New agent task…', () => ws && newTask(ws.id), undefined, !ws)] : []),
       cmd('term-new', 'Terminal', 'New terminal in current pane (default shell)', () => newTerminal(), 'newTerminal', !ws),
       ...(discovery?.profiles ?? []).flatMap((p) => {
         const name = p.kind === 'wsl' ? `WSL · ${p.label}` : p.label;
@@ -1194,6 +1268,9 @@ export function App() {
         onAdd={() => void addWorkspace()}
         onRename={setRenameId}
         onRemove={removeWorkspace}
+        tasksEnabled={state.settings.agentTasks}
+        taskProgress={taskProgress}
+        onNewTask={newTask}
         onWidthChange={(sidebarWidth) => dispatch({ type: 'updateSettings', patch: { sidebarWidth } })}
         onSettings={openSettings}
         onShortcuts={() => setShortcutsOpen(true)}
@@ -1315,6 +1392,15 @@ export function App() {
         onClose={() => setRenameId(null)}
       />
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
+      <NewTaskDialog
+        open={!!taskFor}
+        workspace={state.workspaces.find((w) => w.id === taskFor) ?? null}
+        gitStatus={(taskFor && gitStatuses.get(taskFor)) || null}
+        profiles={(discovery?.profiles ?? []).filter((p) => p.kind !== 'wsl')}
+        defaultProfileId={state.settings.defaultProfileId ?? discovery?.fallbackProfileId ?? null}
+        onCreate={(choice) => (taskFor ? createTask(taskFor, choice) : Promise.resolve(null))}
+        onClose={() => setTaskFor(null)}
+      />
       <Toasts
         toasts={toasts}
         onDismiss={(id) => {

@@ -1,6 +1,7 @@
 // Shared contracts between main, preload, PTY host and renderer.
 
 import type { AgentResume } from './agent-resume';
+import type { WorkspaceTask } from './tasks';
 /**
  * 3: tabs can also be file-editor tabs. 2: panes hold tabs. Versions 1 and 2
  * are migrated on load (a version-3 file is rejected as unsupported by older
@@ -101,6 +102,8 @@ export interface Workspace {
   rootPath: string;
   layout: LayoutNode | null;
   activePaneId: string | null;
+  /** Set when the workspace is an agent task: a Git worktree SplitNest created (see shared/tasks.ts). */
+  task?: WorkspaceTask;
 }
 
 export interface AppSettings {
@@ -166,6 +169,8 @@ export interface AppSettings {
   notifyDetails: boolean;
   /** Also notify for estimated states ("may need you" after a terminal bell). */
   notifyEstimated: boolean;
+  /** Preview: agent tasks (a Git worktree and branch per task). Off by default until finishing tasks exists. */
+  agentTasks: boolean;
 }
 
 /**
@@ -269,6 +274,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifySound: true,
   notifyDetails: false,
   notifyEstimated: false,
+  agentTasks: false,
 };
 
 export function emptyState(): PersistedState {

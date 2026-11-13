@@ -19,6 +19,8 @@ import { readTextFile, statTextFile, writeTextFile } from './file-editor';
 import type { OpenFileWatcher } from './file-watch';
 import type { AgentMonitor } from './agent-monitor';
 import type { GitStatusService } from './git-status';
+import { taskFailure, type TaskService } from './task-service';
+import { taskRecordKey } from '../shared/tasks';
 import type { NotificationService } from './notifications';
 import { parseUpdatePrefs, type UpdatePrefs, type UpdateStatus } from '../shared/updates';
 import { isAbsoluteWindowsPath, isAllowedExternalUrl, isId, parsePersistedState, parseWindowTheme } from '../shared/validation';
@@ -43,6 +45,8 @@ export interface IpcContext {
   fileWatcher: OpenFileWatcher;
   agentMonitor: AgentMonitor;
   gitStatus: GitStatusService;
+  /** Agent tasks: Git worktrees per task (src/main/task-service.ts). */
+  tasks: TaskService;
   notifications: NotificationService;
   updates: {
     status(): UpdateStatus;
@@ -64,6 +68,9 @@ export function registerIpc(ctx: IpcContext): void {
   // Roots the renderer may persist: those loaded from disk or chosen in the folder dialog.
   const allowedRoots = new Set<string>();
   const rootKey = (p: string) => path.win32.normalize(p).toLowerCase();
+  // Tasks the page may save: those loaded from disk or created by main in this run. A saved task's
+  // paths and branch are what M4 removes and merges, so the page can't invent or change one.
+  const knownTasks = new Set<string>();
 
   const trusted = (event: IpcMainEvent | IpcMainInvokeEvent): boolean => {
     const win = ctx.getWindow();
@@ -88,7 +95,10 @@ export function registerIpc(ctx: IpcContext): void {
 
   handle(IPC.loadState, async () => {
     const result = await ctx.store.load();
-    for (const w of result.state.workspaces) allowedRoots.add(rootKey(w.rootPath));
+    for (const w of result.state.workspaces) {
+      allowedRoots.add(rootKey(w.rootPath));
+      if (w.task) knownTasks.add(taskRecordKey(w.task));
+    }
     ctx.gitStatus.sync();
     // Update preferences are in the saved settings: before this they are the defaults (notice not
     // seen, so no request), after it the user's choice applies.
@@ -105,6 +115,9 @@ export function registerIpc(ctx: IpcContext): void {
     for (const w of state.workspaces) {
       if (!allowedRoots.has(rootKey(w.rootPath))) {
         return { ok: false, error: { code: 'FORBIDDEN', message: 'workspace folders must be chosen with the folder picker' } };
+      }
+      if (w.task && !knownTasks.has(taskRecordKey(w.task))) {
+        return { ok: false, error: { code: 'FORBIDDEN', message: 'tasks must be created by SplitNest' } };
       }
     }
     ctx.store.update(state);
@@ -240,6 +253,33 @@ export function registerIpc(ctx: IpcContext): void {
     if (workspace) ctx.gitStatus.request(workspace.id);
   });
   handle(IPC.gitStatuses, () => ctx.gitStatus.statuses());
+
+  // Agent tasks. The page sends a workspace id and a name; main uses its own copy of the folder.
+  const taskParent = (workspaceId: unknown) => {
+    if (!ctx.store.state.settings.agentTasks) return taskFailure('DISABLED');
+    const w = isId(workspaceId) ? ctx.store.getWorkspace(workspaceId) : undefined;
+    return w ? { ok: true as const, workspace: w } : taskFailure('WORKSPACE_NOT_FOUND');
+  };
+  handle(IPC.taskPreview, async (_event, workspaceId, name) => {
+    const p = taskParent(workspaceId);
+    return p.ok ? ctx.tasks.preview(p.workspace.rootPath, name) : p;
+  });
+  handle(IPC.taskCreate, async (_event, workspaceId, name) => {
+    const p = taskParent(workspaceId);
+    if (!p.ok) return p;
+    const r = await ctx.tasks.create(p.workspace.rootPath, name);
+    if (r.ok) {
+      knownTasks.add(taskRecordKey(r.task));
+      allowedRoots.add(rootKey(r.task.taskRoot));
+      ctx.log.info('agent task created');
+    } else ctx.log.warn(`agent task not created (${r.error.code})`);
+    return r;
+  });
+  handle(IPC.taskProgress, async (_event, workspaceId) => {
+    const w = isId(workspaceId) ? ctx.store.getWorkspace(workspaceId) : undefined;
+    if (!w?.task) return taskFailure('NOT_A_TASK');
+    return ctx.tasks.progress(w.task);
+  });
 
   // Agent notifications: the page sends ids and the event; main writes the text (notifications.ts).
   handle(IPC.notifyAgent, (_event, notice) => ctx.notifications.notify(notice));

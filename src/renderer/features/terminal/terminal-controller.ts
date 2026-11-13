@@ -11,6 +11,7 @@ import '@xterm/xterm/css/xterm.css';
 import { LIMITS, type AppError, type SessionEvent, type SessionStatus, type StartLocation } from '../../../shared/types';
 import { api } from '../../api';
 import type { AgentId } from '../../../shared/agents';
+import { taskAgentCommand, type TaskAgent } from '../../../shared/tasks';
 import { isResumableAgent, resumeCommand, resumeForShell, type AgentResume, type ResumableAgent } from '../../../shared/agent-resume';
 import { agentFromTitle, deriveAgentView, hasTitleStatus, parseProgramStatus, PROGRAM_STATUS_REPLY, StatusRecords, titleLooksLikeShell, type AgentView } from './agent-status';
 import { StartGate, type StartOutcome } from './bulk-start';
@@ -80,6 +81,8 @@ export interface ControllerOptions {
   scrollback: number;
   theme: Theme;
   autoStart: boolean;
+  /** With autoStart: once the shell's prompt is up, type this agent's command (a new agent task). */
+  autoAgent?: TaskAgent;
   hooks: ControllerHooks;
 }
 
@@ -235,6 +238,7 @@ export class TerminalController {
   /** A size sent to the PTY and not yet confirmed. At most one at a time. */
   private resizeInFlight: { cols: number; rows: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private autoStart: boolean;
+  private autoAgent: TaskAgent | null;
   private restartPending: { profileId: string; startIn: StartLocation } | null = null;
   /** One start at a time: concurrent requests join the one in flight. */
   private readonly startGate = new StartGate();
@@ -268,6 +272,7 @@ export class TerminalController {
     this.workspaceId = options.workspaceId;
     this.hooks = options.hooks;
     this.autoStart = options.autoStart;
+    this.autoAgent = options.autoAgent ?? null;
     this.snapshot = {
       status: 'idle',
       sessionId: null,
@@ -448,7 +453,9 @@ export class TerminalController {
     this.scheduleFit();
     if (this.autoStart) {
       this.autoStart = false;
-      void this.start(profileId, 'workspace-root');
+      const agent = this.autoAgent;
+      this.autoAgent = null;
+      void (agent ? this.startAgent(profileId, agent) : this.start(profileId, 'workspace-root'));
     }
   }
 
@@ -919,6 +926,29 @@ export class TerminalController {
     const outcome = await this.startGate.run(() => (inFolder ? this.startSession(profileId, 'workspace-root', r.cwd) : this.startSession(profileId, 'workspace-root')));
     if (outcome !== 'running') return outcome;
     this.update({ resuming: { agent: r.agent, phase: 'waiting' } });
+    if (!(await this.typeAtPrompt(resumeCommand(use)))) return outcome;
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
+    this.resumeTimer = setTimeout(() => {
+      this.resumeTimer = null;
+      if (this.snapshot.resuming?.phase === 'waiting') this.update({ resuming: { agent: r.agent, phase: 'not-started' } });
+    }, RESUME_CONFIRM_MS);
+    return outcome;
+  }
+
+  /**
+   * A new agent task's first terminal: start the shell in the workspace (task) folder, then type the
+   * agent's command at its prompt, visibly, as the user would. Only the agent's name is typed.
+   */
+  async startAgent(profileId: string, agent: TaskAgent): Promise<StartOutcome> {
+    if (this.disposed) return 'skipped';
+    const outcome = await this.start(profileId, 'workspace-root');
+    if (outcome !== 'running') return outcome;
+    await this.typeAtPrompt(taskAgentCommand(agent));
+    return outcome;
+  }
+
+  /** Waits for the shell's prompt (output, then a quiet moment; at most 15 s) and types `command`. */
+  private async typeAtPrompt(command: string): Promise<boolean> {
     const started = Date.now();
     // The prompt is up when output has started and then been quiet for a moment.
     while (!this.disposed && this.snapshot.status === 'running' && Date.now() - started < 15_000) {
@@ -926,16 +956,11 @@ export class TerminalController {
       await new Promise((res) => setTimeout(res, 100));
     }
     const id = this.snapshot.sessionId;
-    if (this.disposed || !id || this.snapshot.status !== 'running') return outcome;
-    api.writeSession(id, `${resumeCommand(use)}\r`);
+    if (this.disposed || !id || this.snapshot.status !== 'running') return false;
+    api.writeSession(id, `${command}\r`);
     this.lastPoke = 0;
     this.pokeAgentScan();
-    if (this.resumeTimer) clearTimeout(this.resumeTimer);
-    this.resumeTimer = setTimeout(() => {
-      this.resumeTimer = null;
-      if (this.snapshot.resuming?.phase === 'waiting') this.update({ resuming: { agent: r.agent, phase: 'not-started' } });
-    }, RESUME_CONFIRM_MS);
-    return outcome;
+    return true;
   }
 
   /** Hide the "didn't start" note. */

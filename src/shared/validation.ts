@@ -1,4 +1,5 @@
 // Runtime validation for untrusted data: persisted state files and IPC payloads.
+import { parseWorkspaceTask } from './tasks';
 import { parseAgentResume } from './agent-resume';
 import { layoutDepth, listPanes, normalizeSizes } from './layout';
 import { isVersion } from './version';
@@ -157,7 +158,9 @@ export function validateWorkspace(value: unknown): Workspace {
   let activePaneId: string | null = null;
   if (typeof w.activePaneId === 'string' && panes.some((p) => p.id === w.activePaneId)) activePaneId = w.activePaneId;
   else if (panes[0]) activePaneId = panes[0].id;
-  return { id: w.id, name: name(w.name, 'workspace name'), rootPath: w.rootPath, layout, activePaneId };
+  // A task record that doesn't check out is dropped; the workspace itself still loads.
+  const task = w.task === undefined ? null : parseWorkspaceTask(w.task, w.rootPath);
+  return { id: w.id, name: name(w.name, 'workspace name'), rootPath: w.rootPath, layout, activePaneId, ...(task ? { task } : {}) };
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -196,6 +199,7 @@ export function validateSettings(value: unknown): AppSettings {
     notifySound: s.notifySound !== false,
     notifyDetails: s.notifyDetails === true,
     notifyEstimated: s.notifyEstimated === true,
+    agentTasks: s.agentTasks === true,
   };
 }
 

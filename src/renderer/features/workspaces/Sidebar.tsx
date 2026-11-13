@@ -1,3 +1,5 @@
+import type { TaskProgress } from '../../../shared/tasks';
+import { taskProgressText } from '../tasks/task-text';
 import { useRef, type PointerEvent } from 'react';
 import type { GitStatus, Workspace } from '../../../shared/types';
 import { listPanes, listTerminalTabs } from '../../../shared/layout';
@@ -25,6 +27,11 @@ interface Props {
   onAdd(): void;
   onRename(id: string): void;
   onRemove(id: string): void;
+  /** Agent tasks (preview setting): a New task button on rows in a Git repository. */
+  tasksEnabled: boolean;
+  /** Each task's commits against its base branch. */
+  taskProgress: ReadonlyMap<string, TaskProgress>;
+  onNewTask(id: string): void;
   onWidthChange(width: number): void;
   onSettings(): void;
   onShortcuts(): void;
@@ -110,7 +117,7 @@ export function Sidebar(props: Props) {
             (git ? `, ${git.summary}` : '') +
             (missing ? ', folder missing' : '');
           return (
-            <li key={w.id} className={`ws-item${active ? ' ws-item--active' : ''}`}>
+            <li key={w.id} className={`ws-item${active ? ' ws-item--active' : ''}${w.task ? ' ws-item--task' : ''}`} data-task={w.task ? 'true' : undefined}>
               <button
                 type="button"
                 className="ws-item__main"
@@ -144,6 +151,7 @@ export function Sidebar(props: Props) {
                         {git.dot && <span className="ws-item__git-dot" aria-hidden="true" />}
                       </span>
                     )}
+                    {w.task && <TaskLine progress={props.taskProgress.get(w.id)} />}
                     {live > 0 && <span className="ws-item__live">{shellsRunningLabel(live)}</span>}
                     {agentText && (
                       <span className={`ws-item__agents${agents.needs > 0 ? ' ws-item__agents--needs' : agents.maybe > 0 ? ' ws-item__agents--maybe' : ''}`}>{agentText}</span>
@@ -153,6 +161,15 @@ export function Sidebar(props: Props) {
               </button>
               {!collapsed && (
                 <span className="ws-item__actions">
+                  {props.tasksEnabled && gitStatus && (
+                    <IconButton
+                      icon="gitBranch"
+                      label={`New agent task from ${w.name}`}
+                      description="A new folder and Git branch for an agent to work in."
+                      size="sm"
+                      onClick={() => props.onNewTask(w.id)}
+                    />
+                  )}
                   <IconButton icon="pencil" label={`Rename workspace ${w.name}`} size="sm" onClick={() => props.onRename(w.id)} />
                   <IconButton
                     icon="trash"
@@ -233,5 +250,15 @@ export function Sidebar(props: Props) {
         />
       )}
     </nav>
+  );
+}
+
+function TaskLine({ progress }: { progress: TaskProgress | undefined }) {
+  const text = taskProgressText(progress);
+  return (
+    <span className="ws-item__task" data-testid="task-progress">
+      <span className="ws-item__task-tag">task</span>
+      {text && <span className="ws-item__task-text">{text}</span>}
+    </span>
   );
 }

@@ -2,6 +2,19 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Agent tasks, M2: create and run (2026-11-13)
+
+- **E2E, dev build** (`node tests/e2e/run-tasks.mjs`, 13 / 13). Stand-in `claude.exe`/`codex.exe` (copies of cmd.exe) first on PATH, checked before each step that types an agent's name; temporary repository, profile and agent home.
+  - Off by default (no command, no button); the setting turns it on.
+  - The dialog shows branch, folder and base commit before anything exists, and names the parent's uncommitted changes; nothing is created on Cancel.
+  - Create: worktree on `splitnest/fix-login`, uncommitted files not copied, the task listed under its workspace, Claude Code typed and detected, running in the task folder.
+  - Commits show in the sidebar (*1 commit*); a second task with Codex runs at the same time; a taken name gets `-2`; a folder that isn't a repository says so and can't create.
+  - Main refuses a saved task with another branch or folder (`FORBIDDEN`), and the saved task stays as created.
+  - Resume: the conversation is saved in the task folder; after a restart the tasks are back under their workspace and Resume reopens it there.
+  - Removing a task from the list keeps its folder and branch, and the confirmation says so.
+- **Unit:** saved-task validation, list order, sidebar text (`tasks-state.test.ts`, 12).
+- **Regressions:** unit 482 / 482; `run-resume.mjs` 12 / 12; `run-e2e.mjs` 36 / 36. Type check and lint are clean.
+
 ## Agent detection suite: intermittent step and leftover temp folders fixed (2026-11-12)
 
 - **Intermittent failure** ("estimated states look different", failed 2 runs out of about 9 over two days):

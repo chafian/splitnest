@@ -3259,3 +3259,101 @@ dialog::backdrop {
 .notice--update .button {
   flex: none;
 }
+
+/* ---------------------------------------------------------------- agent tasks */
+
+/* A task sits under the workspace it came from: indented, with a thin guide line. */
+.ws-item--task .ws-item__main {
+  padding-left: 30px;
+}
+
+.ws-item--task::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--border);
+}
+
+.ws-item__task {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.ws-item__task-tag {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 15px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.ws-item__task-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-dialog .field + .field,
+.task-dialog .field + p + .field {
+  margin-top: 12px;
+}
+
+.task-dialog__intro {
+  margin: 0 0 12px;
+}
+
+.task-dialog__preview {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-sidebar);
+}
+
+.task-dialog__preview p {
+  margin: 8px 0 0;
+}
+
+.task-dialog__preview p:first-child {
+  margin-top: 0;
+}
+
+.task-dialog__facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.task-dialog__facts dt {
+  color: var(--text-faint);
+}
+
+.task-dialog__facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.task-dialog__error {
+  margin: 6px 0 0;
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
+.task-dialog__note {
+  font-size: var(--text-sm);
+  color: var(--warning);
+}

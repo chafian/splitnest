@@ -35,7 +35,7 @@ import { normalizeTabName } from '../../../shared/validation';
 
 export type Action =
   | { type: 'load'; state: PersistedState }
-  | { type: 'addWorkspace'; workspace: Workspace }
+  | { type: 'addWorkspace'; workspace: Workspace; /** Insert right after this workspace and its tasks (a new task). */ after?: string }
   | { type: 'renameWorkspace'; workspaceId: string; name: string }
   | { type: 'relinkWorkspace'; workspaceId: string; rootPath: string }
   | { type: 'removeWorkspace'; workspaceId: string }
@@ -121,9 +121,12 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
   switch (action.type) {
     case 'load':
       return action.state;
-    case 'addWorkspace':
+    case 'addWorkspace': {
       if (state.workspaces.length >= LIMITS.maxWorkspaces) return state;
-      return { ...state, workspaces: [...state.workspaces, action.workspace], activeWorkspaceId: action.workspace.id };
+      const at = action.after ? insertionIndex(state.workspaces, action.after) : state.workspaces.length;
+      const workspaces = [...state.workspaces.slice(0, at), action.workspace, ...state.workspaces.slice(at)];
+      return { ...state, workspaces, activeWorkspaceId: action.workspace.id };
+    }
     case 'renameWorkspace': {
       const name = action.name.trim().slice(0, LIMITS.maxNameLength);
       if (!name) return state;
@@ -266,4 +269,16 @@ function withoutResumeTitles(state: PersistedState): PersistedState {
         }
       : { ...node, children: node.children.map(strip) };
   return { ...state, workspaces: state.workspaces.map((w) => (w.layout ? { ...w, layout: strip(w.layout) } : w)) };
+}
+
+/**
+ * Where a new task of `parentId` goes: after the parent and the tasks already listed right below it
+ * (so tasks stay grouped under their workspace). At the end when the parent isn't there.
+ */
+export function insertionIndex(workspaces: readonly Workspace[], parentId: string): number {
+  const i = workspaces.findIndex((w) => w.id === parentId);
+  if (i < 0) return workspaces.length;
+  let at = i + 1;
+  while (at < workspaces.length && workspaces[at]!.task?.parentId === parentId) at++;
+  return at;
 }
