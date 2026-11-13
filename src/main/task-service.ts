@@ -208,19 +208,18 @@ export class TaskService {
   /** The repository, branch and commit a task created from `root` starts from. */
   private async inspect(root: string): Promise<TaskResult<{ repo: Repo }>> {
     if (isWslRoot(root)) return fail('UNSUPPORTED_LOCATION');
-    const top = await this.deps.git.run(root, ['rev-parse', '--show-toplevel']);
-    if (top === null || top.code !== 0) return gitFailure(top, 'NOT_A_REPOSITORY');
-    const topPath = fromGitPath(top.stdout.trim());
+    // Where the workspace folder is inside its worktree ('' at the top), as Git sees it. Asking Git
+    // rather than comparing paths: the folder may be spelled differently from what Git prints (a
+    // short 8.3 name such as RUNNER~1, a junction, other letter case).
+    const prefix = await this.deps.git.run(root, ['rev-parse', '--show-prefix']);
+    if (prefix === null || prefix.code !== 0) return gitFailure(prefix, 'NOT_A_REPOSITORY');
     const list = await this.list(root);
     const main = list?.[0];
     if (!main) return fail('NOT_A_REPOSITORY');
     if (main.bare) return fail('BARE_REPOSITORY');
-    let subPath = '';
-    if (!samePath(root, topPath)) {
-      // The workspace is a folder inside the repository: the task workspace is the same folder in the task's worktree.
-      if (!isStrictlyInside(root, topPath)) return fail('UNSUPPORTED_LOCATION');
-      subPath = win.relative(topPath, fromGitPath(root));
-    }
+    // The workspace is a folder inside the repository: the task workspace is the same folder in the task's worktree.
+    const subPath = prefix.stdout.trim().replace(/\/+$/, '').replace(/\//g, '\\');
+    if (subPath.split('\\').some((part) => part === '..' || part === '.')) return fail('UNSUPPORTED_LOCATION');
     const sym = await this.deps.git.run(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
     if (sym === null) return fail('GIT_NOT_FOUND');
     if (sym.code !== 0) return fail('DETACHED_HEAD');

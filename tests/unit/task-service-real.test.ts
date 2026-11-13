@@ -1,8 +1,8 @@
 // Agent tasks against real Git in temporary repositories (skipped when git.exe is not on PATH):
 // creating worktrees and branches, names that are taken, two tasks at once, removing without ever
 // losing work, and refusing folders that aren't SplitNest tasks.
-import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
@@ -19,7 +19,19 @@ const env = gitEnv(process.env);
 const runner = createWindowsGitRunner({ run: runFile, findGit: async () => git, env: process.env, home: os.homedir() });
 const service = new TaskService({ git: runner, isDirectory });
 
-const work = mkdtempSync(path.join(os.tmpdir(), 'tw-tasks-'));
+// The long, real path: Git reports folders that way, while the temporary folder can come as a short
+// 8.3 name (C:\Users\RUNNER~1\… on GitHub's runners).
+const work = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), 'tw-tasks-')));
+
+/** The folder's 8.3 short name, or the same path when the volume doesn't make short names. */
+function shortName(p: string): string {
+  const out = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '(New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:TW_P).ShortPath'], {
+    env: { ...process.env, TW_P: p },
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  return out.trim() || p;
+}
 let n = 0;
 
 async function g(cwd: string, ...args: string[]): Promise<string> {
@@ -123,6 +135,23 @@ describe.skipIf(!git)('agent tasks with real Git', { timeout: 60_000 }, () => {
     expect(t.subPath).toBe(path.join('packages', 'web'));
     expect(t.taskRoot).toBe(path.join(t.worktreePath, 'packages', 'web'));
     expect(existsSync(path.join(t.taskRoot, 'index.js'))).toBe(true);
+  });
+
+  it.skipIf(process.platform !== 'win32')('a workspace folder opened by its short 8.3 name (or another spelling) works like the long one', async (ctx) => {
+    const long = await newRepo('my long app folder');
+    mkdirSync(path.join(long, 'packages', 'web site'), { recursive: true });
+    writeFileSync(path.join(long, 'packages', 'web site', 'x.txt'), 'x\n');
+    await g(long, 'add', '.');
+    await g(long, 'commit', '-q', '-m', 'web');
+    const short = shortName(long);
+    if (short.toLowerCase() === long.toLowerCase()) ctx.skip();
+    const t = await created(short, 'short');
+    expect(t).toMatchObject({ repoRoot: long, subPath: '', worktreePath: path.join(`${long}.worktrees`, 'short') });
+    const inner = await created(shortName(path.join(long, 'packages', 'web site')), 'inner');
+    expect(inner).toMatchObject({ repoRoot: long, subPath: path.join('packages', 'web site'), taskRoot: path.join(`${long}.worktrees`, 'inner', 'packages', 'web site') });
+    expect(existsSync(path.join(inner.taskRoot, 'x.txt'))).toBe(true);
+    // Other letter case.
+    expect(await service.create(long.toUpperCase(), 'upper')).toMatchObject({ ok: true, task: { repoRoot: long } });
   });
 
   it('a task created inside a task branches from the task branch, into the same task folder', async () => {

@@ -28,7 +28,7 @@ function repoGit(add: Handler, nul = true): Handler {
   const list = nul ? ['worktree C:/fake/app', `HEAD ${BASE}`, 'branch refs/heads/main', '', ''].join('\0') : ['worktree C:/fake/app', `HEAD ${BASE}`, 'branch refs/heads/main', '', ''].join('\n');
   return (cwd, args) => {
     const a = args.join(' ');
-    if (a === 'rev-parse --show-toplevel') return ok('C:/fake/app\n');
+    if (a === 'rev-parse --show-prefix') return ok('\n');
     if (a.startsWith('worktree list')) return ok(list);
     if (a === 'symbolic-ref --quiet --short HEAD') return ok('main\n');
     if (a === 'rev-parse --verify --quiet HEAD^{commit}') return ok(`${BASE}\n`);
@@ -95,7 +95,6 @@ describe('TaskService (scripted Git)', () => {
         return ok();
       }
       const base = repoGit(() => ok())(cwd, args);
-      if (cwd.toLowerCase().startsWith('c:\\other') && args.join(' ') === 'rev-parse --show-toplevel') return ok('C:/other/lib\n');
       if (cwd.toLowerCase().startsWith('c:\\other') && args[0] === 'worktree' && args[1] === 'list') return ok(['worktree C:/other/lib', `HEAD ${BASE}`, 'branch refs/heads/main', '', ''].join('\0'));
       return base;
     };
