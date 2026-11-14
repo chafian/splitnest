@@ -74,7 +74,9 @@ try {
     await page.fill('[data-testid="task-name"]', 'Fix parser');
     await page.click('[data-testid="task-agent-none"]');
     await until(async () => (await page.textContent('[data-testid="task-preview"]'))?.includes('splitnest/fix-parser'), 'preview', 30_000);
-    const shells = await page.$$eval('[data-testid="task-shell"] option', (os) => os.map((o) => o.value));
+    await page.click('[data-testid="task-shell"]');
+    const shells = await page.$$eval('[role="listbox"][aria-label="Shell"] [role="option"]', (os) => os.map((o) => o.getAttribute('data-value')));
+    await page.keyboard.press('Escape');
     if (shells.join('|') !== `wsl:${DISTRO}`) throw new Error(shells.join('|'));
     const text = await page.textContent('[data-testid="task-preview"]');
     if (!text.includes(taskWin)) throw new Error(text);

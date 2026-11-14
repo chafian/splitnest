@@ -2,6 +2,7 @@
 // what will be made (branch, folder, base), asked from main with the workspace id and the name only.
 import { useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
+import { Select } from '../../components/Select';
 import { api } from '../../api';
 import { agentById } from '../../../shared/agents';
 import { TASK_AGENTS, TASK_LIMITS, isTaskName, type TaskAgent, type TaskError, type TaskPreview } from '../../../shared/tasks';
@@ -153,16 +154,16 @@ export function NewTaskDialog(props: Props) {
         </div>
       </div>
 
-      <label className="field">
+      <div className="field">
         <span className="field__label">Shell</span>
-        <select className="select" data-testid="task-shell" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-          {props.profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-      </label>
+        <Select
+          aria-label="Shell"
+          data-testid="task-shell"
+          value={profileId}
+          onChange={setProfileId}
+          options={props.profiles.map((p) => ({ value: p.id, label: p.kind === 'wsl' ? `WSL · ${p.label}` : p.label }))}
+        />
+      </div>
       {props.profiles.length === 0 && (
         <p className="task-dialog__error">
           {inWsl ? `No WSL profile for ${inWsl} was found; refresh the shell list in Settings › Shells.` : 'Tasks of a repository on a Windows drive start in PowerShell, which wasn’t found.'}

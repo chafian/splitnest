@@ -1,6 +1,7 @@
 // A split pane: a tab bar on top and one terminal or file editor per tab.
 // Inactive tabs stay mounted (hidden) so their shells keep running and keep
 // their scrollback, and editors keep unsaved text and undo history.
+import { Select } from '../../components/Select';
 import { RESUME_LABEL, resumeCommand, resumeFallbackText, resumeForShell } from '../../../shared/agent-resume';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import type { PaneLeaf, SessionStatus, ShellDiscovery, StartLocation, TerminalTab, Workspace } from '../../../shared/types';
@@ -779,14 +780,16 @@ function ProfileSelect({ discovery, value, onChange }: { discovery: ShellDiscove
   const profiles = discovery?.profiles ?? [];
   const known = profiles.some((p) => p.id === value);
   return (
-    <select className="select" value={value} aria-label="Shell" title="Shell to start" onChange={(e) => onChange(e.target.value)}>
-      {!known && <option value={value}>{value} (not available)</option>}
-      {profiles.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.kind === 'wsl' ? `WSL · ${p.label}` : p.label}
-        </option>
-      ))}
-    </select>
+    <Select
+      aria-label="Shell"
+      title="Shell to start"
+      value={value}
+      onChange={onChange}
+      options={[
+        ...(known ? [] : [{ value, label: `${value} (not available)`, disabled: true }]),
+        ...profiles.map((p) => ({ value: p.id, label: p.kind === 'wsl' ? `WSL · ${p.label}` : p.label })),
+      ]}
+    />
   );
 }
 

@@ -1184,9 +1184,22 @@ async function main() {
     const tabId = firstPane(state.workspaces[0].layout).tabs[0].id;
     await page.click(`[data-tab-id="${tabId}"][role="tab"]`);
     const view = `.tabview[data-tab-id="${tabId}"]`;
-    await page.waitForSelector(`${view} option:has-text("not available")`, { state: 'attached' });
+    await page.waitForSelector(`${view} button.select:has-text("not available")`);
     await shot(page, '12-missing-shell.png');
-    await page.selectOption(`${view} select`, 'windows-powershell');
+    // The shell picker with the keyboard only: ↓ opens it, a letter jumps, Enter picks.
+    await page.focus(`${view} button.select`);
+    await page.keyboard.press('ArrowDown');
+    await page.waitForSelector(`${view} [role="listbox"]:popover-open`);
+    await shot(page, '12b-shell-picker-open.png');
+    // Typing a letter moves to the next option starting with it (as in a native select): until Windows PowerShell.
+    for (let i = 0; i < 6; i++) {
+      if ((await page.getAttribute(`${view} .select__option--active`, 'data-value')) === 'windows-powershell') break;
+      await page.keyboard.press('w');
+    }
+    await page.keyboard.press('Enter');
+    await page.waitForSelector(`${view} [role="listbox"]:popover-open`, { state: 'hidden' });
+    const picked = await page.getAttribute(`${view} button.select`, 'data-value');
+    if (picked !== 'windows-powershell') throw new Error(`picked ${picked}`);
     await page.click(`${view} button:has-text("Start Windows PowerShell")`);
     await waitTabStatus(page, tabId, 'running');
     await typeIn(page, id, 'exit');

@@ -2,6 +2,7 @@
 // section's settings on the right, one row per setting (name and explanation, control on the
 // right). Opened from the sidebar's ⚙ button, Ctrl+, or the palette; it shows up as a
 // "Settings" row under the workspaces while open.
+import { Select } from '../../components/Select';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_SETTINGS, LIMITS, type AppInfo, type AppSettings, type DarkThemeId, type ShellDiscovery, type ThemeMode } from '../../../shared/types';
 import { THEMES, themeById, type Theme } from '../appearance/themes';
@@ -355,18 +356,16 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
                 title="Default shell for new terminals"
                 hint="Used by New terminal, splits and new tabs unless you pick another shell from the menu."
                 control={
-                  <select
-                    className="select"
+                  <Select
                     aria-label="Default shell for new terminals"
+                    data-testid="default-shell"
                     value={effectiveDefault ?? ''}
-                    onChange={(e) => onChange({ defaultProfileId: e.target.value || null })}
-                  >
-                    {(discovery?.profiles ?? []).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.kind === 'wsl' ? `WSL · ${p.label}${p.isDefaultDistro ? ' (WSL default)' : ''}` : p.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => onChange({ defaultProfileId: v || null })}
+                    options={(discovery?.profiles ?? []).map((p) => ({
+                      value: p.id,
+                      label: p.kind === 'wsl' ? `WSL · ${p.label}${p.isDefaultDistro ? ' (WSL default)' : ''}` : p.label,
+                    }))}
+                  />
                 }
               />
               <Row

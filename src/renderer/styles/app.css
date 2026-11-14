@@ -434,11 +434,92 @@ button {
   min-width: 0;
 }
 
+/* Focus: the border turns the theme's gray (1 px), no coloured ring. */
 .input:focus,
-.select:focus {
-  border-color: var(--focus);
+.select:focus-visible,
+.select[aria-expanded='true'] {
+  border-color: var(--text-faint);
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
+}
+
+/* A select is a button showing the choice; its list opens in the top layer (components/Select.tsx). */
+button.select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+button.select:hover:not(:disabled) {
+  border-color: var(--text-faint);
+}
+
+button.select:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.select__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select__chevron {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.select__list {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 4px;
+  max-height: min(320px, calc(100vh - 16px));
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--text-sm);
+}
+
+.select__list:focus {
+  outline: none;
+}
+
+.select__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 6px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.select__option--active {
+  background: var(--bg-hover);
+}
+
+.select__option[aria-disabled='true'] {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.select__check {
+  display: inline-flex;
+  width: 14px;
+  flex: none;
+  color: var(--text-muted);
 }
 
 .field {
@@ -1476,7 +1557,7 @@ button {
   min-width: 0;
   height: 24px;
   padding: 0 6px;
-  border: 1px solid var(--focus);
+  border: 1px solid var(--text-faint);
   border-radius: var(--radius-sm);
   background: var(--bg-app);
   color: var(--text);
