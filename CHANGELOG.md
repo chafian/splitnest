@@ -2,9 +2,17 @@
 
 All notable changes to SplitNest. Release notes on GitHub are taken from the section for each version.
 
-## Unreleased
+## 0.3.0 (2026-11-14)
 
-- **Agent tasks: parallel agents in their own Git worktrees**: *New agent task* creates a Git worktree next to the repository on a new branch `splitnest/<name>`, opens it as a workspace under the one it came from, and starts Claude Code, Codex or Gemini CLI there, so several agents can work on one repository without changing each other's files. Each task is one line in the sidebar with its `+added −removed` against where it left its branch, a **Changes panel** docked next to the task's terminals lists the files it changed (committed or not) and updates by itself while the agent works (**Ctrl+Shift+G**), and each file's changes open as a diff tab beside the terminal, and *Finish* commits what is left, merges the task into the branch it came from (checked for conflicts first and undone at once if a merge stops) and deletes its folder and branch. Conflicts are resolved in the task with *Bring in latest <branch>*; *Discard* deletes a task after listing what is lost. Tasks run in PowerShell; for a repository stored inside WSL they use that distribution's own Git and run in WSL.
+Agent tasks: run several agents on one repository at once, each in its own Git worktree, and review and merge their work from SplitNest.
+
+- **New agent task** (the branch button on a repository's row, or the command palette) creates a Git worktree next to the repository on a new branch `splitnest/<name>`, opens it as a workspace under the one it came from, and starts Claude Code, Codex or Gemini CLI there. Each agent works in its own folder and branch, so agents don't change each other's files, and your own folder, branch and uncommitted changes are left alone.
+- **Changes panel** (**Ctrl+Shift+G**): docked next to the task's terminals, it lists the files the task changed compared with where it left its branch (committed or not, new files included) and updates by itself while the agent works. Each file's changes open as a **diff tab** beside the terminal.
+- **In the sidebar**, each task is one line with its `+added −removed`; the tooltip has its branch, commits and what isn't committed yet.
+- **Finish** commits what is left, merges the task into the branch it came from (checked for conflicts first, and undone at once if a merge stops) and deletes its folder and branch. Conflicts are resolved inside the task with *Bring in latest <branch>*. *Discard* deletes a task after listing exactly what is lost.
+- **WSL**: for a repository stored inside WSL, tasks use that distribution's own Git and run in WSL. Tasks of a repository on a Windows drive run in PowerShell.
+- Agent tasks are on by default; *Settings → Workspaces → Agent tasks* turns them off.
+- **Look and feel**: dropdowns in SplitNest's own style (keyboard as before), text fields show focus with a quiet 1 px gray border instead of a blue ring, and the title bar's bottom border now runs under the window buttons.
 
 ## 0.2.2 (2026-11-13)
 
