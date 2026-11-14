@@ -32,6 +32,11 @@ ipcRenderer.on(IPC.sessionAgent, (_event, payload: { sessionId: string; agent: A
   for (const listener of agentListeners) listener(payload);
 });
 
+const portListeners = new Set<(event: { sessionId: string; ports: number[] }) => void>();
+ipcRenderer.on(IPC.sessionPorts, (_event, payload: { sessionId: string; ports: number[] }) => {
+  for (const listener of portListeners) listener(payload);
+});
+
 const resumeListeners = new Set<(event: { sessionId: string; resume: AgentResume | null }) => void>();
 ipcRenderer.on(IPC.sessionResume, (_event, payload: { sessionId: string; resume: AgentResume | null }) => {
   for (const listener of resumeListeners) listener(payload);
@@ -130,6 +135,12 @@ const api: AppApi = {
     agentListeners.add(listener);
     return () => {
       agentListeners.delete(listener);
+    };
+  },
+  onSessionPorts: (listener) => {
+    portListeners.add(listener);
+    return () => {
+      portListeners.delete(listener);
     };
   },
   pokeAgentScan: (sessionId) => ipcRenderer.send(IPC.agentPoke, sessionId),

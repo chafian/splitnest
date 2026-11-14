@@ -208,6 +208,13 @@ const agentMonitor = new AgentMonitor({
     const contents = webContents.fromId(ownerId);
     if (contents && !contents.isDestroyed()) contents.send(IPC.sessionAgent, { sessionId, agent });
   },
+  ports: {
+    enabled: () => store.state.settings.showPorts !== false,
+    report: (ownerId, sessionId, ports) => {
+      const contents = webContents.fromId(ownerId);
+      if (contents && !contents.isDestroyed()) contents.send(IPC.sessionPorts, { sessionId, ports });
+    },
+  },
   powershellPath: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
   wslPath: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe'),
   log: (message) => log.warn(message),

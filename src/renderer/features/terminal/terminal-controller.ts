@@ -51,6 +51,8 @@ export interface ControllerSnapshot {
   agent: AgentView | null;
   /** A resumed agent is starting (`waiting`), or didn't appear in time (`not-started`). */
   resuming: { agent: ResumableAgent; phase: 'waiting' | 'not-started' } | null;
+  /** Localhost ports this terminal's programs listen on (sorted; see main/ports.ts). */
+  ports: number[];
 }
 
 export interface ControllerHooks {
@@ -297,6 +299,7 @@ export class TerminalController {
       shellTitle: null,
       agent: null,
       resuming: null,
+      ports: [],
     };
     this.decorations = searchDecorations(options.theme);
     this.element = document.createElement('div');
@@ -1091,7 +1094,7 @@ export class TerminalController {
     this.out(`\r\n\x1b[2m[${label}]\x1b[0m\r\n`);
     if (this.resumeTimer) clearTimeout(this.resumeTimer);
     this.resumeTimer = null;
-    this.update({ status: 'exited', exitCode: code, exitReason: event.reason ?? null, sessionId: null, agent: null, resuming: null });
+    this.update({ status: 'exited', exitCode: code, exitReason: event.reason ?? null, sessionId: null, agent: null, resuming: null, ports: [] });
     const again = this.restartPending;
     this.restartPending = null;
     if (again) void this.start(again.profileId, again.startIn);
@@ -1100,6 +1103,11 @@ export class TerminalController {
   // ------------------------------------------------------------ AI agents
 
   /** Main found (or lost) an agent CLI among this session's processes. */
+  setPorts(ports: number[]): void {
+    const clean = ports.filter((p) => Number.isInteger(p) && p > 0 && p < 65536).slice(0, 32);
+    if (clean.join() !== this.snapshot.ports.join()) this.update({ ports: clean });
+  }
+
   setProcessAgent(agent: AgentId | null): void {
     if (agent === this.processAgent) return;
     if (agent && agent === this.snapshot.resuming?.agent) this.dismissResuming(); // the resumed agent is running
@@ -1202,6 +1210,8 @@ export class TerminalController {
     if (!id || this.snapshot.status !== 'running') return;
     if (this.bellPending) this.acknowledgeAgent();
     for (let i = 0; i < data.length; i += INPUT_CHUNK) api.writeSession(id, data.slice(i, i + INPUT_CHUNK));
+    // A command was run or stopped (Enter, Ctrl+C): a server may be starting or stopping, so look sooner.
+    if (data.includes('\r') || data.includes('\x03')) this.pokeAgentScan();
   }
 
   /** Ends the session (if any) and releases every resource. */

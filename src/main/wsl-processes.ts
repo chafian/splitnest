@@ -22,13 +22,27 @@ export function withWslMarker(marker: string, env: Record<string, string> | unde
 }
 
 /**
- * Runs in the distribution (POSIX sh; grep, tr and head). For each `scan <n>` line on its input it
- * prints one line per marked process (`pid TAB ppid TAB marker TAB name TAB command line`), then
- * `<<END n>>`. `/proc/<pid>/stat` is cut after the last `)`, so a name with spaces can't shift
- * the parent pid.
+ * Runs in the distribution (POSIX sh; grep, tr, head, ls and sed). For each `scan <n>` line on its
+ * input it prints one line per marked process (`pid TAB ppid TAB marker TAB name TAB command
+ * line`), then `<<END n>>`. `/proc/<pid>/stat` is cut after the last `)`, so a name with spaces
+ * can't shift the parent pid. `scan <n> ports` also prints `PORT TAB marker TAB pid TAB address`
+ * for each listening TCP socket (state 0A in /proc/net/tcp and tcp6) a marked process holds,
+ * matched by the socket's inode in /proc/<pid>/fd (see ports.ts).
  */
 export const WSL_SCAN_SCRIPT = String.raw`export LC_ALL=C
 while IFS= read -r q; do
+  L=
+  case $q in *' ports')
+    for f in /proc/net/tcp /proc/net/tcp6; do
+      [ -r $f ] || continue
+      while read -r sl la ra st rest; do
+        [ "$st" = 0A ] || continue
+        set -- $rest
+        L="$L$6 $la
+"
+      done < $f
+    done;;
+  esac
   grep -s -z -H '^${WSL_MARKER}=' /proc/[0-9]*/environ | tr '\000' '\n' | while IFS= read -r m; do
     p=${'$'}{m#/proc/}; p=${'$'}{p%%/*}
     t=${'$'}{m#*:${WSL_MARKER}=}
@@ -38,9 +52,14 @@ while IFS= read -r q; do
     read -r c < /proc/$p/comm 2>/dev/null || c=''
     a=$(tr '\000\t\n' '   ' < /proc/$p/cmdline 2>/dev/null | head -c 2000)
     printf '%s\t%s\t%s\t%s\t%s\n' "$p" "$2" "$t" "$c" "$a"
+    [ -n "$L" ] || continue
+    for i in $(ls -l /proc/$p/fd 2>/dev/null | sed -n 's/.*socket:\[\([0-9]*\)\].*/\1/p'); do
+      printf '%s' "$L" | while read -r n x; do [ "$n" = "$i" ] && printf 'PORT\t%s\t%s\t%s\n' "$t" "$p" "$x"; done
+    done
   done
   printf 'HOME\t%s\n' "$HOME"
-  printf '<<END %s>>\n' "${'$'}{q#scan }"
+  n=${'$'}{q#scan }
+  printf '<<END %s>>\n' "${'$'}{n%% *}"
 done`;
 
 /** The Linux home folder the helper reported (its `HOME` line), if it looks like one. */
@@ -111,8 +130,8 @@ export class WslScanHelper {
     private readonly log: (message: string) => void,
   ) {}
 
-  /** The marked processes' lines, or null when there is no answer (the last result is then kept). */
-  scan(timeoutMs = 10_000): Promise<string | null> {
+  /** The marked processes' lines (with `ports`, their listening sockets too), or null when there is no answer. */
+  scan(timeoutMs = 10_000, ports = false): Promise<string | null> {
     const child = this.ensure();
     if (!child) return Promise.resolve(null);
     this.waiting?.resolve(null);
@@ -129,7 +148,7 @@ export class WslScanHelper {
           resolve(text);
         },
       };
-      child.stdin.write(`scan ${id}\n`);
+      child.stdin.write(`scan ${id}${ports ? ' ports' : ''}\n`);
     });
   }
 

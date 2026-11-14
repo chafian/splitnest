@@ -16,7 +16,7 @@ import { Toasts, type Toast } from './components/Toasts';
 import { wslGuidance } from './components/ProfileMenu';
 import { matchShortcut, shortcutLabel, type CommandId } from './features/commands/shortcuts';
 import { BulkStartTracker, startAll } from './features/terminal/bulk-start';
-import { registry } from './features/terminal/terminal-registry';
+import { registry, type PortEntry } from './features/terminal/terminal-registry';
 import { applyThemeVars, resolveTheme } from './features/appearance/themes';
 import { editors } from './features/editor/editor-registry';
 import { focusTab } from './features/terminal/tab-focus';
@@ -53,6 +53,7 @@ let boot: Promise<[LoadStateResult, ShellDiscovery]> | null = null;
 const loadOnce = () => (boot ??= Promise.all([api.loadState(), api.listShells()]));
 
 const NO_GIT: ReadonlyMap<string, GitStatus> = new Map();
+const NO_PORTS: ReadonlyMap<string, PortEntry[]> = new Map();
 const NO_SUMMARIES: ReadonlyMap<string, TaskSummary> = new Map();
 
 export function App() {
@@ -275,6 +276,13 @@ export function App() {
     void registryVersion;
     return new Map(state.workspaces.map((w) => [w.id, registry.runningCount(listTerminalTabs(w.layout).map((t) => t.id))]));
   }, [state.workspaces, registryVersion]);
+
+  const portsByWorkspace = useMemo(() => {
+    void registryVersion;
+    if (!state.settings.showPorts) return NO_PORTS;
+    return new Map(state.workspaces.map((w) => [w.id, registry.portsOf(listTerminalTabs(w.layout))]));
+  }, [state.workspaces, state.settings.showPorts, registryVersion]);
+  const openPort = (port: number) => void api.openExternal(`http://localhost:${port}`);
 
   const agentCounts = useMemo(() => {
     void registryVersion;
@@ -1275,6 +1283,12 @@ export function App() {
       cmd('agent-inbox', 'Agents', 'Agent inbox (agents waiting for you)', () => setInboxOpen(true), 'inbox'),
       cmd('agent-next', 'Agents', 'Go to the next waiting agent', () => goToNextAgent(), 'nextAgent', inboxRows.length === 0),
       ...inboxRows.map((r) => cmd(`agent-go-${r.tabId}`, 'Agents', `${r.title} — ${r.body}`, () => openInboxTab(r.tabId))),
+      ...state.workspaces.flatMap((w) =>
+        (portsByWorkspace.get(w.id) ?? []).flatMap((p) => [
+          cmd(`port-open-${w.id}-${p.port}`, 'Ports', `Open localhost:${p.port} (${w.name} · ${p.tabLabel})`, () => openPort(p.port)),
+          cmd(`port-copy-${w.id}-${p.port}`, 'Ports', `Copy http://localhost:${p.port} (${w.name} · ${p.tabLabel})`, () => void api.writeClipboard(`http://localhost:${p.port}`)),
+        ]),
+      ),
       cmd('ws-start-all', 'Workspace', 'Start all restored shells in this workspace', () => ws && startAllRestored(ws.id), undefined, !ws),
       cmd(
         'tab-resume',
@@ -1373,6 +1387,8 @@ export function App() {
         liveCounts={liveCounts}
         agentCounts={agentCounts}
         gitStatuses={state.settings.showGitStatus ? gitStatuses : NO_GIT}
+        ports={portsByWorkspace}
+        onOpenPort={openPort}
         missing={missing}
         onSelect={(id) => {
           setView('workspace');

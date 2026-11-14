@@ -802,6 +802,64 @@ button.select:disabled {
   color: var(--success);
 }
 
+/* Listening ports: a line of small chips under the row, part of the same row visually. */
+.ws-item--ports .ws-item__main {
+  padding-bottom: 4px;
+}
+
+.ws-item__ports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 16px 8px;
+}
+
+.ws-item--ports:hover .ws-item__main,
+.ws-item--ports:hover .ws-item__ports {
+  background: var(--bg-hover);
+}
+
+.ws-item--active.ws-item--ports .ws-item__main,
+.ws-item--active.ws-item--ports .ws-item__ports {
+  background: var(--bg-active);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.port-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.port-chip:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
+
+.port-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.port-chip--more {
+  cursor: default;
+  border-style: dashed;
+}
+
+.port-chip--more:hover {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
 .ws-item__actions {
   position: absolute;
   right: 10px;

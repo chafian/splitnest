@@ -15,6 +15,7 @@ import type { AgentResume } from '../shared/agent-resume';
 import { findAgent, type AgentId, type ProcessInfo } from '../shared/agents';
 import type { AgentSessionTracker } from './agent-sessions';
 import type { SessionProcess } from './session-broker';
+import { parseWindowsListeners, parseWslListeners, samePorts, terminalPorts, treeOf, type Listener } from './ports';
 import { findWslAgent, linuxToWindowsPath, parseWslHome, parseWslSnapshot, wslHomeForWindows, WslScanHelper } from './wsl-processes';
 
 export interface AgentMonitorDeps {
@@ -26,8 +27,15 @@ export interface AgentMonitorDeps {
   wslPath?: string;
   /** Injected for tests. */
   snapshot?(): Promise<ProcessInfo[]>;
+  /** Injected for tests: listening sockets (with `snapshot`). */
+  listeners?(): Promise<Listener[]>;
   /** Injected for tests: one distribution's scan output (see WSL_SCAN_SCRIPT), or null for no answer. */
-  wslSnapshot?(distro: string): Promise<string | null>;
+  wslSnapshot?(distro: string, ports: boolean): Promise<string | null>;
+  /** Listening ports per terminal (ports.ts): asked for only while enabled; changes are reported. */
+  ports?: {
+    enabled(): boolean;
+    report(ownerId: number, sessionId: string, ports: number[]): void;
+  };
   /** Which conversation each agent runs, for resuming it after a restart (see agent-sessions.ts). */
   resume?: {
     tracker: AgentSessionTracker;
@@ -52,6 +60,10 @@ const SCRIPT = [
   '  foreach ($p in (Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name,CommandLine)) {',
   '    $c = [string]$p.CommandLine',
   '    [Console]::Out.WriteLine(("{0}`t{1}`t{2}`t{3}" -f $p.ProcessId, $p.ParentProcessId, $p.Name, ($c -replace "[`t`r`n]", " ")))',
+  '  }',
+  // `scan <n> ports`: also the listening TCP sockets and their processes (ports.ts).
+  "  if ($line -like '* ports') {",
+  '    foreach ($t in (Get-NetTCPConnection -State Listen)) { [Console]::Out.WriteLine(("PORT`t{0}`t{1}`t{2}" -f $t.OwningProcess, $t.LocalAddress, $t.LocalPort)) }',
   '  }',
   "  [Console]::Out.WriteLine('<<END ' + $id + '>>')",
   '}',
@@ -80,6 +92,7 @@ export class AgentMonitor {
   private scanning = false;
   private stopped = false;
   private readonly last = new Map<string, AgentId | null>();
+  private readonly lastPorts = new Map<string, number[]>();
   private readonly wslHelpers = new Map<string, WslScanHelper>();
   /** Per distribution: its Linux home (Windows path) and the tracker reading the agents' files there. */
   private readonly wslTrackers = new Map<string, { home: string; tracker: AgentSessionTracker }>();
@@ -108,6 +121,7 @@ export class AgentMonitor {
   /** Forget a session that ended. */
   forget(sessionId: string): void {
     this.last.delete(sessionId);
+    this.lastPorts.delete(sessionId);
     this.deps.resume?.tracker.forget(sessionId);
     for (const t of this.wslTrackers.values()) t.tracker.forget(sessionId);
   }
@@ -122,18 +136,21 @@ export class AgentMonitor {
     const all = this.deps.sessions();
     const sessions = all.filter((s) => !s.wsl);
     const wslSessions = all.filter((s) => s.wsl && s.distro && s.marker);
+    for (const id of [...this.lastPorts.keys()]) if (!all.some((s) => s.sessionId === id)) this.lastPorts.delete(id);
+    const wantPorts = this.deps.ports?.enabled() === true;
     for (const id of [...this.last.keys()]) {
       if (all.some((s) => s.sessionId === id)) continue;
       this.last.delete(id);
       this.deps.resume?.tracker.forget(id);
       for (const t of this.wslTrackers.values()) t.tracker.forget(id);
     }
-    if (wslSessions.length > 0 || this.wslHelpers.size > 0) await this.scanWsl(wslSessions);
+    if (wslSessions.length > 0 || this.wslHelpers.size > 0) await this.scanWsl(wslSessions, wantPorts);
     if (sessions.length > 0) {
       this.scanning = true;
       try {
-        const processes = await (this.deps.snapshot ?? (() => this.query()))();
+        const { processes, listeners } = await this.windowsScan(wantPorts);
         for (const s of sessions) {
+          if (processes.length) this.reportPorts(s, wantPorts ? terminalPorts(listeners, treeOf(processes, s.pid), processes) : []);
           const found = processes.length ? findAgent(processes, s.pid) : null;
           const agent = processes.length ? (found?.id ?? null) : (this.last.get(s.sessionId) ?? null);
           if ((this.last.get(s.sessionId) ?? null) !== agent || !this.last.has(s.sessionId)) {
@@ -156,7 +173,7 @@ export class AgentMonitor {
   }
 
   /** WSL terminals, one helper per distribution in use; helpers of distributions no longer in use stop. */
-  private async scanWsl(sessions: SessionProcess[]): Promise<void> {
+  private async scanWsl(sessions: SessionProcess[], wantPorts: boolean): Promise<void> {
     const distros = new Set(sessions.map((s) => s.distro!));
     for (const [d, h] of this.wslHelpers) {
       if (distros.has(d)) continue;
@@ -167,17 +184,19 @@ export class AgentMonitor {
     for (const distro of distros) {
       let text: string | null;
       try {
-        text = await (this.deps.wslSnapshot ?? ((d: string) => this.wslHelper(d)?.scan() ?? Promise.resolve(null)))(distro);
+        text = await (this.deps.wslSnapshot ?? ((d: string, p: boolean) => this.wslHelper(d)?.scan(10_000, p) ?? Promise.resolve(null)))(distro, wantPorts);
       } catch {
         text = null;
       }
       if (this.stopped) return;
       const byMarker = parseWslSnapshot(text ?? '');
+      const listeners = wantPorts ? parseWslListeners(text ?? '') : new Map<string, Listener[]>();
       const tracker = this.wslTrackerFor(distro, text ? parseWslHome(text) : null);
       for (const s of sessions.filter((x) => x.distro === distro)) {
         // The terminal's own shell always carries its marker: none at all means no answer, not "no agent".
         const processes = byMarker.get(s.marker!);
         if (!processes?.length) continue;
+        this.reportPorts(s, wantPorts ? terminalPorts(listeners.get(s.marker!) ?? [], new Set(processes.map((p) => p.pid)), processes) : []);
         const found = findWslAgent(processes);
         const agent = found?.id ?? null;
         if (!this.last.has(s.sessionId) || this.last.get(s.sessionId) !== agent) {
@@ -198,6 +217,20 @@ export class AgentMonitor {
         }
       }
     }
+  }
+
+  /** A terminal's listening ports, reported when they change. */
+  private reportPorts(s: SessionProcess, ports: number[]): void {
+    if (!this.deps.ports || samePorts(this.lastPorts.get(s.sessionId) ?? [], ports)) return;
+    this.lastPorts.set(s.sessionId, ports);
+    this.deps.ports.report(s.ownerId, s.sessionId, ports);
+  }
+
+  /** Windows processes and (when asked) listening sockets; empty when there is no answer. */
+  private async windowsScan(ports: boolean): Promise<{ processes: ProcessInfo[]; listeners: Listener[] }> {
+    if (this.deps.snapshot) return { processes: await this.deps.snapshot(), listeners: ports ? ((await this.deps.listeners?.()) ?? []) : [] };
+    const text = await this.query(ports);
+    return { processes: text ? parseSnapshot(text) : [], listeners: text && ports ? parseWindowsListeners(text) : [] };
   }
 
   /** The tracker for a distribution's Linux home (kept while the home stays the same). */
@@ -259,23 +292,23 @@ export class AgentMonitor {
     }
   }
 
-  private query(): Promise<ProcessInfo[]> {
+  private query(ports: boolean): Promise<string | null> {
     const helper = this.ensureHelper();
-    if (!helper) return Promise.resolve([]);
+    if (!helper) return Promise.resolve(null);
     return new Promise((resolve) => {
       const id = ++this.querySeq;
       const timeout = setTimeout(() => {
         if (this.waiting?.id === id) this.waiting = null;
-        resolve([]); // empty = "no information": the last result is kept
+        resolve(null); // no answer = "no information": the last result is kept
       }, 15_000);
       this.waiting = {
         id,
         resolve: (text) => {
           clearTimeout(timeout);
-          resolve(text ? parseSnapshot(text) : []);
+          resolve(text);
         },
       };
-      helper.stdin.write(`scan ${id}\n`);
+      helper.stdin.write(`scan ${id}${ports ? ' ports' : ''}\n`);
     });
   }
 }

@@ -10,6 +10,7 @@ import { shortcutLabel } from '../commands/shortcuts';
 import { shellsRunningLabel } from '../terminal/shell-count';
 import type { SidebarMode } from './chrome';
 import { gitLabel } from './git-label';
+import type { PortEntry } from '../terminal/terminal-registry';
 
 interface Props {
   workspaces: Workspace[];
@@ -23,6 +24,9 @@ interface Props {
   missing: Set<string>;
   /** Git state per workspace (empty when the setting is off or a folder is not in a repository). */
   gitStatuses: ReadonlyMap<string, GitStatus>;
+  /** Localhost ports each workspace's terminals listen on (empty when the setting is off). */
+  ports: ReadonlyMap<string, PortEntry[]>;
+  onOpenPort(port: number): void;
   onSelect(id: string): void;
   onAdd(): void;
   onRename(id: string): void;
@@ -45,6 +49,9 @@ interface Props {
   onShowSettings(): void;
   onCloseSettings(): void;
 }
+
+/** Port chips on a row; the rest are counted ("+2") and listed in the command palette. */
+const MAX_CHIPS = 3;
 
 /**
  * "1 agent needs you · 2 working", or "" when no agent is busy or waiting. Estimated
@@ -113,15 +120,21 @@ export function Sidebar(props: Props) {
           const agentText = agentSummaryText(agents);
           const gitStatus = props.gitStatuses.get(w.id);
           const git = gitStatus ? gitLabel(gitStatus) : null;
+          const ports = props.ports.get(w.id) ?? [];
           const summary = w.task ? props.taskSummaries.get(w.id) : undefined;
           const counts = w.task ? taskCounts(summary) : null;
           const description =
             `${panes} ${panes === 1 ? 'pane' : 'panes'}, ${terminals} ${terminals === 1 ? 'terminal' : 'terminals'}, ${shellsRunningLabel(live)}` +
             (agentText ? `, ${agentText}` : '') +
             (w.task ? `, agent task: ${taskTooltip(w.task, summary).join(', ')}` : git ? `, ${git.summary}` : '') +
+            (ports.length ? `, listening on ${ports.map((p) => `localhost:${p.port}`).join(', ')}` : '') +
             (missing ? ', folder missing' : '');
           return (
-            <li key={w.id} className={`ws-item${active ? ' ws-item--active' : ''}${w.task ? ' ws-item--task' : ''}`} data-task={w.task ? 'true' : undefined}>
+            <li
+              key={w.id}
+              className={`ws-item${active ? ' ws-item--active' : ''}${w.task ? ' ws-item--task' : ''}${ports.length && !collapsed ? ' ws-item--ports' : ''}`}
+              data-task={w.task ? 'true' : undefined}
+            >
               <button
                 type="button"
                 className="ws-item__main"
@@ -175,6 +188,28 @@ export function Sidebar(props: Props) {
                   </>
                 )}
               </button>
+              {!collapsed && ports.length > 0 && (
+                <div className="ws-item__ports" data-testid="ws-ports">
+                  {ports.slice(0, MAX_CHIPS).map((p) => (
+                    <button
+                      key={p.port}
+                      type="button"
+                      className="port-chip"
+                      data-port={p.port}
+                      title={`localhost:${p.port} · ${p.tabLabel}\nClick to open http://localhost:${p.port} in your browser.`}
+                      aria-label={`Open localhost:${p.port} (${p.tabLabel}) in your browser`}
+                      onClick={() => props.onOpenPort(p.port)}
+                    >
+                      :{p.port}
+                    </button>
+                  ))}
+                  {ports.length > MAX_CHIPS && (
+                    <span className="port-chip port-chip--more" title={ports.slice(MAX_CHIPS).map((p) => `localhost:${p.port} · ${p.tabLabel}`).join('\n') + '\nAll ports are in the command palette.'}>
+                      +{ports.length - MAX_CHIPS}
+                    </span>
+                  )}
+                </div>
+              )}
               {!collapsed && (
                 <span className="ws-item__actions">
                   {props.tasksEnabled && w.task && (

@@ -454,6 +454,15 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
           {section === 'workspaces' && (
             <section className="settings-group">
               <Row
+                title="Show listening ports"
+                hint={
+                  'Ports that programs in a workspace’s terminals listen on (a dev server on 5173, an API on 3000) appear on the workspace in the sidebar; ' +
+                  'click one to open http://localhost:<port> in your browser. Found from the processes each terminal started, in PowerShell and WSL; the agent ' +
+                  'CLI’s own ports are left out. SplitNest never connects to them. Turning this off stops checking for them.'
+                }
+                control={<Switch label="Show listening ports" checked={settings.showPorts} onChange={(v) => onChange({ showPorts: v })} />}
+              />
+              <Row
                 title="Show Git status in the sidebar"
                 hint={
                   'Branch of each workspace folder that is in a Git repository, and the lines added and removed since the last commit ' +

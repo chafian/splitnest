@@ -11,6 +11,14 @@ import { countRunningShells } from './shell-count';
 import { TerminalController } from './terminal-controller';
 import type { ProgramNotice } from './program-notify';
 
+/** A port a workspace's terminal listens on (see main/ports.ts). */
+export interface PortEntry {
+  port: number;
+  tabId: string;
+  /** The tab's name, or its shell's. */
+  tabLabel: string;
+}
+
 interface EarlyBuffer {
   events: SessionEvent[];
   chars: number;
@@ -42,6 +50,7 @@ export class TerminalRegistry {
   constructor() {
     api.onSessionEvent((event) => this.route(event));
     api.onSessionAgent(({ sessionId, agent }) => this.bySession.get(sessionId)?.setProcessAgent(agent));
+    api.onSessionPorts(({ sessionId, ports }) => this.bySession.get(sessionId)?.setPorts(Array.isArray(ports) ? ports : []));
     api.onSessionResume(({ sessionId, resume }) => {
       const c = this.bySession.get(sessionId);
       if (c) this.resumeHandler(c.paneId, resume);
@@ -51,6 +60,18 @@ export class TerminalRegistry {
   /** The agent conversation in a terminal changed (see TerminalTab.resume). */
   setResumeHandler(handler: (tabId: string, resume: AgentResume | null) => void): void {
     this.resumeHandler = handler;
+  }
+
+  /** The ports these terminals listen on, sorted, each with the first tab that has it. */
+  portsOf(tabs: readonly { id: string; name?: string }[]): PortEntry[] {
+    const seen = new Map<number, PortEntry>();
+    for (const t of tabs) {
+      const snap = this.controllers.get(t.id)?.getSnapshot();
+      for (const port of snap?.ports ?? []) {
+        if (!seen.has(port)) seen.set(port, { port, tabId: t.id, tabLabel: t.name || snap?.profileLabel || 'Terminal' });
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.port - b.port);
   }
 
   /** Agents among `tabIds`: how many need the user and how many are working. */

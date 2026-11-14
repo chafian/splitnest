@@ -157,6 +157,8 @@ export interface AppSettings {
   darkTheme: DarkThemeId;
   /** Sidebar: branch and changed lines of each workspace folder that is in a Git repository. */
   showGitStatus: boolean;
+  /** Sidebar: the localhost ports programs in each workspace's terminals listen on (main/ports.ts). */
+  showPorts: boolean;
   /**
    * Save the agent conversation's title with a terminal (shown with Resume after a restart). On by
    * default; a title can contain words from the prompt, and it is written to the state file.
@@ -287,6 +289,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   themeMode: 'dark',
   darkTheme: 'graphite',
   showGitStatus: true,
+  showPorts: true,
   resumeTitles: true,
   resumeAutomatically: false,
   updateCheck: true,

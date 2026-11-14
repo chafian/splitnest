@@ -675,6 +675,42 @@ async function main() {
     return { toasts };
   });
 
+  await step('ports: a listener started in a terminal shows on its workspace, opens in the browser, and goes when it stops', async () => {
+    const chip = (port) => `.ws-item--active [data-testid="ws-ports"] .port-chip[data-port="${port}"]`;
+    // The shell itself listens on a free loopback port (no program to install).
+    await typeIn(page, ps, '$l = [System.Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $l.Start(); "LISTEN=" + $l.LocalEndpoint.Port');
+    const port = Number((await waitText(page, ps, /^LISTEN=(\d+)$/m)).match(/^LISTEN=(\d+)$/m)[1]);
+    const t0 = Date.now();
+    await page.waitForSelector(chip(port), { timeout: 20_000 });
+    const shownMs = Date.now() - t0;
+    const before = (await app.evaluate(() => globalThis.__twOpened ?? [])).length;
+    await page.click(chip(port));
+    const opened = await app.evaluate(() => globalThis.__twOpened ?? []);
+    if (opened.length !== before + 1 || opened.at(-1) !== `http://localhost:${port}`) throw new Error(`opened: ${opened.slice(before)}`);
+    await app.evaluate((_e, n) => {
+      globalThis.__twOpened = (globalThis.__twOpened ?? []).slice(0, n); // later steps check this list
+    }, before);
+    const tab = await page.getAttribute(`[data-pane-id="${ps}"]`, 'data-active-tab');
+    const tip = await page.getAttribute(`[role="tab"][data-tab-id="${tab}"]`, 'title');
+    if (!tip.includes(`Listening on localhost:${port}`)) throw new Error(`tab tooltip: ${tip}`);
+    await shot(page, '05c-ports.png');
+    await typeIn(page, ps, '$l.Stop()');
+    await page.waitForSelector(chip(port), { state: 'detached', timeout: 20_000 });
+    let wslPort = null;
+    if (wsl) {
+      await typeIn(page, wsl, 'command -v python3 >/dev/null && { python3 -m http.server 0 --bind 127.0.0.1 2>&1 & } || echo NO-PY""THON'); // not matched by the echoed command
+      const text = await waitText(page, wsl, /Serving HTTP on \S+ port (\d+)|NO-PYTHON/, 20_000);
+      const m = text.match(/Serving HTTP on \S+ port (\d+)/);
+      if (m) {
+        wslPort = Number(m[1]);
+        await page.waitForSelector(chip(wslPort), { timeout: 20_000 });
+        await typeIn(page, wsl, 'kill %1');
+        await page.waitForSelector(chip(wslPort), { state: 'detached', timeout: 20_000 });
+      }
+    }
+    return { port, shownMs, wslPort };
+  });
+
   await step('compact folders: java-app/src/main/java/com/example is one row; segments and files keep their real paths', async () => {
     const row = (p) => `.workspace:not([hidden]) .explorer__row[data-path="${p}"]`;
     const pkg = 'java-app/src/main/java/com/example';

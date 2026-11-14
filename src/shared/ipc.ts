@@ -54,6 +54,7 @@ export const IPC = {
   saveAllResult: 'tw:app:save-all-result',
   quitAborted: 'tw:app:quit-aborted',
   sessionAgent: 'tw:session:agent',
+  sessionPorts: 'tw:session:ports',
   sessionResume: 'tw:session:resume',
   agentPoke: 'tw:session:agent-poke',
   windowTheme: 'tw:window:theme',
@@ -140,6 +141,8 @@ export interface AppApi {
   onQuitAborted(listener: (result: { ok: boolean; failed: number }) => void): () => void;
   /** Main detected (or lost) an AI agent CLI among a session's processes (PowerShell sessions only). */
   onSessionAgent(listener: (event: { sessionId: string; agent: AgentId | null }) => void): () => void;
+  /** The localhost ports a terminal's programs listen on changed (sorted). */
+  onSessionPorts(listener: (event: { sessionId: string; ports: number[] }) => void): () => void;
   /** The conversation the agent in a session runs (null: the agent exited), for resuming after a restart. */
   onSessionResume(listener: (event: { sessionId: string; resume: AgentResume | null }) => void): () => void;
   /** Something changed in a session (e.g. its title); main looks for agent processes sooner. */

@@ -516,6 +516,7 @@ function TabButton(props: {
     agent?.title ? `Session: ${agent.title}` : null,
     agent?.message ? agent.message : null,
     `Starting directory: ${cwd} (does not follow later cd commands)`,
+    snap.ports.length ? `Listening on ${snap.ports.map((p) => `localhost:${p}`).join(', ')}` : null,
     label.titleLine && !agent ? `Title set by the shell: ${label.titleLine}` : null,
     'Double-click or F2 to rename. Right-click for more.',
   ]
