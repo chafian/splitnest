@@ -137,7 +137,7 @@ describe('header facts', () => {
     expect(taskFacts(undefined, 'main').map((f) => f.text)).toEqual(['Checking…']);
     expect(taskFacts(s({}), 'main').map((f) => f.text)).toEqual(['No changes yet']);
     expect(taskFacts(s({ files: 2, uncommitted: 2 }), 'main').map((f) => f.text)).toEqual(['2 not committed']);
-    expect(taskFacts(s({ files: 1, ahead: 3, behind: 1 }), 'main').map((f) => f.text)).toEqual(['3 commits to merge', 'main +1']);
-    expect(taskFacts(s({ files: 1, ahead: null, behind: null }), 'main').map((f) => f.text)).toEqual(['Can’t tell what main lacks']);
+    expect(taskFacts(s({ files: 1, ahead: 3, behind: 1 }), 'main').map((f) => f.text)).toEqual(['3 to merge', 'main ahead 1']);
+    expect(taskFacts(s({ files: 1, ahead: null, behind: null }), 'main').map((f) => f.text)).toEqual(['main not found']);
   });
 });

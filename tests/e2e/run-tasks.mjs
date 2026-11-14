@@ -237,9 +237,9 @@ try {
     writeFileSync(path.join(fixRoot, 'notes.md'), '# notes\n');
     // Output never settles while an agent works; the folder watch must carry it.
     await page.waitForSelector('[data-testid="changes-files"] [data-path="notes.md"]', { timeout: 15_000 });
-    await until(async () => (await page.textContent('[data-testid="changes-totals"]'))?.includes('in 2 files'), 'totals', 15_000);
+    await until(async () => (await page.textContent('[data-testid="changes-totals"]'))?.replace(/\s+/g, ' ').trim() === '+3 −0', 'totals', 15_000);
     const facts = await page.textContent('[data-testid="changes-facts"]');
-    if (!facts.includes('2 not committed') || !facts.includes('1 commit to merge')) throw new Error(facts);
+    if (!facts.includes('2 not committed') || !facts.includes('1 to merge')) throw new Error(facts);
     // Ignored files never trigger anything (node_modules/ is in .gitignore).
     const before = await app.evaluate(() => globalThis.__twGitRuns());
     mkdirSync(path.join(fixRoot, 'node_modules', 'x'), { recursive: true });
@@ -261,6 +261,8 @@ try {
     if (panes !== 2) throw new Error(`${panes} panes`);
     await page.click('[data-testid="changes-files"] [data-path="login.js"]');
     if ((await diffTabs()).join('|') !== 'login.js') throw new Error(`duplicate: ${(await diffTabs()).join('|')}`);
+    // Choosing an open file focuses its tab on the next frame: wait for that before using the keyboard in the list.
+    await until(() => page.evaluate(() => !!document.activeElement?.closest('.diffview')), 'focus moved to the open diff');
     await page.focus('[data-testid="changes-files"] [data-path="login.js"]');
     await page.keyboard.press('ArrowDown');
     if ((await page.evaluate(() => document.activeElement?.getAttribute('data-path'))) !== 'notes.md') throw new Error('arrow didn’t move');

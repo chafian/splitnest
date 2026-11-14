@@ -4,7 +4,6 @@
 // watch while this panel is shown); nothing here polls. Read-only: Finish does the rest.
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { api } from '../../api';
-import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { shortcutLabel } from '../commands/shortcuts';
 import type { TaskChange, TaskChanges, TaskError, TaskSummary } from '../../../shared/tasks';
@@ -121,7 +120,7 @@ export function ChangesPanel(props: Props) {
   };
 
   const facts = taskFacts(summary, task.baseBranch);
-  const totals = summary && summary.files > 0 ? `${summary.approximate ? '≥' : ''}+${summary.added.toLocaleString('en-US')} −${summary.removed.toLocaleString('en-US')} in ${summary.files} ${summary.files === 1 ? 'file' : 'files'}` : null;
+  const fileCount = summary?.files ?? changes?.files.length ?? null;
 
   return (
     <aside
@@ -162,37 +161,37 @@ export function ChangesPanel(props: Props) {
           e.preventDefault();
         }}
       />
-      <header className="changes__header">
+      {/* Two compact lines: title, file count and actions; then the base branch, counts and facts. */}
+      <header className="changes__header" title={`${task.branch} → ${task.baseBranch}`}>
         <div className="changes__title">
           <span className="changes__heading">Changes</span>
+          {fileCount !== null && fileCount > 0 && <span className="changes__count">{fileCount}</span>}
           <span className="changes__actions">
+            <button type="button" className="changes__finish" data-testid="changes-finish" title="Finish task: commit, merge, clean up" onClick={props.onFinish}>
+              Finish
+            </button>
             <IconButton icon="restart" size="sm" label="Check for changes now" onClick={props.onRefresh} />
             <IconButton icon="close" size="sm" label="Hide changes panel" shortcut={shortcutLabel('toggleChanges')} onClick={props.onClose} />
           </span>
         </div>
-        <div className="changes__branch" title={`${task.branch} → ${task.baseBranch}`}>
-          <Icon name="gitBranch" size={12} />
-          <code>{task.branch}</code>
-          <span className="changes__arrow" aria-hidden="true">
-            →
-          </span>
-          <code>{task.baseBranch}</code>
-        </div>
-        <div className="changes__facts" data-testid="changes-facts">
-          {facts.map((f) => (
-            <span key={f.text} className={`changes__fact changes__fact--${f.tone}`}>
-              {f.text}
+        <div className="changes__meta">
+          <span className="changes__vs">vs</span> <span className="changes__base">{task.baseBranch}</span>
+          {summary && summary.files > 0 && (
+            <span className="changes__totals" data-testid="changes-totals">
+              <span className="ws-item__git-added">
+                {summary.approximate ? '≥' : ''}+{summary.added.toLocaleString('en-US')}
+              </span>{' '}
+              <span className="ws-item__git-removed">−{summary.removed.toLocaleString('en-US')}</span>
             </span>
-          ))}
+          )}
+          <span className="changes__facts" data-testid="changes-facts">
+            {facts.map((f) => (
+              <span key={f.text} className={`changes__fact changes__fact--${f.tone}`}>
+                {f.text}
+              </span>
+            ))}
+          </span>
         </div>
-        {totals && (
-          <div className="changes__totals" data-testid="changes-totals">
-            {totals}
-          </div>
-        )}
-        <button type="button" className="button button--small button--primary changes__finish" data-testid="changes-finish" onClick={props.onFinish}>
-          Finish task…
-        </button>
       </header>
       {error ? (
         <p className="changes__note task-dialog__error" data-testid="changes-error">
