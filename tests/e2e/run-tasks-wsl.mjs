@@ -99,6 +99,10 @@ try {
 
   await step('Review and Finish with Linux Git: commit all, merge into main (no preview with Git 2.34), clean up', async () => {
     writeFileSync(`${taskWin}\\parser.c`, 'int parse(void) { return 0; }\n');
+    // The WSL task's row gets its counts from Linux Git (WSL workspaces have no sidebar Git status).
+    await selectWorkspace(page, 'app');
+    await selectWorkspace(page, 'Fix parser');
+    await until(async () => (await page.textContent('.ws-item--task [data-testid="task-counts"]').catch(() => ''))?.replace(/\s+/g, ' ').trim() === '+1 −0', 'WSL task counts', 30_000);
     await palette(page, 'Review task changes…');
     await page.waitForSelector('[data-testid="review-files"] [data-path="parser.c"]', { timeout: 30_000 });
     await page.click('[data-testid="review-finish"]');

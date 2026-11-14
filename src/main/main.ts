@@ -23,6 +23,7 @@ import { AgentSessionTracker } from './agent-sessions';
 import { GitStatusService } from './git-status';
 import { createWindowsGitRunner, createWslGitRunner } from './git-runner';
 import { TaskService } from './task-service';
+import { TaskSummaries } from './task-summaries';
 import { NotificationService, notifyIdPrefix, showAgainOnceRegistered, type NativeNotification } from './notifications';
 import { githubFeedUrl, Updater, type AutoUpdaterLike } from './updater';
 import type { UpdatePrefs } from '../shared/updates';
@@ -202,6 +203,8 @@ const gitStatus = new GitStatusService({
     const contents = mainWindow?.webContents;
     if (contents && !contents.isDestroyed()) contents.send(IPC.gitStatus, { workspaceId, status });
   },
+  // Task workspaces: their summary follows each check (its own queue; see task-summaries.ts).
+  afterCheck: (workspaceId) => taskSummaries.request(workspaceId),
 });
 // Agent tasks: a Git worktree and branch per task (see task-service.ts).
 const tasks = new TaskService({
@@ -210,8 +213,24 @@ const tasks = new TaskService({
   wslGit: (distro, host) => createWslGitRunner({ run: runFile, wslExe: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe'), distro, host }),
   isDirectory,
 });
+// Sidebar numbers of agent tasks, computed after each Git status check of a task's workspace.
+const taskSummaries = new TaskSummaries({
+  summarize: async (task) => {
+    const r = await tasks.summary(task);
+    return r.ok ? r.summary : null;
+  },
+  workspaces: () => store.state.workspaces,
+  enabled: () => store.state.settings.agentTasks && store.state.settings.showGitStatus,
+  publish: (workspaceId, summary) => {
+    const contents = mainWindow?.webContents;
+    if (contents && !contents.isDestroyed()) contents.send(IPC.taskSummary, { workspaceId, summary });
+  },
+});
 // Development-only: E2E checks count Git checks (how often terminal output causes one).
-if (!app.isPackaged && process.env.TW_E2E === '1') (globalThis as Record<string, unknown>).__twGitRuns = () => gitStatus.runs;
+if (!app.isPackaged && process.env.TW_E2E === '1') {
+  (globalThis as Record<string, unknown>).__twGitRuns = () => gitStatus.runs;
+  (globalThis as Record<string, unknown>).__twSummaryRuns = () => taskSummaries.runs;
+}
 
 /** Save-all requests sent to the renderer, waiting for its answer. */
 const pendingSaveAll = new Map<number, (result: SaveAllResult) => void>();
@@ -513,6 +532,7 @@ async function shutdown(): Promise<void> {
   fileWatcher.dispose();
   agentMonitor.stop();
   gitStatus.dispose();
+  taskSummaries.dispose();
   notifications.dispose();
   updater.dispose();
   readyToQuit = true;
@@ -578,6 +598,7 @@ void app.whenReady().then(async () => {
     agentMonitor,
     gitStatus,
     tasks,
+    taskSummaries,
     notifications,
     updates: {
       status: () => updater.status(),

@@ -53,7 +53,7 @@ export function gitLabel(s: GitStatus): GitLabel {
   if (!changed) tip.push('No changes');
   if (s.changedFiles > 0) {
     if (!known) tip.push(`${plural(s.changedFiles, 'changed file')}; lines could not be counted (Git took too long or failed)`);
-    else if (hasLines) tip.push(`${plural(s.changedFiles, 'changed file')}: ${added.toLocaleString('en-US')} lines added, ${removed.toLocaleString('en-US')} removed`);
+    else if (hasLines) tip.push(`${plural(s.changedFiles, 'changed file')}: ${added.toLocaleString('en-US')} lines added, ${removed.toLocaleString('en-US')} removed since the last commit`);
     else tip.push(`${plural(s.changedFiles, 'changed file')}, no lines added or removed (for example a renamed file, a changed file mode or a binary file)`);
   }
   // Git lists a new folder as one entry, so the number of entries is not a number of files.

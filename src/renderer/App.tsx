@@ -41,7 +41,7 @@ import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialo
 import { ReviewDialog } from './features/tasks/ReviewDialog';
 import { taskShells } from './features/tasks/task-text';
 import { FinishTaskDialog, type BranchResult, type FinishOutcome } from './features/tasks/FinishTaskDialog';
-import type { TaskError, TaskProgress } from '../shared/tasks';
+import type { TaskError, TaskSummary } from '../shared/tasks';
 import { canAddPane, canAddTab, initialState, reducer } from './features/workspaces/workspace-state';
 
 const uid = () => crypto.randomUUID();
@@ -52,6 +52,7 @@ let boot: Promise<[LoadStateResult, ShellDiscovery]> | null = null;
 const loadOnce = () => (boot ??= Promise.all([api.loadState(), api.listShells()]));
 
 const NO_GIT: ReadonlyMap<string, GitStatus> = new Map();
+const NO_SUMMARIES: ReadonlyMap<string, TaskSummary> = new Map();
 
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -105,32 +106,24 @@ export function App() {
   const [finishFor, setFinishFor] = useState<string | null>(null);
   /** Re-render after saving editors from Finish (their dirty state lives outside React). */
   const [, setEditorsSaved] = useState(0);
-  const [taskProgress, setTaskProgress] = useState<ReadonlyMap<string, TaskProgress>>(() => new Map());
-
-  const progressFor = useRef(new Map<string, GitStatus | undefined>());
+  /** Each task's summary (sidebar rows), pushed by main after the Git status checks of its workspace. */
+  const [taskSummaries, setTaskSummaries] = useState<ReadonlyMap<string, TaskSummary>>(() => new Map());
   useEffect(() => {
-    for (const w of state.workspaces) {
-      if (!w.task) continue;
-      const status = gitStatuses.get(w.id);
-      if (progressFor.current.has(w.id) && progressFor.current.get(w.id) === status) continue;
-      progressFor.current.set(w.id, status);
-      void api.taskProgress(w.id).then((r) => {
-        if (r.ok) setTaskProgress((m) => new Map(m).set(w.id, r.progress));
-      });
-    }
-  }, [state.workspaces, gitStatuses]);
-  // Also when a task is selected: a commit leaves the folder as clean as before, so its Git status
-  // (above) doesn't change, but the number of commits does.
-  useEffect(() => {
-    const w = state.workspaces.find((x) => x.id === state.activeWorkspaceId);
-    if (!w?.task) return;
-    const id = w.id;
-    void api.taskProgress(id).then((r) => {
-      if (r.ok) setTaskProgress((m) => new Map(m).set(id, r.progress));
-    });
-    // Only on selection; the effect above follows Git status changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeWorkspaceId]);
+    let alive = true;
+    const off = api.onTaskSummary(({ workspaceId, summary }) =>
+      setTaskSummaries((m) => {
+        const next = new Map(m);
+        if (summary) next.set(workspaceId, summary);
+        else next.delete(workspaceId);
+        return next;
+      }),
+    );
+    void api.getTaskSummaries().then((all) => alive && setTaskSummaries((m) => new Map([...Object.entries(all), ...m])));
+    return () => {
+      alive = false;
+      off();
+    };
+  }, []);
 
   const toastSeq = useRef(0);
   const pushToast = useCallback((kind: Toast['kind'], message: string, detail?: string) => {
@@ -1325,7 +1318,7 @@ export function App() {
         onRename={setRenameId}
         onRemove={removeWorkspace}
         tasksEnabled={state.settings.agentTasks}
-        taskProgress={taskProgress}
+        taskSummaries={state.settings.showGitStatus ? taskSummaries : NO_SUMMARIES}
         onNewTask={newTask}
         onReviewTask={setReviewFor}
         onWidthChange={(sidebarWidth) => dispatch({ type: 'updateSettings', patch: { sidebarWidth } })}

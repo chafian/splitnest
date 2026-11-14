@@ -33,6 +33,11 @@ export interface GitRunner {
   toWindows(gitPath: string): string;
   /** The installed version, e.g. [2, 39, 0] (null: unknown). Read once. */
   version(): Promise<[number, number, number] | null>;
+  /**
+   * Several read-only commands in the same folder, results in order (stdout only). In WSL they run in
+   * one wsl.exe start (each costs ~130 ms otherwise). Null when Git isn't installed.
+   */
+  runMany(cwd: string, commands: string[][]): Promise<GitResult[] | null>;
 }
 
 export const GIT_TIMEOUT_MS = 20_000;
@@ -64,6 +69,15 @@ export function createWindowsGitRunner(deps: WindowsGitDeps): GitRunner {
   return {
     side: 'windows',
     run,
+    runMany: async (cwd, commands) => {
+      const out: GitResult[] = [];
+      for (const args of commands) {
+        const r = await run(cwd, args);
+        if (r === null) return null;
+        out.push(r);
+      }
+      return out;
+    },
     toGit: (p) => p,
     toWindows: fromGitPath,
     version: () =>
@@ -112,17 +126,89 @@ export function createWslGitRunner(deps: WslGitDeps): GitRunner {
     // Git's own output is UTF-8; wsl.exe's messages (no such distribution…) may be UTF-16.
     return { code: r.code, stdout: r.stdout.toString('utf8'), stderr: decodeWslOutput(r.stderr), timedOut: r.timedOut, ...(r.overflow ? { overflow: true } : {}) };
   };
+  const missing = (r: GitResult) =>
+    // Git (or bash, for batches) isn't installed in the distribution: `timeout`/`env` can't run it (126/127); or no such distribution.
+    ((r.code === 126 || r.code === 127) && /^(env|timeout): .*(git|bash)/m.test(r.stderr)) || /WSL_E_DISTRO_NOT_FOUND/.test(r.stderr);
+  const run: GitRunner['run'] = async (cwd, args, options) => {
+    const r = await exec(['-c', 'core.fsmonitor=false', '-c', 'core.quotepath=off', '-C', toGit(cwd), ...args], options?.timeoutMs ?? GIT_TIMEOUT_MS);
+    return missing(r) ? null : r;
+  };
+  let noBash = false;
   return {
     side: 'wsl',
     toGit,
     toWindows: (p) => (p.startsWith('/') ? wslUnc(deps.host, deps.distro, p) : fromGitPath(p)),
-    run: async (cwd, args, options) => {
-      const r = await exec(['-c', 'core.fsmonitor=false', '-c', 'core.quotepath=off', '-C', toGit(cwd), ...args], options?.timeoutMs ?? GIT_TIMEOUT_MS);
-      // Git isn't installed in the distribution (`env` can't run it: 126/127), or there is no such distribution.
-      if (((r.code === 126 || r.code === 127) && /^env: .git/m.test(r.stderr)) || /WSL_E_DISTRO_NOT_FOUND/.test(r.stderr)) return null;
-      return r;
+    run,
+    runMany: async (cwd, commands) => {
+      const sequential = async () => {
+        const out: GitResult[] = [];
+        for (const args of commands) {
+          const r = await run(cwd, args);
+          if (r === null) return null;
+          out.push(r);
+        }
+        return out;
+      };
+      if (noBash || commands.length < 2) return sequential();
+      // One bash in the distribution runs each command (arguments passed as positional parameters,
+      // never through a shell string) and frames its exit code and output by length.
+      const argv: string[] = [toGit(cwd)];
+      for (const c of commands) argv.push(String(c.length), ...c);
+      const timeoutMs = GIT_TIMEOUT_MS * commands.length;
+      const seconds = Math.ceil(timeoutMs / 1000);
+      const r = await deps.run(
+        deps.wslExe,
+        ['--distribution', deps.distro, '--exec', 'env', 'LC_ALL=C', 'LANGUAGE=C', 'GIT_TERMINAL_PROMPT=0', 'GIT_OPTIONAL_LOCKS=0', 'timeout', '-k', '10', String(seconds), 'bash', '-c', BATCH_SCRIPT, 'bash', ...argv],
+        { timeoutMs: timeoutMs + 20_000, env: { ...process.env, WSL_UTF8: '1' } },
+      );
+      const stderr = decodeWslOutput(r.stderr);
+      if ((r.code === 126 || r.code === 127) && /bash/.test(stderr)) {
+        noBash = true; // a distribution without bash: one wsl.exe start per command from now on
+        return sequential();
+      }
+      if (/WSL_E_DISTRO_NOT_FOUND/.test(stderr) || /^(env|timeout): .*git/m.test(stderr)) return null;
+      const timedOut = r.timedOut || r.code === 124 || r.code === 137;
+      return parseBatch(r.stdout, commands.length, timedOut, !!r.overflow);
     },
     version: () =>
       (version ??= exec(['--version'], GIT_TIMEOUT_MS).then((r) => (r.code === 0 ? parseGitVersion(r.stdout) : null))),
   };
+}
+
+/** Runs `git -C <dir>` once per command given as `<count> <args…>`; prints `<exit code> <bytes>\n` and the output. */
+export const BATCH_SCRIPT = [
+  'dir=$1; shift',
+  'tmp=$(mktemp) || exit 90',
+  "trap 'rm -f \"$tmp\"' EXIT",
+  'while [ "$#" -gt 0 ]; do',
+  '  n=$1; shift',
+  '  git -c core.fsmonitor=false -c core.quotepath=off -C "$dir" "${@:1:$n}" >"$tmp" 2>/dev/null',
+  '  code=$?',
+  '  shift "$n"',
+  '  printf \'%s %s\n\' "$code" "$(( $(wc -c <"$tmp") ))"',
+  '  cat "$tmp"',
+  'done',
+].join('\n');
+
+/** The batch script's output: one result per command (missing ones, after a stop or a cut, failed). */
+export function parseBatch(stdout: Buffer, count: number, timedOut: boolean, overflow: boolean): GitResult[] {
+  const out: GitResult[] = [];
+  let pos = 0;
+  while (out.length < count && pos < stdout.length) {
+    const nl = stdout.indexOf(10, pos);
+    if (nl < 0) break;
+    const m = /^(\d+) (\d+)$/.exec(stdout.subarray(pos, nl).toString('latin1'));
+    if (!m) break;
+    const size = Number(m[2]);
+    const end = nl + 1 + size;
+    if (end > stdout.length) {
+      // Cut off by the output limit: what there is, marked.
+      out.push({ code: Number(m[1]), stdout: stdout.subarray(nl + 1).toString('utf8'), stderr: '', timedOut: false, overflow: true });
+      break;
+    }
+    out.push({ code: Number(m[1]), stdout: stdout.subarray(nl + 1, end).toString('utf8'), stderr: '', timedOut: false });
+    pos = end;
+  }
+  while (out.length < count) out.push({ code: null, stdout: '', stderr: '', timedOut, ...(overflow ? { overflow: true } : {}) });
+  return out;
 }

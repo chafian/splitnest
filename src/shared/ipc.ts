@@ -1,7 +1,7 @@
 import type { AgentResume } from './agent-resume';
 import type { AgentId } from './agents';
 import type { UpdatePrefs, UpdateStatus } from './updates';
-import type { BranchOutcome, TaskChanges, TaskDiff, TaskFinishCheck, TaskMergeResult, TaskPreview, TaskProgress, TaskRecord, TaskResult, TaskUpdateResult } from './tasks';
+import type { BranchOutcome, TaskSummary, TaskChanges, TaskDiff, TaskFinishCheck, TaskMergeResult, TaskPreview, TaskProgress, TaskRecord, TaskResult, TaskUpdateResult } from './tasks';
 import type { AgentNotice, NoticeDelivery, NoticeTarget } from './notifications';
 import type {
   AppInfo,
@@ -78,6 +78,8 @@ export const IPC = {
   taskUpdate: 'tw:task:update',
   taskRemove: 'tw:task:remove',
   taskDiscard: 'tw:task:discard',
+  taskSummaries: 'tw:task:summaries',
+  taskSummary: 'tw:task:summary',
 } as const;
 
 export interface PickFolderResult {
@@ -191,5 +193,9 @@ export interface AppApi {
   /** Finish: delete the task folder (refused with uncommitted files) and, if asked, its branch once merged. */
   taskRemove(workspaceId: string, deleteBranch: boolean): Promise<TaskResult<{ branch: BranchOutcome }>>;
   /** Finish: delete the task folder and branch whatever they contain; `confirmedKey` is the check's discardKey the user confirmed. */
+  /** Every task's summary computed so far (sidebar rows); later changes arrive through onTaskSummary. */
+  getTaskSummaries(): Promise<Record<string, TaskSummary>>;
+  /** A task's summary changed (null: none to show). Follows the Git status checks of its workspace. */
+  onTaskSummary(listener: (event: { workspaceId: string; summary: TaskSummary | null }) => void): () => void;
   taskDiscard(workspaceId: string, confirmedKey: string): Promise<TaskResult<{ branch: 'deleted' | 'kept' | 'missing' }>>;
 }

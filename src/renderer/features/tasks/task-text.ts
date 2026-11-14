@@ -1,5 +1,6 @@
 // Text about agent tasks shown in the sidebar and the New task dialog.
-import type { TaskProgress } from '../../../shared/tasks';
+import type { TaskProgress, TaskSummary, WorkspaceTask } from '../../../shared/tasks';
+import { shortCount } from '../workspaces/git-label';
 import type { GitStatus } from '../../../shared/types';
 
 /** "2 commits" on the task branch that its base doesn't have yet (and how far the base moved on). */
@@ -32,4 +33,35 @@ export function taskShells<P extends { kind: string; distro?: string }>(profiles
   const distro = wslDistroOf(parentRoot);
   if (distro) return profiles.filter((p) => p.kind === 'wsl' && p.distro?.toLowerCase() === distro.toLowerCase());
   return profiles.filter((p) => p.kind !== 'wsl');
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+
+/** The row's `+356 −41` (`≥` when new files weren't all counted), or null when there is nothing to show. */
+export function taskCounts(s: TaskSummary | undefined): { added: string; removed: string } | null {
+  if (!s || (s.files === 0 && s.added === 0 && s.removed === 0)) return null;
+  const at = s.approximate ? '≥' : '';
+  return { added: `${at}+${shortCount(s.added)}`, removed: `−${shortCount(s.removed)}` };
+}
+
+/**
+ * The task row's tooltip: what the counts mean (against where the task left its base branch, not
+ * against the last commit as for other workspaces), and the rest of the summary.
+ */
+export function taskTooltip(task: WorkspaceTask, s: TaskSummary | undefined): string[] {
+  const lines = [`Branch ${task.branch}, from ${task.baseBranch}`];
+  if (!s) return [...lines, 'Changes not checked yet (or not available for this task).'];
+  if (s.ahead !== null) lines.push(s.ahead === 0 ? 'No commits yet' : `${plural(s.ahead, 'commit')} that ${task.baseBranch} doesn’t have`);
+  else lines.push(`Can’t tell how it relates to ${task.baseBranch} (that branch may have been renamed or deleted)`);
+  if (s.behind) lines.push(`${task.baseBranch} has ${plural(s.behind, 'newer commit')}`);
+  if (s.files === 0) lines.push('No changes yet');
+  else {
+    lines.push(
+      `${s.approximate ? 'At least ' : ''}${s.added.toLocaleString('en-US')} lines added, ${s.removed.toLocaleString('en-US')} removed in ${plural(s.files, 'file')}, ` +
+        `compared with where the task left ${task.baseBranch}: committed and uncommitted changes, new files included${s.binary ? ` (${plural(s.binary, 'binary file')} not counted)` : ''}`,
+    );
+    if (s.approximate) lines.push('Some new files weren’t counted (too large, too many, or a whole new folder)');
+  }
+  if (s.uncommitted) lines.push(`${plural(s.uncommitted, 'change')} not committed yet`);
+  return lines;
 }

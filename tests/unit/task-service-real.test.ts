@@ -669,4 +669,66 @@ describe.skipIf(!git)('agent tasks with real Git', { timeout: 60_000 }, () => {
       expect(await stillConflicted(path.join(dir, 'missing-folder'), ['resolved.md'])).toEqual(['resolved.md']);
     });
   });
+
+  describe('summary: the numbers on the task row', () => {
+    const sumOf = async (t: TaskRecord) => {
+      const r = await service.summary(t);
+      if (!r.ok) throw new Error(r.error.code);
+      return r.summary;
+    };
+
+    it('lines against where the task left main: committed and uncommitted, new files included, binary not counted, main’s own changes left out', async () => {
+      writeFileSync(path.join(repo, 'old.txt'), 'x\ny\n');
+      writeFileSync(path.join(repo, 'gone.txt'), 'a\nb\nc\n');
+      await g(repo, 'add', '.');
+      await g(repo, 'commit', '-q', '-m', 'files');
+      const t = await created(repo, 'counted');
+      expect(await sumOf(t)).toMatchObject({ added: 0, removed: 0, files: 0, uncommitted: 0, ahead: 0, behind: 0, approximate: false });
+      writeFileSync(path.join(t.worktreePath, 'a.txt'), 'one\ntwo\n'); // +1, committed
+      await g(t.worktreePath, 'rm', '-q', 'gone.txt'); // −3, committed
+      await g(t.worktreePath, 'mv', 'old.txt', 'new.txt'); // a rename: no lines
+      await g(t.worktreePath, 'add', '.');
+      await g(t.worktreePath, 'commit', '-q', '-m', 'work');
+      writeFileSync(path.join(t.worktreePath, 'a.txt'), 'one\ntwo\nthree\n'); // +1, uncommitted
+      writeFileSync(path.join(t.worktreePath, 'notes.md'), '# a\nb\nc\nd'); // +4, new (no final newline)
+      writeFileSync(path.join(t.worktreePath, 'logo.png'), Buffer.from([137, 80, 0, 1, 2])); // binary, new
+      // main moves on: not part of the task.
+      writeFileSync(path.join(repo, 'main-only.txt'), '1\n2\n3\n4\n5\n');
+      await g(repo, 'add', '.');
+      await g(repo, 'commit', '-q', '-m', 'main work');
+      expect(await sumOf(t)).toMatchObject({ added: 6, removed: 3, files: 5, uncommitted: 3, binary: 1, ahead: 1, behind: 1, approximate: false });
+    });
+
+    it('the version changes with the changes and stays when nothing changed', async () => {
+      const t = await created(repo, 'versioned');
+      const a = await sumOf(t);
+      expect((await sumOf(t)).version).toBe(a.version);
+      writeFileSync(path.join(t.worktreePath, 'n.txt'), 'n\n');
+      const b = await sumOf(t);
+      expect(b.version).not.toBe(a.version);
+      writeFileSync(path.join(t.worktreePath, 'n.txt'), 'n\nm\n');
+      const c = await sumOf(t);
+      // A changed new file is counted anew (its size and time changed).
+      expect([b.added, c.added]).toEqual([1, 2]);
+    });
+
+    it('lower bounds (≥) for a new folder, an oversized new file, or too many; never a wrong exact number', async () => {
+      const t = await created(repo, 'bounded');
+      mkdirSync(path.join(t.worktreePath, 'newdir'));
+      writeFileSync(path.join(t.worktreePath, 'newdir', 'x.txt'), 'x\n');
+      expect(await sumOf(t)).toMatchObject({ approximate: true, files: 1, uncommitted: 1 });
+      rmSync(path.join(t.worktreePath, 'newdir'), { recursive: true });
+      writeFileSync(path.join(t.worktreePath, 'big.log'), 'x\n'.repeat(300_000)); // 600 KB
+      expect(await sumOf(t)).toMatchObject({ approximate: true, added: 0 });
+    });
+
+    it('nothing is compared when the repository names a filter program; a missing folder says so', async () => {
+      const t = await created(repo, 'guarded');
+      await g(repo, 'config', 'filter.sneaky.clean', 'sneaky-program');
+      expect(await service.summary(t)).toMatchObject({ ok: false, error: { code: 'CHANGES_NOT_CHECKED' } });
+      await g(repo, 'config', '--unset', 'filter.sneaky.clean');
+      rmSync(t.worktreePath, { recursive: true, force: true });
+      expect(await service.summary(t)).toMatchObject({ ok: false, error: { code: 'TASK_FOLDER_MISSING' } });
+    });
+  });
 });

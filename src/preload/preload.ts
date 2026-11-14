@@ -7,6 +7,7 @@ import type { AgentId } from '../shared/agents';
 import type { UpdateStatus } from '../shared/updates';
 import type { NoticeTarget } from '../shared/notifications';
 import type { FileChangedEvent, GitStatus, SessionEvent } from '../shared/types';
+import type { TaskSummary } from '../shared/tasks';
 
 const sessionListeners = new Set<(event: SessionEvent) => void>();
 ipcRenderer.on(IPC.sessionEvent, (_event, payload: SessionEvent) => {
@@ -39,6 +40,11 @@ ipcRenderer.on(IPC.sessionResume, (_event, payload: { sessionId: string; resume:
 const updateListeners = new Set<(status: UpdateStatus) => void>();
 ipcRenderer.on(IPC.updateChanged, (_event, status: UpdateStatus) => {
   for (const listener of updateListeners) listener(status);
+});
+
+const summaryListeners = new Set<(event: { workspaceId: string; summary: TaskSummary | null }) => void>();
+ipcRenderer.on(IPC.taskSummary, (_event, payload: { workspaceId: string; summary: TaskSummary | null }) => {
+  for (const listener of summaryListeners) listener(payload);
 });
 
 const gitListeners = new Set<(event: { workspaceId: string; status: GitStatus | null }) => void>();
@@ -131,6 +137,11 @@ const api: AppApi = {
   taskMerge: (workspaceId) => ipcRenderer.invoke(IPC.taskMerge, workspaceId),
   taskUpdate: (workspaceId) => ipcRenderer.invoke(IPC.taskUpdate, workspaceId),
   taskRemove: (workspaceId, deleteBranch) => ipcRenderer.invoke(IPC.taskRemove, workspaceId, deleteBranch),
+  getTaskSummaries: () => ipcRenderer.invoke(IPC.taskSummaries),
+  onTaskSummary: (listener) => {
+    summaryListeners.add(listener);
+    return () => summaryListeners.delete(listener);
+  },
   taskDiscard: (workspaceId, confirmedKey) => ipcRenderer.invoke(IPC.taskDiscard, workspaceId, confirmedKey),
   onGitStatus: (listener) => {
     gitListeners.add(listener);

@@ -121,7 +121,7 @@ export function withCeiling(env: NodeJS.ProcessEnv, root: string, home: string):
 }
 
 /** Filter programs Git would start during `git status`. */
-const FILTER_KEYS = '^filter\\..*\\.(clean|process)$';
+export const FILTER_KEYS = '^filter\\..*\\.(clean|process)$';
 
 /**
  * From `git config --show-scope --includes --null --get-regexp`: the filter keys set by the
@@ -206,6 +206,8 @@ export interface GitStatusDeps {
   enabled(): boolean;
   /** A workspace's state changed (null: not shown). */
   publish(workspaceId: string, status: GitStatus | null): void;
+  /** A check of this workspace just finished (also for WSL folders, whose status isn't read here). */
+  afterCheck?(workspaceId: string): void;
   env?: NodeJS.ProcessEnv;
   /** The user's home folder: Git does not look for a repository there from folders below it. */
   home?: string;
@@ -408,6 +410,7 @@ export class GitStatusService {
           e.status = status;
           this.deps.publish(id, status);
         }
+        this.deps.afterCheck?.(id);
         if (e.again) {
           // Asked again while this check ran (a save): through request(), so the one-second limit
           // counts from the start of this check (one follow-up for all such requests).

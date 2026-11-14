@@ -193,16 +193,35 @@ try {
     if (!w || w.rootPath !== fixRoot || w.task.branch !== 'splitnest/fix-login' || w.task.agent !== 'claude') throw new Error(JSON.stringify(w?.task));
   });
 
-  await step('the task shows its branch and commits against main as work happens', async () => {
-    await until(async () => (await page.textContent('.ws-item--task [data-testid="task-progress"]'))?.includes('no commits yet'), 'no commits yet', 20_000);
+  await step('the compact task row shows +added −removed as work happens (uncommitted new files included), details in its tooltip', async () => {
+    const row = '.ws-item--task:has(.ws-item__label:text-is("Fix login"))';
+    const counts = () => page.textContent(`${row} [data-testid="task-counts"]`).catch(() => null);
+    const tooltip = () => page.getAttribute(`${row} .ws-item__main`, 'title');
+    // A new, untracked 3-line file: counted right away, before any commit.
+    writeFileSync(path.join(fixRoot, 'login.js'), 'export const login = () => true;\n// a\n// b\n');
+    await selectWorkspace(page, 'shop app');
+    await selectWorkspace(page, 'Fix login');
+    await until(async () => (await counts())?.replace(/\s+/g, ' ').trim() === '+3 −0', '+3 −0', 20_000);
+    let tip = await tooltip();
+    if (!tip.includes('Branch splitnest/fix-login, from main') || !tip.includes('No commits yet') || !tip.includes('1 change not committed yet')) throw new Error(tip);
+    if (!tip.includes('compared with where the task left main: committed and uncommitted changes, new files included')) throw new Error(tip);
+    // Committed and trimmed to one line: the counts follow, and the commit shows in the tooltip.
     writeFileSync(path.join(fixRoot, 'login.js'), 'export const login = () => true;\n');
     git(fixRoot, 'add', '.');
     git(fixRoot, 'commit', '-q', '-m', 'Fix login');
     await selectWorkspace(page, 'shop app');
     await selectWorkspace(page, 'Fix login');
-    await until(async () => (await page.textContent('.ws-item--task [data-testid="task-progress"]'))?.includes('1 commit'), '1 commit', 20_000);
-    const branch = await page.textContent('.ws-item--task .ws-item__git-branch');
-    if (branch !== 'splitnest/fix-login') throw new Error(branch);
+    await until(async () => (await tooltip())?.includes('1 commit that main doesn’t have'), '1 commit in tooltip', 20_000);
+    if ((await counts())?.replace(/\s+/g, ' ').trim() !== '+1 −0') throw new Error(await counts());
+    tip = await tooltip();
+    if (tip.includes('not committed yet')) throw new Error(tip);
+    // The row is one line: no path, no branch line, no TASK tag.
+    if (await page.$(`${row} .ws-item__path`)) throw new Error('path line shown');
+    if (await page.$(`${row} .ws-item__git`)) throw new Error('branch line shown');
+    // Summaries follow Git status checks; they never run more often.
+    const runs = await app.evaluate(() => ({ git: globalThis.__twGitRuns(), summaries: globalThis.__twSummaryRuns() }));
+    if (runs.summaries > runs.git) throw new Error(JSON.stringify(runs));
+    return runs;
   });
 
   await step('Review lists what the task changed against main, committed or not, and shows each file’s diff', async () => {

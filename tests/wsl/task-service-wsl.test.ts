@@ -106,6 +106,38 @@ describe.skipIf(!hasGit)(`agent tasks in WSL (${distro ?? 'none'})`, () => {
     expect(g(`${tmp}/app`, 'branch', '--list', 'splitnest/throwaway')).toBe('');
   });
 
+  it('several Git commands in one wsl.exe start: exit codes and NUL-separated output framed exactly', async () => {
+    const runner = createWslGitRunner({ run: runFile, wslExe: WSL_EXE, distro: distro!, host: 'wsl.localhost' });
+    lx('sh', '-c', 'cd "$1" && printf "x\\n" > "new file with spaces.txt" && printf "%s" "$2" > "$3"', 'sh', `${tmp}/app`, 'quoted', "it's \"odd\" $(x).txt");
+    const t0 = Date.now();
+    const r = await runner.runMany(repo, [
+      ['rev-parse', '--abbrev-ref', 'HEAD'],
+      ['status', '--porcelain=v2', '-z', '--untracked-files=normal'],
+      ['no-such-subcommand'],
+      ['rev-parse', '--verify', '--quiet', 'refs/heads/does-not-exist'],
+    ]);
+    const ms = Date.now() - t0;
+    expect(r).not.toBeNull();
+    expect(r!.map((x) => x.code)).toEqual([0, 0, 1, 1]);
+    expect(r![0]!.stdout.trim()).toBe('main');
+    const entries = r![1]!.stdout.split('\0').filter(Boolean);
+    expect(entries).toContain('? new file with spaces.txt');
+    expect(entries).toContain(`? it's "odd" $(x).txt`);
+    lx('sh', '-c', 'cd "$1" && rm -f "new file with spaces.txt" "$2"', 'sh', `${tmp}/app`, "it's \"odd\" $(x).txt");
+    // One wsl.exe start for all four (four separate starts take ~0.5 s).
+    expect(ms).toBeLessThan(4000);
+  });
+
+  it('summary in WSL: counts from Linux Git in two wsl.exe starts', async () => {
+    const t = await created('summed');
+    // Files of its own (earlier tests change a.txt in this shared repository).
+    writeFileSync(`${t.worktreePath}\\summed.txt`, 'a\nb\n');
+    expect(await service.summary(t)).toMatchObject({ ok: true, summary: { added: 2, removed: 0, files: 1, uncommitted: 1, ahead: 0, approximate: false } });
+    expect(await service.commitAll(t, 'summed')).toMatchObject({ ok: true });
+    writeFileSync(`${t.worktreePath}\\summed.txt`, 'a\n');
+    expect(await service.summary(t)).toMatchObject({ ok: true, summary: { added: 1, removed: 0, files: 1, uncommitted: 1, ahead: 1 } });
+  });
+
   it('a folder of another distribution, or an unknown one, is never handed to this Git', async () => {
     expect(await service.create(`\\\\wsl.localhost\\NoSuchDistro\\tmp\\x`, 'x')).toMatchObject({ ok: false });
     expect(await service.create(`\\\\wsl.localhost\\${distro}\\tmp\\..\\etc`, 'x')).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_LOCATION' } });

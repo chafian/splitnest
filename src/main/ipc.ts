@@ -20,6 +20,7 @@ import type { OpenFileWatcher } from './file-watch';
 import type { AgentMonitor } from './agent-monitor';
 import type { GitStatusService } from './git-status';
 import { taskFailure, type TaskService } from './task-service';
+import type { TaskSummaries } from './task-summaries';
 import { taskRecordKey } from '../shared/tasks';
 import type { NotificationService } from './notifications';
 import { parseUpdatePrefs, type UpdatePrefs, type UpdateStatus } from '../shared/updates';
@@ -47,6 +48,8 @@ export interface IpcContext {
   gitStatus: GitStatusService;
   /** Agent tasks: Git worktrees per task (src/main/task-service.ts). */
   tasks: TaskService;
+  /** Each task's summary, kept current after Git status checks (src/main/task-summaries.ts). */
+  taskSummaries: TaskSummaries;
   notifications: NotificationService;
   updates: {
     status(): UpdateStatus;
@@ -123,6 +126,7 @@ export function registerIpc(ctx: IpcContext): void {
     ctx.store.update(state);
     // New or removed workspaces, or the Git status setting switched.
     ctx.gitStatus.sync();
+    ctx.taskSummaries.sync();
     return { ok: true };
   });
 
@@ -297,6 +301,7 @@ export function registerIpc(ctx: IpcContext): void {
     if (!p.ok) return p;
     return p.workspace.task ? { ok: true as const, id: p.workspace.id, task: p.workspace.task } : taskFailure('NOT_A_TASK');
   };
+  handle(IPC.taskSummaries, () => (ctx.store.state.settings.agentTasks ? ctx.taskSummaries.all() : {}));
   handle(IPC.taskFinishCheck, async (_event, workspaceId) => {
     const t = taskOf(workspaceId);
     if (!t.ok) return t;

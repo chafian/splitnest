@@ -20,7 +20,7 @@
 import { createHash } from 'node:crypto';
 import { access, lstat, open, readdir, readFile, realpath, rmdir } from 'node:fs/promises';
 import path from 'node:path';
-import { isWslRoot, repositoryFilterKeys } from './git-status';
+import { FILTER_KEYS, isWslRoot, repositoryFilterKeys } from './git-status';
 import { parseWslUnc } from './git-worktree';
 import type { GitResult, GitRunner } from './git-runner';
 import {
@@ -31,6 +31,7 @@ import {
   parseNameStatus,
   parseNumstat,
   parsePaths,
+  parseStatusEntries,
   parseWorktreeList,
   removeRefusal,
   samePath,
@@ -61,6 +62,7 @@ import {
   type TaskProgress,
   type TaskRecord,
   type TaskResult,
+  type TaskSummary,
 } from '../shared/tasks';
 
 const win = path.win32;
@@ -287,6 +289,119 @@ export class TaskService {
     files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     const truncated = files.length > TASK_LIMITS.maxChangedFiles || !!names!.overflow || !!others!.overflow;
     return { ok: true, changes: { baseBranch: task.baseBranch, mergeBase, files: files.slice(0, TASK_LIMITS.maxChangedFiles), truncated, unlisted } };
+  }
+
+  /**
+   * The numbers for the sidebar row and the Changes panel header (see TaskSummary for what they
+   * mean). Read-only, in two rounds so that nothing reads files before the repository's own
+   * configuration is checked for filter programs (then nothing is compared, as for Git status).
+   * In WSL each round is one wsl.exe start.
+   */
+  async summary(task: TaskRecord): Promise<TaskResult<{ summary: TaskSummary }>> {
+    const cwd = task.worktreePath;
+    if (!(await this.deps.isDirectory(cwd))) return fail('TASK_FOLDER_MISSING');
+    const git = this.gitFor(cwd);
+    if (!git) return fail('UNSUPPORTED_LOCATION');
+    const ro = (args: string[]) => ['--no-optional-locks', ...args];
+    // Round 1: nothing here reads files of the working tree.
+    const first = await git.runMany(cwd, [
+      ro(['config', '--show-scope', '--includes', '--null', '--get-regexp', FILTER_KEYS]),
+      ro(['merge-base', `refs/heads/${task.baseBranch}`, 'HEAD']),
+      ro(['rev-list', '--left-right', '--count', `refs/heads/${task.baseBranch}...HEAD`]),
+    ]);
+    if (!first) return fail('GIT_NOT_FOUND');
+    const [cfg, mb, lr] = first as [GitResult, GitResult, GitResult];
+    if (cfg.code !== 0 && cfg.code !== 1) return gitFailure(cfg);
+    if (cfg.code === 0 && repositoryFilterKeys(cfg.stdout).length > 0) return fail('CHANGES_NOT_CHECKED');
+    const mergeBase = mb.code === 0 && /^[0-9a-f]{40,64}$/.test(mb.stdout.trim()) ? mb.stdout.trim() : task.baseCommit;
+    const leftRight = lr.code === 0 ? parseLeftRight(lr.stdout) : null;
+    // Round 2: the working tree against the merge base, and what is new or uncommitted.
+    const second = await git.runMany(cwd, [
+      ro(['status', '--porcelain=v2', '-z', '--untracked-files=normal']),
+      ro(['diff', '--numstat', '-z', '-M', '--no-color', '--no-ext-diff', '--no-textconv', '--ignore-submodules=all', mergeBase]),
+    ]);
+    if (!second) return fail('GIT_NOT_FOUND');
+    const [st, num] = second as [GitResult, GitResult];
+    if (st.code !== 0 && !st.overflow) return gitFailure(st);
+    if (num.code !== 0 && !num.overflow) return gitFailure(num);
+    let added = 0;
+    let removed = 0;
+    let binary = 0;
+    let files = 0;
+    for (const c of parseNumstat(num.stdout).values()) {
+      files++;
+      if (c.added === null && c.removed === null) binary++;
+      else {
+        added += c.added ?? 0;
+        removed += c.removed ?? 0;
+      }
+    }
+    const status = parseStatusEntries(st.stdout);
+    const fresh = await this.countNewLines(cwd, status.untracked);
+    files += status.untracked.length;
+    return {
+      ok: true,
+      summary: {
+        added: added + fresh.lines,
+        removed,
+        approximate: fresh.approximate || !!st.overflow || !!num.overflow,
+        files,
+        uncommitted: status.tracked + status.untracked.length,
+        binary: binary + fresh.binary,
+        ahead: leftRight ? leftRight[1] : null,
+        behind: leftRight ? leftRight[0] : null,
+        version: createHash('sha1').update(mergeBase).update('\0').update(num.stdout).update('\0').update(st.stdout).digest('hex'),
+      },
+    };
+  }
+
+  /** Line counts of new files, per task folder, by path with the size and time they were counted at. */
+  private readonly lineCounts = new Map<string, Map<string, { size: number; mtimeMs: number; lines: number; binary: boolean }>>();
+
+  /**
+   * Lines in new untracked text files: each read at most once while unchanged (size and time), at most
+   * TASK_LIMITS.maxCountedNewFiles files and maxCountBytesPerRun of new reading per run. Anything
+   * skipped (too large, too many, a whole new folder, a link) makes the count a lower bound.
+   */
+  private async countNewLines(folder: string, entries: string[]): Promise<{ lines: number; binary: number; approximate: boolean }> {
+    const key = fromGitPath(folder).toLowerCase();
+    const old = this.lineCounts.get(key) ?? new Map();
+    const cache = new Map<string, { size: number; mtimeMs: number; lines: number; binary: boolean }>();
+    let budget = TASK_LIMITS.maxCountBytesPerRun;
+    let lines = 0;
+    let binary = 0;
+    let counted = 0;
+    let approximate = false;
+    for (const rel of entries) {
+      if (rel.endsWith('/') || !isSafeRelative(rel) || counted >= TASK_LIMITS.maxCountedNewFiles) {
+        approximate = true;
+        continue;
+      }
+      const full = win.join(folder, ...rel.split('/'));
+      try {
+        const st = await lstat(full);
+        if (!st.isFile()) continue; // a link counts no lines
+        const hit = old.get(rel);
+        let entry = hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs ? hit : null;
+        if (!entry) {
+          if (st.size > TASK_LIMITS.maxUntrackedBytes || st.size > budget) {
+            approximate = true;
+            continue;
+          }
+          budget -= st.size;
+          entry = { size: st.size, mtimeMs: st.mtimeMs, ...lineCount(await readFile(full)) };
+        }
+        cache.set(rel, entry);
+        counted++;
+        if (entry.binary) binary++;
+        else lines += entry.lines;
+      } catch {
+        approximate = true; // gone or unreadable meanwhile
+      }
+    }
+    // Only what is still new is kept (the cache can't grow past the folder's new files).
+    this.lineCounts.set(key, cache);
+    return { lines, binary, approximate };
   }
 
   /** Review: one changed file's diff against the merge base (only a file `changes` lists). */
@@ -879,4 +994,13 @@ export async function stillConflicted(folder: string, files: string[]): Promise<
     }
   }
   return out;
+}
+
+/** Lines in a file's bytes (the last line counts without a final newline); binary when a NUL is in the first 8 KB. */
+export function lineCount(bytes: Buffer): { lines: number; binary: boolean } {
+  if (bytes.subarray(0, 8000).includes(0)) return { lines: 0, binary: true };
+  let lines = 0;
+  for (let i = bytes.indexOf(10); i !== -1; i = bytes.indexOf(10, i + 1)) lines++;
+  if (bytes.length > 0 && bytes[bytes.length - 1] !== 10) lines++;
+  return { lines, binary: false };
 }

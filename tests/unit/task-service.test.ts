@@ -22,6 +22,16 @@ function fakeGit(handler: Handler, version: [number, number, number] | null = [2
       calls.push({ cwd, args });
       return handler(cwd, args);
     },
+    runMany: async (cwd, commands) => {
+      const out: GitResult[] = [];
+      for (const args of commands) {
+        calls.push({ cwd, args });
+        const r = await handler(cwd, args);
+        if (r === null) return null;
+        out.push(r);
+      }
+      return out;
+    },
   };
   return { git, calls };
 }

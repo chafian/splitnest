@@ -2,6 +2,23 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Changes panel, R1: task summaries and compact rows (2026-11-14)
+
+- **E2E:**
+  - `run-tasks.mjs` 19 / 19: a new, untracked 3-line file shows `+3 −0` before any commit, with "No commits yet" and "1 change not committed yet" in the tooltip, which says what the counts are against. After a commit trimmed to one line it shows `+1 −0` and "1 commit that main doesn't have". The row has no path, branch or tag line. Summaries ran 3 times against 7 Git status checks, never more.
+  - `run-tasks-wsl.mjs` 4 / 4: the WSL task row shows `+1 −0` from Linux Git.
+- **Real Git** (`task-service-real.test.ts`, now 47):
+  - +6 −3 for a committed edit, a deletion and a rename, plus an uncommitted edit, a new 4-line file without a final newline and a new binary file; main's own later commit is left out; ahead 1, behind 1.
+  - The version is stable without changes and moves with them, and a changed new file is counted anew.
+  - A new folder or a 600 KB new file makes the count approximate.
+  - A repository filter gives nothing, and a missing folder says so.
+- **Real WSL** (13): several Git commands in one `wsl.exe` start, with exact exit codes and NUL-separated output, including file names with spaces, quotes and `$(…)`. Summary counts from Linux Git.
+- **Unit:** the queue (tasks only, only when on, requests during a run become one more run, clearing when turned off), line counts (no final newline, empty file, CRLF, binary), status entries, batch framing (missing results after a stop, a cut), and the row's counts and tooltip.
+- **Found while testing:**
+  - Since M6's `timeout` wrapper, a missing Git in WSL was reported by `timeout`, not `env`, so "Git not installed" wasn't recognised. Fixed.
+  - Separately, a probe run from Git Bash passed a Linux path that Git Bash rewrote into a Windows one. The command then ran in this repository mounted in WSL and added one empty local commit. It was found at once, checked empty and removed before anything was pushed; the repository's settings were unchanged. Linux paths for WSL now go through Node or tests only.
+- **Regressions:** unit 544 / 544; WSL 13 / 13; `run-e2e.mjs` 36 / 36. Type check and lint are clean.
+
 ## Agent tasks, M6: review fixes and on by default (2026-11-14)
 
 - **Independent review** of the whole feature (a separate reviewer reading the code, not my notes). Its findings, each verified before fixing:

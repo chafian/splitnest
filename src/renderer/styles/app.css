@@ -3277,31 +3277,15 @@ dialog::backdrop {
   background: var(--border);
 }
 
-.ws-item__task {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: var(--text-xs);
+.ws-item__name .ws-item__task-icon {
+  flex: none;
   color: var(--text-faint);
 }
 
-.ws-item__task-tag {
-  flex: none;
-  padding: 0 5px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 15px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.ws-item__task-text {
+/* `+356 −41`: right-aligned on the name's line, where other rows show their running shells. */
+.ws-item__task-counts {
+  font-family: var(--font-mono);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .task-dialog .field + .field,

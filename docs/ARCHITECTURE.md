@@ -94,6 +94,15 @@
   - Git in WSL runs under coreutils `timeout -k 10`, because stopping `wsl.exe` doesn't stop the Git inside.
   - Also: a folder deleted outside SplitNest (`TASK_FOLDER_MISSING`, removable); names without Latin letters (`splitnest/task`); `Filename too long` → `PATH_TOO_LONG` with the `core.longpaths` hint; the workspace limit checked before creating.
   - Known remaining: inside WSL, folder paths are compared without regard to case (as on Windows), although Linux is case-sensitive. Branch checks keep it from acting on the wrong worktree.
+- **Summaries (R1, Changes panel work).**
+  - `TaskService.summary` is the sidebar row's `+added −removed` and the future panel header's numbers (`TaskSummary`).
+  - It runs in two rounds, so nothing reads working-tree files before the repository's filter check:
+    1. config (filters), merge-base, and ahead/behind;
+    2. `status --porcelain=v2 --untracked-files=normal` and `diff --numstat -M <merge-base>`.
+  - New untracked files add their lines. Counts are cached per task folder by size and mtime, at most 200 files and 2 MB of new reading per run. A new folder, an oversized file or the caps give `approximate`, shown as `≥`. `version` hashes the merge-base, numstat and status, so the panel knows when to read the list again.
+  - `TaskSummaries` (main) has its own queue, one summary at a time, separate from Git status's. A request during a run becomes exactly one more run.
+  - It's triggered by `GitStatusService.afterCheck`, which fires after every check including WSL folders (whose status it doesn't read). So summaries follow the same triggers and limits and never poll; the E2E checks they don't run more often than Git status checks.
+  - `GitRunner.runMany` runs a round's commands in one `wsl.exe` start in WSL (~130 ms each otherwise). It uses a fixed bash script that takes the commands as positional parameters and frames each exit code and output by byte length (`BATCH_SCRIPT`/`parseBatch`). Without bash it falls back to one start per command.
 - **`GitRunner`** (`src/main/git-runner.ts`): `git -C <folder>` with the Git status environment (English messages, no prompts, no redirecting variables, ceilings), so tasks in WSL can later use the distribution's Git behind the same interface. Unlike the status check, task commands run the repository's hooks, as the same command in a terminal would.
 
 ## Agent inbox

@@ -1,5 +1,5 @@
-import type { TaskProgress } from '../../../shared/tasks';
-import { taskProgressText, wslDistroOf } from '../tasks/task-text';
+import type { TaskSummary } from '../../../shared/tasks';
+import { taskCounts, taskTooltip, wslDistroOf } from '../tasks/task-text';
 import { useRef, type PointerEvent } from 'react';
 import type { GitStatus, Workspace } from '../../../shared/types';
 import { listPanes, listTerminalTabs } from '../../../shared/layout';
@@ -29,8 +29,8 @@ interface Props {
   onRemove(id: string): void;
   /** Agent tasks (preview setting): a New task button on rows in a Git repository. */
   tasksEnabled: boolean;
-  /** Each task's commits against its base branch. */
-  taskProgress: ReadonlyMap<string, TaskProgress>;
+  /** Each task's summary (counts against where it left its base branch). */
+  taskSummaries: ReadonlyMap<string, TaskSummary>;
   onNewTask(id: string): void;
   /** A task's Review dialog (its changes against its base branch). */
   onReviewTask(id: string): void;
@@ -113,10 +113,12 @@ export function Sidebar(props: Props) {
           const agentText = agentSummaryText(agents);
           const gitStatus = props.gitStatuses.get(w.id);
           const git = gitStatus ? gitLabel(gitStatus) : null;
+          const summary = w.task ? props.taskSummaries.get(w.id) : undefined;
+          const counts = w.task ? taskCounts(summary) : null;
           const description =
             `${panes} ${panes === 1 ? 'pane' : 'panes'}, ${terminals} ${terminals === 1 ? 'terminal' : 'terminals'}, ${shellsRunningLabel(live)}` +
             (agentText ? `, ${agentText}` : '') +
-            (git ? `, ${git.summary}` : '') +
+            (w.task ? `, agent task: ${taskTooltip(w.task, summary).join(', ')}` : git ? `, ${git.summary}` : '') +
             (missing ? ', folder missing' : '');
           return (
             <li key={w.id} className={`ws-item${active ? ' ws-item--active' : ''}${w.task ? ' ws-item--task' : ''}`} data-task={w.task ? 'true' : undefined}>
@@ -126,7 +128,11 @@ export function Sidebar(props: Props) {
                 aria-current={active ? 'page' : undefined}
                 aria-label={collapsed ? `${w.name} (${description})` : undefined}
                 aria-description={collapsed ? undefined : description}
-                title={`${w.name}${active ? ' (current workspace)' : ''}\n${w.rootPath}\n${description}`}
+                title={
+                  w.task
+                    ? [`${w.name}${active ? ' (current workspace)' : ''}`, w.rootPath, ...taskTooltip(w.task, summary), shellsRunningLabel(live)].join('\n')
+                    : `${w.name}${active ? ' (current workspace)' : ''}\n${w.rootPath}\n${description}`
+                }
                 onClick={() => props.onSelect(w.id)}
               >
                 {collapsed ? (
@@ -138,10 +144,11 @@ export function Sidebar(props: Props) {
                   <>
                     <span className="ws-item__name">
                       {missing && <Icon name="warning" size={14} className="ws-item__warn" />}
+                      {w.task && !missing && <Icon name="gitBranch" size={13} className="ws-item__task-icon" />}
                       <span className="ws-item__label">{w.name}</span>
                     </span>
-                    <span className="ws-item__path">{folderTail(w.rootPath)}</span>
-                    {git && (
+                    {!w.task && <span className="ws-item__path">{folderTail(w.rootPath)}</span>}
+                    {git && !w.task && (
                       <span className="ws-item__git" title={git.tooltip}>
                         <Icon name="gitBranch" size={12} className="ws-item__git-icon" />
                         <span className="ws-item__git-branch">{git.branch}</span>
@@ -153,8 +160,15 @@ export function Sidebar(props: Props) {
                         {git.dot && <span className="ws-item__git-dot" aria-hidden="true" />}
                       </span>
                     )}
-                    {w.task && <TaskLine progress={props.taskProgress.get(w.id)} />}
-                    {live > 0 && <span className="ws-item__live">{shellsRunningLabel(live)}</span>}
+                    {w.task ? (
+                      counts && (
+                        <span className="ws-item__live ws-item__task-counts" data-testid="task-counts">
+                          <span className="ws-item__git-added">{counts.added}</span> <span className="ws-item__git-removed">{counts.removed}</span>
+                        </span>
+                      )
+                    ) : (
+                      live > 0 && <span className="ws-item__live">{shellsRunningLabel(live)}</span>
+                    )}
                     {agentText && (
                       <span className={`ws-item__agents${agents.needs > 0 ? ' ws-item__agents--needs' : agents.maybe > 0 ? ' ws-item__agents--maybe' : ''}`}>{agentText}</span>
                     )}
@@ -255,15 +269,5 @@ export function Sidebar(props: Props) {
         />
       )}
     </nav>
-  );
-}
-
-function TaskLine({ progress }: { progress: TaskProgress | undefined }) {
-  const text = taskProgressText(progress);
-  return (
-    <span className="ws-item__task" data-testid="task-progress">
-      <span className="ws-item__task-tag">task</span>
-      {text && <span className="ws-item__task-text">{text}</span>}
-    </span>
   );
 }

@@ -230,3 +230,19 @@ export function wslUnc(host: string, distro: string, linuxPath: string): string 
   const rest = linuxPath.replace(/\/+$/, '').replace(/\//g, '\\');
   return `\\\\${host}\\${distro}${rest || '\\'}`;
 }
+
+/** `git status --porcelain=v2 -z`: how many tracked entries changed, and the untracked entries (a new folder ends with `/`). */
+export function parseStatusEntries(stdout: string): { tracked: number; untracked: string[] } {
+  const f = stdout.split('\0');
+  let tracked = 0;
+  const untracked: string[] = [];
+  for (let i = 0; i < f.length; i++) {
+    const e = f[i]!;
+    if (e.startsWith('1 ') || e.startsWith('u ')) tracked++;
+    else if (e.startsWith('2 ')) {
+      tracked++;
+      i++; // the original path of a rename or copy
+    } else if (e.startsWith('? ')) untracked.push(e.slice(2));
+  }
+  return { tracked, untracked };
+}

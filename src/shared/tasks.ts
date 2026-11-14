@@ -15,6 +15,9 @@ export const TASK_LIMITS = {
   maxDiffBytes: 1024 * 1024,
   /** Review: an untracked file larger than this is listed but not shown. */
   maxUntrackedBytes: 512 * 1024,
+  /** Summary: new files whose lines are counted at most, and how much is read anew per summary. */
+  maxCountedNewFiles: 200,
+  maxCountBytesPerRun: 2 * 1024 * 1024,
 } as const;
 
 /** The branch prefix of every task branch: `splitnest/<slug>`. */
@@ -141,6 +144,32 @@ export interface TaskDiff {
   binary: boolean;
   /** Cut off at TASK_LIMITS.maxDiffBytes. */
   truncated: boolean;
+}
+
+/**
+ * A task at a glance (sidebar row, Changes panel header), kept current by main after each Git
+ * status check of the task's workspace.
+ *
+ * `added`/`removed` are the lines the task adds and removes compared with where it left its base
+ * branch, which is what merging it would bring: committed and uncommitted changes to tracked files,
+ * plus every line of new untracked text files. Binary files count no lines (`binary` says how many).
+ * Changes the base branch got since the task started don't count.
+ */
+export interface TaskSummary {
+  added: number;
+  removed: number;
+  /** Lower bounds: some new files weren't counted (too large, too many, or a whole new folder). */
+  approximate: boolean;
+  /** Files changed, including new untracked ones (a new folder Git lists as one entry counts once). */
+  files: number;
+  /** Entries not committed yet: changed tracked files and new untracked files or folders. */
+  uncommitted: number;
+  binary: number;
+  /** Commits on the task branch that the base branch doesn't have, and the other way round (null: unknown). */
+  ahead: number | null;
+  behind: number | null;
+  /** Changes whenever the list of changes does; the Changes panel reads the list again then. */
+  version: string;
 }
 
 /** Everything Finish needs to know before it offers to merge or clean up. */
