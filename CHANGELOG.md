@@ -2,6 +2,10 @@
 
 All notable changes to SplitNest. Release notes on GitHub are taken from the section for each version.
 
+## Unreleased
+
+- **Paste screenshots into agents**: with an image on the clipboard (Win+Shift+S, *Copy image* in a browser), **Ctrl+V** or right-click in a terminal saves it as a PNG and types its path at the prompt, so Claude Code, Codex or Gemini CLI attaches it. Files copied in Explorer paste as their paths, and files dragged onto a terminal type their paths too. In WSL tabs the paths are Linux paths (from the distribution's `wslpath`). Pasted images stay on this PC, in SplitNest's own temp folder, and are deleted after a day and when SplitNest quits. Text paste is unchanged.
+
 ## 0.3.0 (2026-11-14)
 
 Agent tasks: run several agents on one repository at once, each in its own Git worktree, and review and merge their work from SplitNest.

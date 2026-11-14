@@ -1199,6 +1199,7 @@ export function App() {
       }
       dispatch({ type: 'setTabResume', workspaceId: ws.id, tabId, resume: next });
     });
+    registry.setNoticeHandler((kind, message, detail) => toastRef.current(kind, message, detail));
     // Controllers report focus by tab id.
     registry.setFocusHandler((tabId) => {
       const ws = stateRef.current.workspaces.find((w) => findPaneOfTab(w.layout, tabId));

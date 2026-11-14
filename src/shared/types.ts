@@ -355,6 +355,9 @@ export interface AppError {
 
 export type Result<T> = ({ ok: true } & T) | { ok: false; error: AppError };
 
+/** A pasted image or dropped files: the text to type at the prompt (paths, quoted for that shell). */
+export type PasteResult = { ok: true; text: string } | { ok: false; reason: 'no-image' | 'too-large' | 'failed'; message: string; detail?: string };
+
 // --------------------------------------------------------------- sessions
 
 export type SessionStatus = 'idle' | 'starting' | 'running' | 'exited' | 'failed';

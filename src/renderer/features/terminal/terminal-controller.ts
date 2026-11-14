@@ -8,7 +8,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
-import { LIMITS, type AppError, type SessionEvent, type SessionStatus, type StartLocation } from '../../../shared/types';
+import { LIMITS, type AppError, type PasteResult, type SessionEvent, type SessionStatus, type StartLocation } from '../../../shared/types';
 import { api } from '../../api';
 import type { AgentId } from '../../../shared/agents';
 import { taskAgentCommand, type TaskAgent } from '../../../shared/tasks';
@@ -72,7 +72,12 @@ export interface ControllerHooks {
    */
   forgetResume(): void;
   unbindSession(sessionId: string): void;
+  /** Tells the user about a problem in this terminal (a paste that failed). */
+  notice(kind: 'warning' | 'error', message: string, detail?: string): void;
 }
+
+/** A drag that carries files from Windows (Explorer, a browser's download bar), not a tab or file-tree drag. */
+const carriesFiles = (dt: DataTransfer | null): dt is DataTransfer => !!dt && Array.from(dt.types).includes('Files');
 
 export interface ControllerOptions {
   paneId: string;
@@ -247,6 +252,8 @@ export class TerminalController {
   /** Search highlight colours of the current theme. */
   private decorations: ReturnType<typeof searchDecorations>;
   private isWsl = false;
+  /** The shell profile of the current (or last) session: pasted paths are typed for that shell. */
+  private profileId: string | null = null;
   /** E2E diagnostics: false = use xterm's DOM renderer instead of WebGL. */
   private testWebgl = true;
   /** Tests only: the numbers behind each anchored resize (off unless enabled). */
@@ -406,6 +413,21 @@ export class TerminalController {
     this.element.addEventListener('contextmenu', (event) => {
       event.preventDefault();
       void this.copyOrPaste();
+    });
+    // Capture phase, before xterm's own paste handler: text is left to xterm; an image or files
+    // (nothing to paste for xterm) type a path instead.
+    this.element.addEventListener('paste', (event) => this.onPasteEvent(event), true);
+    this.element.addEventListener('dragover', (event) => {
+      if (!carriesFiles(event.dataTransfer)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = this.snapshot.status === 'running' ? 'copy' : 'none';
+    });
+    this.element.addEventListener('drop', (event) => {
+      if (!carriesFiles(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const paths = Array.from(event.dataTransfer.files, (f) => api.pathForFile(f)).filter(Boolean);
+      if (paths.length > 0) void this.pastePaths(paths);
     });
     this.element.addEventListener('focusin', () => this.hooks.onFocus(this.paneId));
   }
@@ -973,6 +995,7 @@ export class TerminalController {
   private async startSession(profileId: string, startIn: StartLocation, startPath?: string): Promise<StartOutcome> {
     this.update({ status: 'starting', error: null, exitCode: null, exitReason: null, startIn });
     this.isWsl = profileId.startsWith('wsl:');
+    this.profileId = profileId;
     this.wslResumeAgent = null;
     if (this.snapshot.hasStarted) this.out('\r\n\x1b[2m──── new session ────\x1b[0m\r\n');
     this.clearResizeState();
@@ -1227,10 +1250,45 @@ export class TerminalController {
     return true;
   }
 
+  /** Pastes the clipboard's text, or, when it holds an image instead, the path of a saved copy. */
   async paste(): Promise<void> {
     const text = await api.readClipboard();
     if (text) this.term.paste(text);
+    else await this.pasteImage(true);
     this.term.focus();
+  }
+
+  private onPasteEvent(event: ClipboardEvent): void {
+    const dt = event.clipboardData;
+    if (!dt || dt.getData('text/plain')) return; // text: xterm pastes it (bracketed when supported)
+    const files = Array.from(dt.files);
+    if (files.length === 0 && !Array.from(dt.items).some((i) => i.kind === 'file')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // Files copied in Explorer have paths; a screenshot is a bitmap, saved by main first.
+    const paths = files.map((f) => api.pathForFile(f));
+    if (paths.length > 0 && paths.every(Boolean)) void this.pastePaths(paths);
+    else void this.pasteImage(false);
+  }
+
+  /** `quiet`: say nothing when the clipboard simply has no image (an empty clipboard). */
+  private async pasteImage(quiet: boolean): Promise<void> {
+    if (this.snapshot.status !== 'running' || !this.profileId) return;
+    this.applyPaste(await api.pasteImage(this.profileId), quiet);
+  }
+
+  private async pastePaths(paths: string[]): Promise<void> {
+    if (this.snapshot.status !== 'running' || !this.profileId) return;
+    this.applyPaste(await api.pasteFiles(this.profileId, paths), false);
+  }
+
+  private applyPaste(result: PasteResult, quiet: boolean): void {
+    if (result.ok) {
+      this.insertText(result.text);
+      return;
+    }
+    if (quiet && result.reason === 'no-image') return;
+    this.hooks.notice('warning', result.message, result.detail);
   }
 
   /** Inserts text at the prompt like a paste (bracketed when supported); never presses Enter. */

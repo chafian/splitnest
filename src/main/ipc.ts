@@ -24,6 +24,7 @@ import type { TaskSummaries } from './task-summaries';
 import type { TaskFolderWatcher } from './task-watch';
 import { taskRecordKey } from '../shared/tasks';
 import type { NotificationService } from './notifications';
+import type { PasteService } from './paste';
 import { parseUpdatePrefs, type UpdatePrefs, type UpdateStatus } from '../shared/updates';
 import { isAbsoluteWindowsPath, isAllowedExternalUrl, isId, parsePersistedState, parseWindowTheme } from '../shared/validation';
 import type { ShellCache } from './launch-resolver';
@@ -54,6 +55,7 @@ export interface IpcContext {
   /** The folder watch for the task whose Changes panel is on screen (src/main/task-watch.ts). */
   taskWatcher: TaskFolderWatcher;
   notifications: NotificationService;
+  paste: PasteService;
   updates: {
     status(): UpdateStatus;
     setPrefs(prefs: UpdatePrefs): void;
@@ -182,6 +184,13 @@ export function registerIpc(ctx: IpcContext): void {
     if (typeof text !== 'string' || text.length > MAX_CLIPBOARD_CHARS) return;
     await clipboard.writeText(text);
   });
+  const profileIdOk = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 200;
+  handle(IPC.pasteImage, async (_event, profileId) =>
+    profileIdOk(profileId) ? ctx.paste.pasteImage(profileId) : { ok: false, reason: 'failed', message: 'Unknown shell.' },
+  );
+  handle(IPC.pasteFiles, async (_event, profileId, paths) =>
+    profileIdOk(profileId) ? ctx.paste.filePaths(profileId, paths) : { ok: false, reason: 'failed', message: 'Unknown shell.' },
+  );
 
   handle(IPC.openExternal, async (_event, url) => {
     if (!isAllowedExternalUrl(url)) {

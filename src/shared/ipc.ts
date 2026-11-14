@@ -19,6 +19,7 @@ import type {
   Result,
   SessionEvent,
   ShellDiscovery,
+  PasteResult,
 } from './types';
 
 /** IPC channel names. Each one has a single, specific purpose. */
@@ -36,6 +37,8 @@ export const IPC = {
   sessionEvent: 'tw:session:event',
   clipboardRead: 'tw:clipboard:read',
   clipboardWrite: 'tw:clipboard:write',
+  pasteImage: 'tw:paste:image',
+  pasteFiles: 'tw:paste:files',
   openExternal: 'tw:app:open-external',
   appInfo: 'tw:app:info',
   revealStateFile: 'tw:app:reveal-state-file',
@@ -105,6 +108,12 @@ export interface AppApi {
   onSessionEvent(listener: (event: SessionEvent) => void): () => void;
   readClipboard(): Promise<string>;
   writeClipboard(text: string): Promise<void>;
+  /** Saves the clipboard's image as a PNG and returns its path as typed in that shell profile. */
+  pasteImage(profileId: string): Promise<PasteResult>;
+  /** Paths of dropped or pasted files as typed in that shell profile (Linux paths in WSL). */
+  pasteFiles(profileId: string, paths: string[]): Promise<PasteResult>;
+  /** The file system path of a dropped or pasted File, '' when it has none (a clipboard bitmap). */
+  pathForFile(file: File): string;
   openExternal(url: string): Promise<boolean>;
   getAppInfo(): Promise<AppInfo>;
   revealStateFile(): Promise<void>;

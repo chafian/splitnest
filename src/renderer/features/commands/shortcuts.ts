@@ -118,7 +118,8 @@ export function shortcutLabel(command: CommandId): string | undefined {
 export const TERMINAL_KEYS: { keys: string; action: string }[] = [
   { keys: 'Ctrl+C', action: 'Copy when text is selected; otherwise sent to the shell (interrupt)' },
   { keys: 'Ctrl+Shift+C', action: 'Copy selection' },
-  { keys: 'Ctrl+V / Ctrl+Shift+V', action: 'Paste' },
+  { keys: 'Ctrl+V / Ctrl+Shift+V', action: 'Paste; an image (a screenshot) pastes as the path of a saved copy, copied files as their paths' },
+  { keys: 'Drag files in', action: 'Type the paths of files dragged from Explorer' },
   { keys: 'Right-click', action: 'Copy selection, or paste when nothing is selected' },
   { keys: 'Ctrl+click', action: 'Open an http(s) link in your browser' },
 ];

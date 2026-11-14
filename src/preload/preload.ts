@@ -1,6 +1,6 @@
 // Sandboxed preload: exposes a small, typed API. Raw ipcRenderer, Node.js
 // modules and generic channels are never exposed to the page.
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { IPC, type AppApi } from '../shared/ipc';
 import type { AgentResume } from '../shared/agent-resume';
 import type { AgentId } from '../shared/agents';
@@ -92,6 +92,15 @@ const api: AppApi = {
   },
   readClipboard: () => ipcRenderer.invoke(IPC.clipboardRead),
   writeClipboard: (text) => ipcRenderer.invoke(IPC.clipboardWrite, text),
+  pasteImage: (profileId) => ipcRenderer.invoke(IPC.pasteImage, profileId),
+  pasteFiles: (profileId, paths) => ipcRenderer.invoke(IPC.pasteFiles, profileId, paths),
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return '';
+    }
+  },
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   getAppInfo: () => ipcRenderer.invoke(IPC.appInfo),
   revealStateFile: () => ipcRenderer.invoke(IPC.revealStateFile),

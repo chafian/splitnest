@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
 const electronPath = require('electron');
@@ -28,6 +29,7 @@ writeFileSync(path.join(alpha, 'README.md'), '# alpha\n');
 writeFileSync(path.join(beta, 'notes.md'), 'beta notes\n');
 // Quit tests use their own folder.
 const gamma = path.join(work, 'gamma-quit');
+const pasteDir = path.join(work, 'pasted');
 mkdirSync(gamma);
 writeFileSync(path.join(gamma, 'a.txt'), 'alpha');
 writeFileSync(path.join(gamma, 'b.txt'), 'beta');
@@ -78,7 +80,7 @@ async function launch(extraEnv = {}) {
     executablePath: electronPath,
     args: ['.', `--tw-user-data=${userData}`],
     cwd: root,
-    env: { ...process.env, TW_E2E: '1', ...extraEnv },
+    env: { ...process.env, TW_E2E: '1', TW_E2E_PASTE_DIR: pasteDir, ...extraEnv },
   });
   const page = await app.firstWindow();
   globalThis.__e2ePage = page;
@@ -306,6 +308,37 @@ async function main() {
     if (!copied.trim()) throw new Error('nothing copied');
     if ((await status(page, ps)) !== 'running') throw new Error('Ctrl+C with selection interrupted the shell');
     return { copied: copied.slice(0, 40) };
+  });
+
+  await step('Ctrl+V with an image types the path of a saved PNG; with copied files, their paths', async () => {
+    // A bitmap on the clipboard, as the Snipping Tool (Win+Shift+S) leaves it.
+    const setClipboard = (script) => execFileSync('powershell.exe', ['-NoProfile', '-STA', '-Command', script], { timeout: 30_000 });
+    setClipboard(
+      'Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $b = New-Object System.Drawing.Bitmap 64,48; ' +
+        '[System.Drawing.Graphics]::FromImage($b).Clear([System.Drawing.Color]::Orange); [System.Windows.Forms.Clipboard]::SetImage($b)',
+    );
+    await typeIn(page, ps, "Write-Output ('IMG-' + (Get-Item -LiteralPath ", false);
+    await page.keyboard.press('Control+V');
+    await waitText(page, ps, /shot-\d{8}-\d{6}-\d+\.png/, 10_000);
+    await page.keyboard.type(').Length)', { delay: 2 });
+    await page.keyboard.press('Enter');
+    const shown = await waitText(page, ps, /^IMG-(\d+)$/m);
+    const saved = readdirSync(pasteDir).filter((f) => /^shot-.*\.png$/.test(f));
+    if (saved.length !== 1) throw new Error(`expected one pasted image, found ${saved}`);
+    const png = readFileSync(path.join(pasteDir, saved[0]));
+    if (png.subarray(1, 4).toString() !== 'PNG') throw new Error('the pasted file is not a PNG');
+    const length = Number(String(shown).match(/IMG-(\d+)/)?.[1] ?? NaN);
+    if (length !== png.length) throw new Error(`PowerShell read ${length} bytes, the file has ${png.length}`);
+    // Files copied in Explorer (Ctrl+C) paste as their paths.
+    setClipboard(`Set-Clipboard -LiteralPath '${path.join(alpha, 'README.md').replace(/'/g, "''")}'`);
+    await typeIn(page, ps, "Write-Output ('FILE-' + (Split-Path -Leaf ", false);
+    await page.keyboard.press('Control+V');
+    await waitText(page, ps, /README\.md\s*$/, 10_000); // at the prompt, not earlier output
+    await page.keyboard.type('))', { delay: 2 });
+    await page.keyboard.press('Enter');
+    await waitText(page, ps, /^FILE-README\.md$/m);
+    await app.evaluate(({ clipboard }) => clipboard.writeText(''));
+    return { image: saved[0], bytes: png.length };
   });
 
   await step('file explorer lists the workspace with file-type icons and inserts quoted paths', async () => {
@@ -966,6 +999,9 @@ async function main() {
     }
     await shot(page, '10-exited.png').catch(() => undefined);
     await app.close();
+    // Quitting removes pasted images.
+    const left = existsSync(pasteDir) ? readdirSync(pasteDir).filter((f) => f.startsWith('shot-')) : [];
+    if (left.length > 0) throw new Error(`pasted images left after quitting: ${left}`);
   });
 
   // ------------------------------------------------------------- run 2: restore

@@ -2,7 +2,7 @@
 // shell discovery and session authorization.
 // First: Squirrel's install/update/uninstall launches do their job and exit before anything else runs.
 import { INSTALLED_APP_ID, INSTALLED_TOAST_CLSID, updateExePath } from './squirrel';
-import { app, autoUpdater, BrowserWindow, dialog, Menu, nativeImage, Notification, session, shell, webContents } from 'electron';
+import { app, autoUpdater, BrowserWindow, clipboard, dialog, Menu, nativeImage, Notification, session, shell, webContents } from 'electron';
 import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -25,6 +25,7 @@ import { createWindowsGitRunner, createWslGitRunner } from './git-runner';
 import { TaskService } from './task-service';
 import { TaskSummaries } from './task-summaries';
 import { TaskFolderWatcher } from './task-watch';
+import { createPasteService, MAX_PASTE_IMAGE_BYTES, PASTE_MAX_AGE_MS } from './paste';
 import { NotificationService, notifyIdPrefix, showAgainOnceRegistered, type NativeNotification } from './notifications';
 import { githubFeedUrl, Updater, type AutoUpdaterLike } from './updater';
 import type { UpdatePrefs } from '../shared/updates';
@@ -75,6 +76,35 @@ if (!userDataArg && !selfTestArg && !existsSync(stateFile)) {
 }
 const store = new StateStore(stateFile, log);
 const shells = new ShellCache({ env: process.env, exists: fileExists, run: runFile });
+// Pasted images (see paste.ts). E2E runs use their own folder (development builds only).
+const paste = createPasteService({
+  dir: (!app.isPackaged && process.env.TW_E2E_PASTE_DIR) || path.join(app.getPath('temp'), PRODUCT.name, 'paste'),
+  readImagePng: async () => {
+    for (const item of await clipboard.read()) {
+      if (!item.types.includes('image/png')) continue;
+      const blob = await item.getType('image/png');
+      if (blob.size > MAX_PASTE_IMAGE_BYTES) return 'too-large';
+      return Buffer.from(await blob.arrayBuffer());
+    }
+    return null;
+  },
+  mkdir: async (dir) => {
+    await fsp.mkdir(dir, { recursive: true });
+  },
+  writeFile: (file, data) => fsp.writeFile(file, data, { flag: 'wx' }),
+  list: (dir) => fsp.readdir(dir).catch(() => []),
+  mtimeMs: (file) => fsp.stat(file).then((s) => s.mtimeMs, () => null),
+  remove: (file) => fsp.unlink(file),
+  now: () => Date.now(),
+  distroOf: async (profileId) => {
+    const profile = (await shells.get()).discovery.profiles.find((p) => p.id === profileId);
+    return !profile ? null : profile.kind === 'wsl' ? (profile.distro ?? null) : '';
+  },
+  run: runFile,
+  wslExe: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe'),
+  env: process.env,
+});
+let pasteCleanupTimer: NodeJS.Timeout | null = null;
 
 const rendererIndex = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
 const devServerUrl = typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'string' ? MAIN_WINDOW_VITE_DEV_SERVER_URL : '';
@@ -545,6 +575,8 @@ async function shutdown(): Promise<void> {
   taskWatcher.dispose();
   notifications.dispose();
   updater.dispose();
+  if (pasteCleanupTimer) clearInterval(pasteCleanupTimer);
+  await paste.cleanup(0).catch(() => 0);
   readyToQuit = true;
   // "Restart now" on a downloaded update: Squirrel installs it and starts the new version.
   if (restartForUpdate && updater.installAndRestart()) return;
@@ -611,6 +643,7 @@ void app.whenReady().then(async () => {
     taskSummaries,
     taskWatcher,
     notifications,
+    paste,
     updates: {
       status: () => updater.status(),
       setPrefs: (prefs) => {
@@ -646,6 +679,9 @@ void app.whenReady().then(async () => {
   });
   host.start();
   agentMonitor.start();
+  void paste.cleanup(PASTE_MAX_AGE_MS).catch(() => 0);
+  pasteCleanupTimer = setInterval(() => void paste.cleanup(PASTE_MAX_AGE_MS).catch(() => 0), 60 * 60 * 1000);
+  pasteCleanupTimer.unref();
   void shells.get();
   mainWindow = createWindow();
   // Never makes a request by itself before the first-run notice was acknowledged (updater.ts).

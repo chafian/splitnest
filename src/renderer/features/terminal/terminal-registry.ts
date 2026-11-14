@@ -35,6 +35,7 @@ export class TerminalRegistry {
   private focusHandler: (paneId: string) => void = () => undefined;
   private resumeHandler: (tabId: string, resume: AgentResume | null) => void = () => undefined;
   private settings = { fontSize: 14, scrollback: 10_000, shortPrompt: true };
+  private noticeHandler: (kind: 'warning' | 'error', message: string, detail?: string) => void = () => undefined;
 
   constructor() {
     api.onSessionEvent((event) => this.route(event));
@@ -67,6 +68,11 @@ export class TerminalRegistry {
 
   setShortcutHandler(handler: (event: KeyboardEvent) => boolean): void {
     this.shortcutHandler = handler;
+  }
+
+  /** Problems a terminal reports to the user (a paste that failed). */
+  setNoticeHandler(handler: (kind: 'warning' | 'error', message: string, detail?: string) => void): void {
+    this.noticeHandler = handler;
   }
 
   setFocusHandler(handler: (paneId: string) => void): void {
@@ -110,6 +116,7 @@ export class TerminalRegistry {
         // The folder is filled in by the app (the workspace folder; the agent's own list opens there).
         wslAgent: (agent) => this.resumeHandler(paneId, agent ? { agent, sessionId: null, cwd: '', exact: false, at: Date.now() } : null),
         unbindSession: (sessionId) => this.unbind(sessionId),
+        notice: (kind, message, detail) => this.noticeHandler(kind, message, detail),
       },
     });
     this.controllers.set(paneId, controller);
