@@ -138,6 +138,7 @@ const api: AppApi = {
   taskUpdate: (workspaceId) => ipcRenderer.invoke(IPC.taskUpdate, workspaceId),
   taskRemove: (workspaceId, deleteBranch) => ipcRenderer.invoke(IPC.taskRemove, workspaceId, deleteBranch),
   getTaskSummaries: () => ipcRenderer.invoke(IPC.taskSummaries),
+  watchTask: (workspaceId) => ipcRenderer.send(IPC.taskWatch, workspaceId),
   onTaskSummary: (listener) => {
     summaryListeners.add(listener);
     return () => summaryListeners.delete(listener);

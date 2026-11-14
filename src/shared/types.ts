@@ -104,6 +104,14 @@ export interface Workspace {
   activePaneId: string | null;
   /** Set when the workspace is an agent task: a Git worktree SplitNest created (see shared/tasks.ts). */
   task?: WorkspaceTask;
+  /** Agent tasks: the docked Changes panel on the right, open or not and its width (absent: not set yet). */
+  changesPanel?: ChangesPanelState;
+}
+
+export interface ChangesPanelState {
+  open: boolean;
+  /** Width in px, LIMITS.changesWidth. */
+  width: number;
 }
 
 export interface AppSettings {
@@ -222,6 +230,9 @@ export const LIMITS = {
   fontSize: { min: 8, max: 32, default: 14 },
   scrollback: { min: 500, max: 100_000, default: 10_000 },
   explorerWidth: { min: 160, max: 640, default: 260 },
+  changesWidth: { min: 240, max: 720, default: 340 },
+  /** Windows narrower than this open a new task with its Changes panel closed. */
+  changesOpenMinWindow: 1000,
   sidebarWidth: { min: 180, max: 420, default: 236 },
   /** Width of the collapsed workspace rail. Must match --sidebar-collapsed-width. */
   sidebarRailWidth: 52,

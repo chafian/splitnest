@@ -79,6 +79,7 @@ export const IPC = {
   taskRemove: 'tw:task:remove',
   taskDiscard: 'tw:task:discard',
   taskSummaries: 'tw:task:summaries',
+  taskWatch: 'tw:task:watch',
   taskSummary: 'tw:task:summary',
 } as const;
 
@@ -193,6 +194,11 @@ export interface AppApi {
   /** Finish: delete the task folder (refused with uncommitted files) and, if asked, its branch once merged. */
   taskRemove(workspaceId: string, deleteBranch: boolean): Promise<TaskResult<{ branch: BranchOutcome }>>;
   /** Finish: delete the task folder and branch whatever they contain; `confirmedKey` is the check's discardKey the user confirmed. */
+  /**
+   * Watch this task's folder while its Changes panel is on screen (null: stop). Changes there trigger
+   * a Git status check (and so a new summary); Windows folders only.
+   */
+  watchTask(workspaceId: string | null): void;
   /** Every task's summary computed so far (sidebar rows); later changes arrive through onTaskSummary. */
   getTaskSummaries(): Promise<Record<string, TaskSummary>>;
   /** A task's summary changed (null: none to show). Follows the Git status checks of its workspace. */

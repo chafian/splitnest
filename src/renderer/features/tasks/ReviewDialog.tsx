@@ -29,12 +29,14 @@ const KIND_TITLE: Record<TaskChange['kind'], string> = {
 interface Props {
   open: boolean;
   workspace: Workspace | null;
+  /** The file to show first (chosen in the Changes panel). */
+  initialPath?: string;
   /** Opens Finish (commit, merge, clean up) for this task. */
   onFinish(): void;
   onClose(): void;
 }
 
-export function ReviewDialog({ open, workspace, onFinish, onClose }: Props) {
+export function ReviewDialog({ open, workspace, initialPath, onFinish, onClose }: Props) {
   const [changes, setChanges] = useState<TaskChanges | null>(null);
   const [error, setError] = useState<TaskError | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -54,9 +56,12 @@ export function ReviewDialog({ open, workspace, onFinish, onClose }: Props) {
     }
     setError(null);
     setChanges(r.changes);
-    setSelected((cur) => (cur && r.changes.files.some((f) => f.path === cur) ? cur : (r.changes.files[0]?.path ?? null)));
+    setSelected((cur) => {
+      const want = cur ?? initialPath ?? null;
+      return want && r.changes.files.some((f) => f.path === want) ? want : (r.changes.files[0]?.path ?? null);
+    });
     setDiff(null);
-  }, [id]);
+  }, [id, initialPath]);
 
   useEffect(() => {
     if (!open) return;

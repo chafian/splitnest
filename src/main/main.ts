@@ -24,6 +24,7 @@ import { GitStatusService } from './git-status';
 import { createWindowsGitRunner, createWslGitRunner } from './git-runner';
 import { TaskService } from './task-service';
 import { TaskSummaries } from './task-summaries';
+import { TaskFolderWatcher } from './task-watch';
 import { NotificationService, notifyIdPrefix, showAgainOnceRegistered, type NativeNotification } from './notifications';
 import { githubFeedUrl, Updater, type AutoUpdaterLike } from './updater';
 import type { UpdatePrefs } from '../shared/updates';
@@ -226,10 +227,16 @@ const taskSummaries = new TaskSummaries({
     if (contents && !contents.isDestroyed()) contents.send(IPC.taskSummary, { workspaceId, summary });
   },
 });
+// The folder of the task whose Changes panel is on screen: changes there trigger a Git status check.
+const taskWatcher = new TaskFolderWatcher({
+  changed: (workspaceId) => gitStatus.request(workspaceId),
+  ignored: (folder) => tasks.ignoredEntries(folder),
+});
 // Development-only: E2E checks count Git checks (how often terminal output causes one).
 if (!app.isPackaged && process.env.TW_E2E === '1') {
   (globalThis as Record<string, unknown>).__twGitRuns = () => gitStatus.runs;
   (globalThis as Record<string, unknown>).__twSummaryRuns = () => taskSummaries.runs;
+  (globalThis as Record<string, unknown>).__twTaskWatches = () => taskWatcher.count;
 }
 
 /** Save-all requests sent to the renderer, waiting for its answer. */
@@ -533,6 +540,7 @@ async function shutdown(): Promise<void> {
   agentMonitor.stop();
   gitStatus.dispose();
   taskSummaries.dispose();
+  taskWatcher.dispose();
   notifications.dispose();
   updater.dispose();
   readyToQuit = true;
@@ -599,6 +607,7 @@ void app.whenReady().then(async () => {
     gitStatus,
     tasks,
     taskSummaries,
+    taskWatcher,
     notifications,
     updates: {
       status: () => updater.status(),

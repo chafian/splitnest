@@ -65,3 +65,23 @@ export function taskTooltip(task: WorkspaceTask, s: TaskSummary | undefined): st
   if (s.uncommitted) lines.push(`${plural(s.uncommitted, 'change')} not committed yet`);
   return lines;
 }
+
+export interface TaskFact {
+  text: string;
+  tone: 'quiet' | 'info' | 'warn';
+}
+
+/**
+ * The Changes panel header: only what the summary knows for certain, cheaply. Whether merging would
+ * conflict is not shown here (it is checked on demand in Finish; older Git can't tell at all).
+ */
+export function taskFacts(s: TaskSummary | undefined, base: string): TaskFact[] {
+  if (!s) return [{ text: 'Checking…', tone: 'quiet' }];
+  const out: TaskFact[] = [];
+  if (s.files === 0 && s.ahead === 0) out.push({ text: 'No changes yet', tone: 'quiet' });
+  if (s.uncommitted > 0) out.push({ text: `${s.uncommitted} not committed`, tone: 'warn' });
+  if (s.ahead === null) out.push({ text: `Can’t tell what ${base} lacks`, tone: 'warn' });
+  else if (s.ahead > 0) out.push({ text: `${s.ahead} ${s.ahead === 1 ? 'commit' : 'commits'} to merge`, tone: 'info' });
+  if (s.behind) out.push({ text: `${base} +${s.behind}`, tone: 'quiet' });
+  return out;
+}

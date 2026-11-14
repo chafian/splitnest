@@ -20,6 +20,7 @@ const DESCRIPTIONS: Record<CommandId, string> = {
   prevWorkspace: 'Previous workspace',
   toggleSidebar: 'Collapse / expand workspace sidebar',
   toggleExplorer: 'Show / hide file explorer',
+  toggleChanges: 'Show / hide a task’s changes panel',
   toggleFocusMode: 'Focus terminals (hide both sidebars / restore them)',
   toggleMaximize: 'Maximise pane / restore layout',
   fontIncrease: 'Increase terminal font size',

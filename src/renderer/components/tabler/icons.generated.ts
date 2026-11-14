@@ -38,4 +38,5 @@ export const ICONS = {
   more: { tabler: 'dots', filled: false, nodes: [["path",{"d":"M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"}],["path",{"d":"M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"}],["path",{"d":"M18 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"}]] },
   bell: { tabler: 'bell', filled: false, nodes: [["path",{"d":"M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6"}],["path",{"d":"M9 17v1a3 3 0 0 0 6 0v-1"}]] },
   gitBranch: { tabler: 'git-branch', filled: false, nodes: [["path",{"d":"M5 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"}],["path",{"d":"M5 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"}],["path",{"d":"M15 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"}],["path",{"d":"M7 8l0 8"}],["path",{"d":"M9 18h6a2 2 0 0 0 2 -2v-5"}],["path",{"d":"M14 14l3 -3l3 3"}]] },
+  changes: { tabler: 'layout-sidebar-right', filled: false, nodes: [["path",{"d":"M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2l0 -12"}],["path",{"d":"M15 4l0 16"}]] },
 } satisfies Record<string, { tabler: string; filled: boolean; nodes: IconNode[] }>;

@@ -17,6 +17,7 @@ import {
   type PersistedState,
   type StartLocation,
   type PaneTab,
+  type ChangesPanelState,
   type Workspace,
 } from './types';
 
@@ -160,7 +161,16 @@ export function validateWorkspace(value: unknown): Workspace {
   else if (panes[0]) activePaneId = panes[0].id;
   // A task record that doesn't check out is dropped; the workspace itself still loads.
   const task = w.task === undefined ? null : parseWorkspaceTask(w.task, w.rootPath);
-  return { id: w.id, name: name(w.name, 'workspace name'), rootPath: w.rootPath, layout, activePaneId, ...(task ? { task } : {}) };
+  // Only for tasks; anything odd is dropped (the panel then opens as for a new task).
+  const panel = task ? parseChangesPanel(w.changesPanel) : null;
+  return { id: w.id, name: name(w.name, 'workspace name'), rootPath: w.rootPath, layout, activePaneId, ...(task ? { task } : {}), ...(panel ? { changesPanel: panel } : {}) };
+}
+
+export function parseChangesPanel(v: unknown): ChangesPanelState | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const p = v as Record<string, unknown>;
+  if (typeof p.open !== 'boolean' || typeof p.width !== 'number' || !Number.isFinite(p.width)) return null;
+  return { open: p.open, width: Math.round(Math.min(LIMITS.changesWidth.max, Math.max(LIMITS.changesWidth.min, p.width))) };
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

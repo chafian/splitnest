@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { PaneLeaf, ShellDiscovery, SplitDirection, Workspace } from '../../../shared/types';
 import { Icon } from '../../components/Icon';
 import { ProfileMenu } from '../../components/ProfileMenu';
@@ -51,6 +52,8 @@ interface Props {
   explorerMaxWidth: number;
   compactFolders: boolean;
   explorerFocusToken: number;
+  /** A task's Changes panel, docked right of the terminals (only for the workspace on screen). */
+  rightPanel?: ReactNode;
   onExplorerWidth(width: number): void;
   onToggleExplorer(): void;
   onInsertPath(relativePath: string): void;
@@ -158,6 +161,7 @@ export function WorkspaceView(props: Props) {
             )}
           </div>
         </div>
+        {props.rightPanel}
       </div>
     </div>
   );

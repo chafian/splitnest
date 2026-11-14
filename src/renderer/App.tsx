@@ -25,7 +25,7 @@ import type { PaneLeaf } from '../shared/types';
 const isFileTabActive = (pane: PaneLeaf) => isFileTab(activeTab(pane));
 import { terminalPathText } from './features/explorer/paths';
 import { flushSave, onSaveError, scheduleSave } from './features/workspaces/persistence';
-import { computeChrome, toggleExplorer, toggleFocusMode, toggleSidebar } from './features/workspaces/chrome';
+import { computeChrome, newChangesPanel, toggleExplorer, toggleFocusMode, toggleSidebar } from './features/workspaces/chrome';
 import { effectiveMaximized } from './features/workspaces/maximize';
 import { useAgentNotifications } from './features/notifications/useAgentNotifications';
 import { UpdateNotices, useUpdateStatus, WhatsNewNotice } from './features/updates/UpdateNotices';
@@ -39,6 +39,7 @@ import { WorkspaceView } from './features/workspaces/WorkspaceView';
 import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
 import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialog';
 import { ReviewDialog } from './features/tasks/ReviewDialog';
+import { ChangesPanel } from './features/tasks/ChangesPanel';
 import { taskShells } from './features/tasks/task-text';
 import { FinishTaskDialog, type BranchResult, type FinishOutcome } from './features/tasks/FinishTaskDialog';
 import type { TaskError, TaskSummary } from '../shared/tasks';
@@ -81,6 +82,8 @@ export function App() {
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [searchPaneId, setSearchPaneId] = useState<string | null>(null);
   const [explorerFocus, setExplorerFocus] = useState(0);
+  /** Increments when the Changes panel should take the keyboard. */
+  const [changesFocus, setChangesFocus] = useState(0);
   // Tabs that came from the saved layout (not created in this session). They
   // stay unstarted until the user starts them; the restore notice tracks them.
   const [restoredTabs, setRestoredTabs] = useState<ReadonlySet<string>>(() => new Set());
@@ -101,7 +104,7 @@ export function App() {
   /** Agent tasks: the workspace the New task dialog is open for, and each task's commits against its base. */
   const [taskFor, setTaskFor] = useState<string | null>(null);
   /** The task workspace whose Review dialog is open. */
-  const [reviewFor, setReviewFor] = useState<string | null>(null);
+  const [reviewFor, setReviewFor] = useState<{ id: string; path?: string } | null>(null);
   /** The task workspace whose Finish dialog is open. */
   const [finishFor, setFinishFor] = useState<string | null>(null);
   /** Re-render after saving editors from Finish (their dirty state lives outside React). */
@@ -281,7 +284,14 @@ export function App() {
   const agentsNeedingYou = [...agentCounts.values()].reduce((n, c) => n + c.needs, 0);
 
   const activeWorkspace = state.workspaces.find((w) => w.id === state.activeWorkspaceId) ?? null;
-  const chrome = computeChrome(state.settings, windowWidth, !!activeWorkspace);
+  // The task on screen and its Changes panel (as saved, or as for a new task).
+  const activePanel = activeWorkspace?.task && state.settings.agentTasks ? (activeWorkspace.changesPanel ?? newChangesPanel(windowWidth)) : null;
+  const chrome = computeChrome(state.settings, windowWidth, !!activeWorkspace, view === 'workspace' ? activePanel : null);
+  // Watch the folder of the task whose panel is on screen (changes there trigger a Git status check).
+  const watchedTask = chrome.changes && activeWorkspace?.task ? activeWorkspace.id : null;
+  useEffect(() => {
+    api.watchTask(watchedTask);
+  }, [watchedTask]);
 
   // The taskbar / Alt+Tab label follows the active workspace.
   useEffect(() => {
@@ -317,7 +327,7 @@ export function App() {
     // Not while the settings page is shown: its controls keep the focus.
     if (!activeTabId || anyDialogOpen || view === 'settings' || searchPaneId === activePaneId) return;
     // Never pull focus out of the explorer, a tab strip, a menu or a control the user is using.
-    if (document.activeElement?.closest('.explorer, [role="tablist"], .menu, .notice, input, select, .panel-handle')) return;
+    if (document.activeElement?.closest('.explorer, .changes, [role="tablist"], .menu, .notice, input, select, .panel-handle')) return;
     const frame = requestAnimationFrame(() => focusTab(activeTabId));
     return () => cancelAnimationFrame(frame);
   }, [activeTabId, activePaneId, state.activeWorkspaceId, anyDialogOpen, searchPaneId, view]);
@@ -619,6 +629,17 @@ export function App() {
     });
   };
 
+  /** Shows a task with its Changes panel open and takes the keyboard there (sidebar button, palette). */
+  const showChanges = (workspaceId: string) => {
+    const ws = stateRef.current.workspaces.find((w) => w.id === workspaceId);
+    if (!ws?.task) return;
+    setView('workspace');
+    dispatch({ type: 'activateWorkspace', workspaceId });
+    if (stateRef.current.settings.focusMode) dispatch({ type: 'updateSettings', patch: { focusMode: false } });
+    dispatch({ type: 'setChangesPanel', workspaceId, panel: { ...(ws.changesPanel ?? newChangesPanel(window.innerWidth)), open: true } });
+    setChangesFocus((n) => n + 1);
+  };
+
   /** Opens the New agent task dialog for a workspace (preview setting on). */
   const newTask = (workspaceId: string) => {
     if (!stateRef.current.settings.agentTasks) return;
@@ -651,6 +672,7 @@ export function App() {
         layout: null,
         activePaneId: null,
         task: { ...r.task, parentId, agent: choice.agent, createdAt: Date.now() },
+        changesPanel: newChangesPanel(window.innerWidth),
       },
     });
     const paneId = uid();
@@ -1013,6 +1035,21 @@ export function App() {
       case 'toggleSidebar':
         dispatch({ type: 'updateSettings', patch: toggleSidebar(stateRef.current.settings) });
         return true;
+      case 'toggleChanges': {
+        if (!ws?.task || !stateRef.current.settings.agentTasks) return false;
+        const panel = ws.changesPanel ?? newChangesPanel(window.innerWidth);
+        // In focus mode it leaves focus mode and shows the panel, like the explorer's shortcut.
+        if (stateRef.current.settings.focusMode) {
+          dispatch({ type: 'updateSettings', patch: { focusMode: false } });
+          dispatch({ type: 'setChangesPanel', workspaceId: ws.id, panel: { ...panel, open: true } });
+          setChangesFocus((n) => n + 1);
+          return true;
+        }
+        dispatch({ type: 'setChangesPanel', workspaceId: ws.id, panel: { ...panel, open: !panel.open } });
+        if (!panel.open) setChangesFocus((n) => n + 1);
+        else if (ws.activePaneId) focusPaneTerminal(ws, ws.activePaneId);
+        return true;
+      }
       case 'toggleExplorer': {
         const patch = toggleExplorer(stateRef.current.settings);
         dispatch({ type: 'updateSettings', patch });
@@ -1177,7 +1214,7 @@ export function App() {
       ...(state.settings.agentTasks
         ? [
             cmd('ws-task', 'Workspace', 'New agent task…', () => ws && newTask(ws.id), undefined, !ws),
-            cmd('ws-task-review', 'Workspace', 'Review task changes…', () => ws?.task && setReviewFor(ws.id), undefined, !ws?.task),
+            cmd('ws-task-review', 'Workspace', 'Review task changes (changes panel)', () => ws?.task && showChanges(ws.id), 'toggleChanges', !ws?.task),
             cmd('ws-task-finish', 'Workspace', 'Finish task (commit, merge, clean up)…', () => ws?.task && setFinishFor(ws.id), undefined, !ws?.task),
           ]
         : []),
@@ -1277,6 +1314,8 @@ export function App() {
         defaultProfileId={effectiveDefault}
         onToggleSidebar={() => runCommand('toggleSidebar')}
         onToggleExplorer={() => runCommand('toggleExplorer')}
+        changesShown={activePanel && view === 'workspace' ? chrome.changes : null}
+        onToggleChanges={() => runCommand('toggleChanges')}
         onToggleFocusMode={() => runCommand('toggleFocusMode')}
         onOpenPalette={() => setPaletteOpen(true)}
         inbox={inboxRows}
@@ -1320,7 +1359,7 @@ export function App() {
         tasksEnabled={state.settings.agentTasks}
         taskSummaries={state.settings.showGitStatus ? taskSummaries : NO_SUMMARIES}
         onNewTask={newTask}
-        onReviewTask={setReviewFor}
+        onReviewTask={showChanges}
         onWidthChange={(sidebarWidth) => dispatch({ type: 'updateSettings', patch: { sidebarWidth } })}
         onSettings={openSettings}
         onShortcuts={() => setShortcutsOpen(true)}
@@ -1427,6 +1466,23 @@ export function App() {
             onInsertPath={(rel) => insertPath(w.id, rel)}
             onOpenFile={(rel) => openFile(w.id, rel)}
             notify={pushToast}
+            rightPanel={
+              w.id === state.activeWorkspaceId && w.task && chrome.changes && activePanel ? (
+                <ChangesPanel
+                  workspace={w}
+                  summary={taskSummaries.get(w.id)}
+                  width={chrome.changesWidth}
+                  maxWidth={chrome.changesMax}
+                  focusToken={changesFocus}
+                  onWidthChange={(width) => dispatch({ type: 'setChangesPanel', workspaceId: w.id, panel: { open: true, width } })}
+                  onClose={() => dispatch({ type: 'setChangesPanel', workspaceId: w.id, panel: { open: false, width: activePanel.width } })}
+                  onOpenDiff={(path) => setReviewFor({ id: w.id, path })}
+                  onFinish={() => setFinishFor(w.id)}
+                  onRefresh={() => api.refreshGit(w.id)}
+                  onEscape={() => activeTabId && focusTab(activeTabId)}
+                />
+              ) : null
+            }
           />
         ))}
         </div>
@@ -1454,9 +1510,10 @@ export function App() {
       />
       <ReviewDialog
         open={!!reviewFor}
-        workspace={state.workspaces.find((w) => w.id === reviewFor && w.task) ?? null}
+        workspace={state.workspaces.find((w) => w.id === reviewFor?.id && w.task) ?? null}
+        initialPath={reviewFor?.path}
         onFinish={() => {
-          setFinishFor(reviewFor);
+          setFinishFor(reviewFor?.id ?? null);
           setReviewFor(null);
         }}
         onClose={() => setReviewFor(null)}

@@ -3660,3 +3660,188 @@ dialog::backdrop {
 .finish-dialog .dialog__footer {
   align-items: center;
 }
+
+/* ---------------------------------------------------------------- Changes panel (task workspaces, right side) */
+
+.changes {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border);
+}
+
+/* The handle sits on the panel's left edge (the panel grows to the left). */
+.changes__handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 25;
+  touch-action: none;
+}
+
+.changes__handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 3px;
+  background: transparent;
+  transition: background var(--transition);
+}
+
+.changes__handle:hover::after,
+.changes__handle:active::after,
+.changes__handle:focus-visible::after {
+  background: var(--accent);
+}
+
+.changes__handle:focus-visible {
+  outline: none;
+}
+
+.changes__header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.changes__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+.changes__heading {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.changes__actions {
+  display: flex;
+  gap: 2px;
+}
+
+.changes__branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.changes__branch code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changes__arrow {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.changes__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.changes__fact {
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.changes__fact--warn {
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--warning);
+}
+
+.changes__fact--info {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text);
+}
+
+.changes__totals {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.changes__finish {
+  align-self: flex-start;
+}
+
+.changes__note {
+  margin: 0;
+  padding: 12px;
+}
+
+.changes__list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+/* Thousands of rows stay smooth: rows off screen aren't laid out or painted. */
+.changes__list > li {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 34px;
+}
+
+.changes__file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.changes__file:hover {
+  background: var(--bg-hover);
+}
+
+.changes__file[aria-selected='true'] {
+  background: var(--bg-hover);
+}
+
+.changes__file:focus-visible {
+  outline: none;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.changes__more {
+  padding: 6px 12px;
+}
+
+.changes:focus {
+  outline: none;
+}

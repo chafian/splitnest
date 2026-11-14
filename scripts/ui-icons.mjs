@@ -46,6 +46,7 @@ const MAP = {
   more: 'dots',
   bell: 'bell',
   gitBranch: 'git-branch',
+  changes: 'layout-sidebar-right',
 };
 
 const camel = (k) => k.replace(/-([a-z])/g, (_, c) => c.toUpperCase());

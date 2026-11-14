@@ -1,5 +1,6 @@
 // Pure reducer for persisted workspace state (layout, tabs, workspaces,
 // settings). Runtime session state lives in terminal controllers, not here.
+import type { ChangesPanelState } from '../../../shared/types';
 import type { AgentResume } from '../../../shared/agent-resume';
 import {
   addTab,
@@ -64,7 +65,8 @@ export type Action =
   | { type: 'setTabResume'; workspaceId: string; tabId: string; resume: AgentResume | null }
   | { type: 'setSplitSizes'; workspaceId: string; splitId: string; sizes: number[] }
   | { type: 'focusPane'; workspaceId: string; paneId: string }
-  | { type: 'updateSettings'; patch: Partial<AppSettings> };
+  | { type: 'updateSettings'; patch: Partial<AppSettings> }
+  | { type: 'setChangesPanel'; workspaceId: string; panel: ChangesPanelState };
 
 function mapWorkspace(state: PersistedState, id: string, fn: (w: Workspace) => Workspace): PersistedState {
   let changed = false;
@@ -243,6 +245,12 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
       return mapWorkspace(state, action.workspaceId, (w) =>
         w.activePaneId === action.paneId || !findPane(w.layout, action.paneId) ? w : { ...w, activePaneId: action.paneId },
       );
+    case 'setChangesPanel': {
+      const width = Math.round(Math.min(LIMITS.changesWidth.max, Math.max(LIMITS.changesWidth.min, action.panel.width)));
+      return mapWorkspace(state, action.workspaceId, (w) =>
+        !w.task || (w.changesPanel?.open === action.panel.open && w.changesPanel.width === width) ? w : { ...w, changesPanel: { open: action.panel.open, width } },
+      );
+    }
     case 'updateSettings': {
       const next = { ...state, settings: { ...state.settings, ...action.patch } };
       // Titles off: the ones already saved go too, not only future ones.

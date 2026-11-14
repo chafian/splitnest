@@ -21,6 +21,9 @@ interface Props {
   defaultProfileId: string | null;
   onToggleSidebar(): void;
   onToggleExplorer(): void;
+  /** The workspace on screen is a task: its Changes panel can be shown (null: not a task). */
+  changesShown: boolean | null;
+  onToggleChanges(): void;
   onToggleFocusMode(): void;
   onOpenPalette(): void;
   onNewTab(profileId: string): void;
@@ -54,6 +57,16 @@ export function TitleBar(props: Props) {
           onClick={props.onToggleExplorer}
           disabled={!workspace}
         />
+        {props.changesShown !== null && (
+          <IconButton
+            icon="changes"
+            label={props.changesShown ? 'Hide changes panel' : 'Show changes panel'}
+            description="What this task changed, next to its terminals."
+            shortcut={shortcutLabel('toggleChanges')}
+            aria-pressed={props.changesShown}
+            onClick={props.onToggleChanges}
+          />
+        )}
         <IconButton
           icon="focus"
           className={focusMode ? 'icon-button--on' : undefined}

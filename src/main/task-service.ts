@@ -355,6 +355,12 @@ export class TaskService {
     };
   }
 
+  /** Entries Git ignores in a task folder (`dir/` for folders), for the folder watcher. Empty when Git can't tell. */
+  async ignoredEntries(folder: string): Promise<string[]> {
+    const r = await this.read(folder, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z']);
+    return r?.code === 0 ? parsePaths(r.stdout) : [];
+  }
+
   /** Line counts of new files, per task folder, by path with the size and time they were counted at. */
   private readonly lineCounts = new Map<string, Map<string, { size: number; mtimeMs: number; lines: number; binary: boolean }>>();
 

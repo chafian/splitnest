@@ -21,6 +21,7 @@ import type { AgentMonitor } from './agent-monitor';
 import type { GitStatusService } from './git-status';
 import { taskFailure, type TaskService } from './task-service';
 import type { TaskSummaries } from './task-summaries';
+import type { TaskFolderWatcher } from './task-watch';
 import { taskRecordKey } from '../shared/tasks';
 import type { NotificationService } from './notifications';
 import { parseUpdatePrefs, type UpdatePrefs, type UpdateStatus } from '../shared/updates';
@@ -50,6 +51,8 @@ export interface IpcContext {
   tasks: TaskService;
   /** Each task's summary, kept current after Git status checks (src/main/task-summaries.ts). */
   taskSummaries: TaskSummaries;
+  /** The folder watch for the task whose Changes panel is on screen (src/main/task-watch.ts). */
+  taskWatcher: TaskFolderWatcher;
   notifications: NotificationService;
   updates: {
     status(): UpdateStatus;
@@ -301,6 +304,11 @@ export function registerIpc(ctx: IpcContext): void {
     if (!p.ok) return p;
     return p.workspace.task ? { ok: true as const, id: p.workspace.id, task: p.workspace.task } : taskFailure('NOT_A_TASK');
   };
+  on(IPC.taskWatch, (_event, workspaceId) => {
+    // Only a task main knows, with agent tasks on; anything else stops the watch.
+    const w = ctx.store.state.settings.agentTasks && isId(workspaceId) ? ctx.store.getWorkspace(workspaceId) : undefined;
+    ctx.taskWatcher.set(w?.task ? { workspaceId: w.id, folder: w.task.worktreePath } : null);
+  });
   handle(IPC.taskSummaries, () => (ctx.store.state.settings.agentTasks ? ctx.taskSummaries.all() : {}));
   handle(IPC.taskFinishCheck, async (_event, workspaceId) => {
     const t = taskOf(workspaceId);

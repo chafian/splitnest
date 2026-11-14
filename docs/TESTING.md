@@ -2,6 +2,26 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Changes panel, R2: the docked panel (2026-11-14)
+
+- **E2E** (`run-tasks.mjs`, now 21 / 21):
+  - **Default and live updates:**
+    - the panel is open for a new task, the terminal stays visible, and the folder is watched;
+    - files written outside SplitNest (as an agent would) appear without a click or Refresh, and the header says *2 not committed* and *1 commit to merge*;
+    - 20 files written into an ignored `node_modules` cause no extra Git check.
+  - **Using it:**
+    - a click shows the diff;
+    - ↓ moves and Enter opens, and Escape returns to the terminal;
+    - Ctrl+Shift+G hides it (the watch stops) and shows it again with the keyboard on its list;
+    - ← on the edge ×3 makes it 30 px wider and saved;
+    - a file written while it was hidden shows once it's back.
+  - **Per task:** another task has its own panel state, the palette command shows the panel and is disabled outside a task, and a non-task workspace has no panel. After a restart it comes back open at the saved width.
+  - **Finish:** the Finish steps run unchanged.
+- **WSL E2E** (`run-tasks-wsl.mjs` 4 / 4): the panel is open, nothing is watched for the WSL folder, and its refresh button brings the new file in. Finish runs from the panel header.
+- **Unit** (`changes-panel.test.ts`, 9): layout (all three panels; explorer gives way first, then the panel, then the sidebar; focus mode and closed; a new task's default by window width), saved state (clamped, dropped when odd or not a task), reducer, the watch's filter (`.git`, ignored folders and files, either separator, any case) and timing (a burst becomes one check after quiet, the 3 s gap, one folder at a time, WSL not watched), header facts.
+- **Found by the E2E and fixed:** showing the panel by shortcut tried to take the keyboard before its list had loaded; it now waits for the list. A unit test also showed the watcher would hold back its first check if the clock read under 3 s; there is now no previous check at start.
+- **Regressions:** unit 553 / 553; WSL 13 / 13; `run-e2e.mjs` 36 / 36. Type check and lint are clean.
+
 ## Changes panel, R1: task summaries and compact rows (2026-11-14)
 
 - **E2E:**

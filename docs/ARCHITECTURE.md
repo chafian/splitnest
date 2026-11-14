@@ -103,6 +103,12 @@
   - `TaskSummaries` (main) has its own queue, one summary at a time, separate from Git status's. A request during a run becomes exactly one more run.
   - It's triggered by `GitStatusService.afterCheck`, which fires after every check including WSL folders (whose status it doesn't read). So summaries follow the same triggers and limits and never poll; the E2E checks they don't run more often than Git status checks.
   - `GitRunner.runMany` runs a round's commands in one `wsl.exe` start in WSL (~130 ms each otherwise). It uses a fixed bash script that takes the commands as positional parameters and frames each exit code and output by byte length (`BATCH_SCRIPT`/`parseBatch`). Without bash it falls back to one start per command.
+- **Changes panel (R2).**
+  - **Where and how big:** `ChangesPanel` is docked right of the terminal column (`WorkspaceView.rightPanel`), only for the task on screen. `computeChrome` gives it room after the explorer and before the sidebar when the window is narrow; the terminals keep `minTerminalAreaWidth`, and focus mode hides it.
+  - **Saved:** open/closed and width per task (`Workspace.changesPanel`; builds that predate it drop the field). A new task's panel opens on windows of at least 1,000 px.
+  - **Freshness:** the list is read (`taskChanges`) when the panel shows and whenever the task's summary `version` changes, so there is no polling.
+  - **Folder watch** (`TaskFolderWatcher`, main), so edits show while terminal output never settles. It covers one folder at a time, only for the task whose panel is on screen (`IPC.taskWatch`), and only Windows folders; `fs.watch` over `\\wsl.localhost` isn't reliable, so WSL uses the usual triggers plus the panel's refresh button. `.git` and Git's ignored entries (re-listed after each check) are skipped. A burst becomes one `GitStatusService.request` after 500 ms of quiet, at least 3 s apart, and the summary follows through `afterCheck`.
+  - **Diffs until R3:** choosing a file opens the Review view at that file; R3 replaces that with diff tabs.
 - **`GitRunner`** (`src/main/git-runner.ts`): `git -C <folder>` with the Git status environment (English messages, no prompts, no redirecting variables, ceilings), so tasks in WSL can later use the distribution's Git behind the same interface. Unlike the status check, task commands run the repository's hooks, as the same command in a terminal would.
 
 ## Agent inbox

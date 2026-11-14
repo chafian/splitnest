@@ -20,6 +20,7 @@ export type CommandId =
   | 'prevWorkspace'
   | 'toggleSidebar'
   | 'toggleExplorer'
+  | 'toggleChanges'
   | 'toggleFocusMode'
   | 'toggleMaximize'
   | 'nextTab'
@@ -70,6 +71,8 @@ export const BINDINGS: Binding[] = [
   b('prevWorkspace', 'CS', ['PageUp'], 'Ctrl+Shift+PgUp'),
   b('toggleSidebar', 'CS', ['KeyB'], 'Ctrl+Shift+B'),
   b('toggleExplorer', 'CS', ['KeyE'], 'Ctrl+Shift+E'),
+  // Shells see the same Ctrl+G as without Shift, so nothing is lost there.
+  b('toggleChanges', 'CS', ['KeyG'], 'Ctrl+Shift+G'),
   // xterm.js sends the same byte for Enter and Ctrl+Shift+Enter, so shells lose nothing.
   b('toggleFocusMode', 'CS', ['Enter', 'NumpadEnter'], 'Ctrl+Shift+Enter'),
   // Not used by shells, PSReadLine, bash/readline or common TUIs (they see plain Ctrl+M = Enter).

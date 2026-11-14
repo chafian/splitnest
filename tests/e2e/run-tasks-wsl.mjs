@@ -103,9 +103,12 @@ try {
     await selectWorkspace(page, 'app');
     await selectWorkspace(page, 'Fix parser');
     await until(async () => (await page.textContent('.ws-item--task [data-testid="task-counts"]').catch(() => ''))?.replace(/\s+/g, ' ').trim() === '+1 −0', 'WSL task counts', 30_000);
-    await palette(page, 'Review task changes…');
-    await page.waitForSelector('[data-testid="review-files"] [data-path="parser.c"]', { timeout: 30_000 });
-    await page.click('[data-testid="review-finish"]');
+    // The Changes panel is open for the new task; WSL folders aren't watched, so Refresh (or the usual triggers) updates it.
+    await page.waitForSelector('[data-testid="changes-panel"]', { timeout: 15_000 });
+    if (await app.evaluate(() => globalThis.__twTaskWatches())) throw new Error('a WSL folder is being watched');
+    await page.click('[data-testid="changes-panel"] [aria-label="Check for changes now"]');
+    await page.waitForSelector('[data-testid="changes-files"] [data-path="parser.c"]', { timeout: 30_000 });
+    await page.click('[data-testid="changes-finish"]');
     await page.waitForSelector('[data-testid="finish-message"]', { timeout: 30_000 });
     await page.fill('[data-testid="finish-message"]', 'Add parser');
     await page.click('[data-testid="finish-commit"]');
