@@ -51,11 +51,13 @@ export type Action =
       profileId: string;
       /** When set, the pane opens this workspace-relative file instead of a terminal (profileId is ignored). */
       filePath?: string;
+      /** When set, the pane shows a task's changes to this file (path as Git lists it in the task). */
+      diffPath?: string;
       direction?: SplitDirection;
       targetPaneId?: string;
     }
   | { type: 'removePane'; workspaceId: string; paneId: string }
-  | { type: 'addTab'; workspaceId: string; paneId: string; tabId: string; profileId: string; filePath?: string }
+  | { type: 'addTab'; workspaceId: string; paneId: string; tabId: string; profileId: string; filePath?: string; diffPath?: string }
   | { type: 'closeTab'; workspaceId: string; tabId: string }
   | { type: 'activateTab'; workspaceId: string; tabId: string }
   | { type: 'moveTab'; workspaceId: string; tabId: string; toPaneId: string; toIndex: number }
@@ -153,9 +155,11 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
       return mapWorkspace(state, action.workspaceId, (w) => {
         if (!canAddPane(w)) return w;
         const tabId = action.tabId ?? action.paneId;
-        const pane = action.filePath
-          ? createFilePane(action.paneId, { id: tabId, kind: 'file', path: action.filePath })
-          : createPane(action.paneId, action.profileId, tabId);
+        const pane = action.diffPath
+          ? createFilePane(action.paneId, { id: tabId, kind: 'diff', path: action.diffPath })
+          : action.filePath
+            ? createFilePane(action.paneId, { id: tabId, kind: 'file', path: action.filePath })
+            : createPane(action.paneId, action.profileId, tabId);
         if (!w.layout) return { ...w, layout: pane, activePaneId: pane.id };
         const target = action.targetPaneId ?? w.activePaneId ?? listPanes(w.layout)[0]?.id;
         if (!target || !findPane(w.layout, target)) return w;
@@ -175,7 +179,11 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
     case 'addTab':
       return mapWorkspace(state, action.workspaceId, (w) => {
         if (!w.layout || !canAddTab(w, action.paneId)) return w;
-        const tab: PaneTab = action.filePath ? { id: action.tabId, kind: 'file', path: action.filePath } : { id: action.tabId, profileId: action.profileId };
+        const tab: PaneTab = action.diffPath
+          ? { id: action.tabId, kind: 'diff', path: action.diffPath }
+          : action.filePath
+            ? { id: action.tabId, kind: 'file', path: action.filePath }
+            : { id: action.tabId, profileId: action.profileId };
         const layout = mapPane(w.layout, action.paneId, (p) => addTab(p, tab));
         return { ...w, layout, activePaneId: action.paneId };
       });

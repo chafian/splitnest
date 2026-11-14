@@ -1,7 +1,7 @@
 // Pure split-tree operations. Every function returns a new tree and never
 // mutates its input, so React state updates stay predictable.
-import { LIMITS, type LayoutNode, type PaneLeaf, type SplitDirection, type SplitNode, type FileTab, type PaneTab, type TerminalTab } from './types';
-import { isFileTab, isTerminalTab } from './types';
+import { LIMITS, type LayoutNode, type PaneLeaf, type PersistedState, type SplitDirection, type SplitNode, type FileTab, type PaneTab, type TerminalTab } from './types';
+import { isDiffTab, isFileTab, isTerminalTab } from './types';
 
 export type FocusDirection = 'left' | 'right' | 'up' | 'down';
 
@@ -16,9 +16,38 @@ export function createPane(id: string, profileId: string, tabId: string = id): P
   return { type: 'pane', id, tabs: [{ id: tabId, profileId }], activeTabId: tabId };
 }
 
-/** A pane whose first tab is a file in the editor. */
-export function createFilePane(id: string, tab: FileTab): PaneLeaf {
+/** A pane whose first tab is a file in the editor (or any other non-terminal tab). */
+export function createFilePane(id: string, tab: FileTab | PaneTab): PaneLeaf {
   return { type: 'pane', id, tabs: [tab], activeTabId: tab.id };
+}
+
+/**
+ * The state as it is saved: without diff tabs. They show live Git data (nothing to restore), and a
+ * build that doesn't know them (0.2.2 and older) would reject the whole state file. A pane left
+ * empty closes; a pane whose active tab was a diff shows its first remaining tab; the workspace's
+ * active pane moves to its first pane if needed. Returns the same object when there is nothing to strip.
+ */
+export function withoutDiffTabs(state: PersistedState): PersistedState {
+  let changed = false;
+  const workspaces = state.workspaces.map((w) => {
+    const panes = listPanes(w.layout);
+    if (!panes.some((p) => p.tabs.some(isDiffTab))) return w;
+    changed = true;
+    let layout: LayoutNode | null = w.layout;
+    for (const p of panes) {
+      const keep = p.tabs.filter((t) => !isDiffTab(t));
+      if (keep.length === p.tabs.length || !layout) continue;
+      if (keep.length === 0) {
+        layout = removePane(layout, p.id);
+        continue;
+      }
+      const activeTabId = keep.some((t) => t.id === p.activeTabId) ? p.activeTabId : keep[0]!.id;
+      layout = mapPane(layout, p.id, (x) => ({ ...x, tabs: keep, activeTabId }));
+    }
+    const activePaneId = layout && w.activePaneId && findPane(layout, w.activePaneId) ? w.activePaneId : (listPanes(layout)[0]?.id ?? null);
+    return { ...w, layout, activePaneId };
+  });
+  return changed ? { ...state, workspaces } : state;
 }
 
 export function activeTab(pane: PaneLeaf): PaneTab {

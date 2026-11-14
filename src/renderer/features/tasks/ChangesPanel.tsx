@@ -32,8 +32,8 @@ interface Props {
   focusToken: number;
   onWidthChange(width: number): void;
   onClose(): void;
-  /** A file was chosen: show its changes. */
-  onOpenDiff(path: string): void;
+  /** A file was chosen: show its changes (beside the terminals; `here`: as a tab in the active pane). */
+  onOpenDiff(path: string, here: boolean): void;
   onFinish(): void;
   /** Check Git now (for WSL tasks, which have no folder watch). */
   onRefresh(): void;
@@ -87,7 +87,7 @@ export function ChangesPanel(props: Props) {
   const onKey = (e: KeyboardEvent<HTMLElement>, f: TaskChange) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      props.onOpenDiff(f.path);
+      props.onOpenDiff(f.path, e.ctrlKey);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       props.onEscape();
@@ -215,10 +215,10 @@ export function ChangesPanel(props: Props) {
                 tabIndex={f.path === (current?.path ?? files[0]!.path) ? 0 : -1}
                 className="changes__file"
                 data-path={f.path}
-                title={`${KIND_TITLE[f.kind]}${f.oldPath ? ` from ${f.oldPath}` : ''}${f.uncommitted ? ' · not committed yet' : ''}\nEnter: show changes`}
-                onClick={() => {
+                title={`${KIND_TITLE[f.kind]}${f.oldPath ? ` from ${f.oldPath}` : ''}${f.uncommitted ? ' · not committed yet' : ''}\nEnter: show changes beside the terminal · Ctrl+Enter: in this pane`}
+                onClick={(e) => {
                   setSelected(f.path);
-                  props.onOpenDiff(f.path);
+                  props.onOpenDiff(f.path, e.ctrlKey);
                 }}
                 onFocus={() => setSelected(f.path)}
                 onKeyDown={(e) => onKey(e, f)}

@@ -68,10 +68,23 @@ export interface FileTab {
   path: string;
 }
 
-export type PaneTab = TerminalTab | FileTab;
+/**
+ * A task's changes to one file (Changes panel). Never saved: it shows live Git data, and builds that
+ * don't know it reject the whole state file, so every save leaves these out (`withoutDiffTabs`).
+ */
+export interface DiffTab {
+  id: string;
+  kind: 'diff';
+  /** Relative to the task folder's top, `/`-separated (as Git lists it). */
+  path: string;
+}
+
+export type PaneTab = TerminalTab | FileTab | DiffTab;
 
 export const isFileTab = (tab: PaneTab): tab is FileTab => tab.kind === 'file';
-export const isTerminalTab = (tab: PaneTab): tab is TerminalTab => tab.kind !== 'file';
+export const isDiffTab = (tab: PaneTab): tab is DiffTab => tab.kind === 'diff';
+/** Only an actual terminal: tabs saved before kinds existed have none, newer ones say 'terminal'. */
+export const isTerminalTab = (tab: PaneTab): tab is TerminalTab => tab.kind === undefined || tab.kind === 'terminal';
 
 export interface PaneLeaf {
   type: 'pane';

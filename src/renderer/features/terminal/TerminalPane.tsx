@@ -4,7 +4,8 @@
 import { RESUME_LABEL, resumeCommand, resumeFallbackText, resumeForShell } from '../../../shared/agent-resume';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import type { PaneLeaf, SessionStatus, ShellDiscovery, StartLocation, TerminalTab, Workspace } from '../../../shared/types';
-import { isFileTab, isTerminalTab, LIMITS } from '../../../shared/types';
+import { isDiffTab, isFileTab, isTerminalTab, LIMITS, type DiffTab } from '../../../shared/types';
+import { DiffTabButton, DiffTabView } from '../tasks/DiffTab';
 import { api } from '../../api';
 import { ContextMenu, type ContextMenuItem } from '../../components/ContextMenu';
 import { Icon, type IconName } from '../../components/Icon';
@@ -166,6 +167,7 @@ export function TerminalPane(props: Props) {
     const tab = pane.tabs.find((t) => t.id === tabId);
     if (!tab) return [];
     if (isFileTab(tab)) return fileMenuItems(tab.id, tab.path);
+    if (isDiffTab(tab)) return diffMenuItems(tab);
     const status = registry.get(tabId)?.getSnapshot().status ?? 'idle';
     return [
       { label: 'Rename terminal…', hint: 'F2', run: () => props.onRenameStart(tabId) },
@@ -208,6 +210,19 @@ export function TerminalPane(props: Props) {
     ];
   };
 
+  /** A task's changes to one file: its path (in the task folder) and closing. */
+  const diffMenuItems = (tab: DiffTab): ContextMenuItem[] => [
+    { label: 'Copy path', run: () => copy(toWindowsPath(workspace.task?.worktreePath ?? workspace.rootPath, tab.path)) },
+    { label: 'Copy relative path', run: () => copy(tab.path.replace(/\//g, '\\')) },
+    {
+      label: 'Close changes',
+      hint: tab.id === activeTab.id ? shortcutLabel('closePane') : 'Middle-click',
+      separator: true,
+      danger: true,
+      run: () => props.onCloseTab(tab.id),
+    },
+  ];
+
   const maximizeItem: ContextMenuItem[] =
     props.maximized || props.canMaximize
       ? [{ label: props.maximized ? 'Restore layout' : 'Maximise pane', hint: shortcutLabel('toggleMaximize'), separator: true, run: props.onToggleMaximize }]
@@ -220,6 +235,7 @@ export function TerminalPane(props: Props) {
       run: () => props.onClosePane(pane.id),
     };
     if (isFileTab(activeTab)) return [...fileMenuItems(activeTab.id, activeTab.path), ...maximizeItem, closePane];
+    if (isDiffTab(activeTab)) return [...diffMenuItems(activeTab), ...maximizeItem, closePane];
     return [
       { label: 'Find in terminal', hint: shortcutLabel('find'), run: () => props.onToggleSearch(pane.id, !props.searchOpen) },
       {
@@ -271,6 +287,30 @@ export function TerminalPane(props: Props) {
                 selected={tab.id === activeTab.id}
                 paneActive={active}
                 showParent={fileNames.filter((n) => n === fileName(tab.path).toLowerCase()).length > 1}
+                dropBefore={drop === index}
+                dropAfter={drop === pane.tabs.length && index === pane.tabs.length - 1}
+                onActivate={() => {
+                  props.onActivateTab(tab.id);
+                  requestAnimationFrame(() => focusTab(tab.id));
+                }}
+                onClose={() => props.onCloseTab(tab.id)}
+                onKeyDown={(e) => onTabKeyDown(e, index)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  props.onActivateTab(tab.id);
+                  openTabMenu(tab.id, { x: e.clientX, y: e.clientY });
+                }}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(TAB_MIME, JSON.stringify({ tabId: tab.id, workspaceId: workspace.id }));
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+              />
+            ) : isDiffTab(tab) ? (
+              <DiffTabButton
+                key={tab.id}
+                tab={tab}
+                selected={tab.id === activeTab.id}
+                paneActive={active}
                 dropBefore={drop === index}
                 dropAfter={drop === pane.tabs.length && index === pane.tabs.length - 1}
                 onActivate={() => {
@@ -369,7 +409,7 @@ export function TerminalPane(props: Props) {
             ref={moreRef}
             icon="more"
             label="More pane actions"
-            description={isFileTab(activeTab) ? 'Save, find, copy path, close.' : 'Find, start or restart, rename, close.'}
+            description={isFileTab(activeTab) ? 'Save, find, copy path, close.' : isDiffTab(activeTab) ? 'Copy path, close.' : 'Find, start or restart, rename, close.'}
             size="sm"
             aria-haspopup="menu"
             aria-expanded={menu?.kind === 'pane'}
@@ -388,6 +428,8 @@ export function TerminalPane(props: Props) {
         {pane.tabs.map((tab) =>
           isFileTab(tab) ? (
             <FileTabView key={tab.id} tab={tab} workspace={workspace} visible={tab.id === activeTab.id} onClose={() => props.onCloseTab(tab.id)} />
+          ) : isDiffTab(tab) ? (
+            <DiffTabView key={tab.id} tab={tab} workspace={workspace} visible={tab.id === activeTab.id} />
           ) : (
           <TabView
             key={tab.id}

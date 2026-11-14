@@ -108,7 +108,11 @@
   - **Saved:** open/closed and width per task (`Workspace.changesPanel`; builds that predate it drop the field). A new task's panel opens on windows of at least 1,000 px.
   - **Freshness:** the list is read (`taskChanges`) when the panel shows and whenever the task's summary `version` changes, so there is no polling.
   - **Folder watch** (`TaskFolderWatcher`, main), so edits show while terminal output never settles. It covers one folder at a time, only for the task whose panel is on screen (`IPC.taskWatch`), and only Windows folders; `fs.watch` over `\\wsl.localhost` isn't reliable, so WSL uses the usual triggers plus the panel's refresh button. `.git` and Git's ignored entries (re-listed after each check) are skipped. A burst becomes one `GitStatusService.request` after 500 ms of quiet, at least 3 s apart, and the summary follows through `afterCheck`.
-  - **Diffs until R3:** choosing a file opens the Review view at that file; R3 replaces that with diff tabs.
+- **Diff tabs (R3).** A third tab kind, `DiffTab {kind: 'diff', path}`, used by `DiffTabButton`/`DiffTabView`.
+  - **Its own branch everywhere:** `isTerminalTab` now means `kind` undefined or `'terminal'`, so diff tabs are never treated as terminals. The 53 kind checks in 8 files were reviewed; besides `TerminalPane`'s tab button, view and menus, every other one already excluded them.
+  - **Never saved:** `scheduleSave` stores `withoutDiffTabs(state)`, which closes panes left empty and fixes the active tab and pane. Validation still refuses a diff tab, since one can only arrive through a bug. Builds before them (0.2.2) reject an unknown tab kind, which would make them discard the whole state file.
+  - **Where it opens (`openDiff`):** a file already open gets the focus. Otherwise it goes to the pane that already holds the task's diffs, or a new pane to the right, so the terminal stays visible; Ctrl opens it in the active pane.
+  - **Freshness:** the view reads `taskDiff` when shown and again when the task's summary version changes (`TaskSummaryContext`); a hidden tab catches up when selected. The Review dialog is gone.
 - **`GitRunner`** (`src/main/git-runner.ts`): `git -C <folder>` with the Git status environment (English messages, no prompts, no redirecting variables, ceilings), so tasks in WSL can later use the distribution's Git behind the same interface. Unlike the status check, task commands run the repository's hooks, as the same command in a terminal would.
 
 ## Agent inbox

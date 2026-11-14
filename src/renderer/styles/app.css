@@ -3342,80 +3342,6 @@ dialog::backdrop {
   color: var(--warning);
 }
 
-/* Review: changed files on the left, the selected file's diff on the right. */
-.review-dialog .dialog__body {
-  min-height: 0;
-  flex: 1;
-}
-
-.review-dialog .dialog__inner {
-  height: calc(100vh - 96px);
-}
-
-.review-dialog .dialog__footer {
-  align-items: center;
-}
-
-.review__footnote {
-  margin-right: auto;
-  font-size: var(--text-xs);
-  color: var(--text-faint);
-}
-
-.review__summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  font-size: var(--text-sm);
-}
-
-.review__totals {
-  color: var(--text-muted);
-}
-
-.review {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.review__files {
-  margin: 0;
-  padding: 4px 0;
-  list-style: none;
-  overflow-y: auto;
-  border-right: 1px solid var(--border);
-  background: var(--bg-sidebar);
-}
-
-.review__file {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 5px 10px;
-  border: 0;
-  background: none;
-  color: inherit;
-  text-align: left;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.review__file:hover {
-  background: var(--bg-hover);
-}
-
-.review__file--on {
-  background: var(--bg-hover);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
 .review__kind {
   flex: none;
   width: 16px;
@@ -3474,27 +3400,6 @@ dialog::backdrop {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-faint);
-}
-
-.review__more {
-  padding: 6px 10px;
-}
-
-.review__diff {
-  min-width: 0;
-  overflow: auto;
-  background: var(--bg-surface);
-}
-
-.review__diff-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
-  font-size: var(--text-sm);
-  font-weight: 600;
 }
 
 .review__pad {
@@ -3844,4 +3749,54 @@ dialog::backdrop {
 
 .changes:focus {
   outline: none;
+}
+
+/* A diff tab: the task's changes to one file, scrolling under a fixed header. */
+.diffview {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--bg-surface);
+}
+
+.diffview[hidden] {
+  display: none;
+}
+
+.diffview:focus {
+  outline: none;
+}
+
+.diffview__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.diffview__path {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.diffview__counts {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.diffview__base {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.diffview__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }

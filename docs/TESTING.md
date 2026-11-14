@@ -2,6 +2,26 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Changes panel, R3: diff tabs (2026-11-14)
+
+- **E2E** (`run-tasks.mjs`, now 22 / 22):
+  - **Opening:**
+    - choosing login.js opens a diff tab in a new pane beside the terminal (two panes, terminal visible);
+    - choosing it again doesn't duplicate it;
+    - ↓ then Enter opens notes.md in the same diff pane.
+  - **Live:** an edit written outside SplitNest appears in the open diff by itself, and a file deleted meanwhile says it has no changes anymore.
+  - **Saved state:** it has no diff tab and only the terminal's pane while diffs are open, and after a restart no diff tab comes back.
+  - **Unchanged:** the panel, Finish, conflict and Discard steps.
+- **Unit** (`diff-tabs.test.ts`, 6):
+  - a diff tab is neither a terminal nor a file, and tabs without a kind are terminals;
+  - a state with a diff tab is rejected and valid once stripped;
+  - the active tab moves off a diff;
+  - a pane of only diffs closes (its split collapses, the active pane moves);
+  - nothing to strip returns the same object;
+  - the reducer adds diffs as tabs and as panes.
+- **Regressions:** unit 559 / 559; WSL 13 / 13; `run-tasks-wsl.mjs` 4 / 4; `run-resume.mjs` 12 / 12; `run-e2e.mjs` 36 / 36. Type check and lint are clean.
+- **Seen in the screenshot:** at 1280 px with the sidebar, explorer and Changes panel all open, diff tab names are truncated; hiding the explorer gives them room.
+
 ## Changes panel, R2: the docked panel (2026-11-14)
 
 - **E2E** (`run-tasks.mjs`, now 21 / 21):

@@ -1,6 +1,7 @@
 // Debounced persistence from the renderer. Main validates and writes atomically.
 import type { AppError, PersistedState } from '../../../shared/types';
 import { api } from '../../api';
+import { withoutDiffTabs } from '../../../shared/layout';
 
 let pending: PersistedState | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -12,7 +13,8 @@ export function onSaveError(handler: (error: AppError) => void): void {
 }
 
 export function scheduleSave(state: PersistedState, delayMs = 250): void {
-  pending = state;
+  // Diff tabs are never saved (see withoutDiffTabs).
+  pending = withoutDiffTabs(state);
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => void flushSave(), delayMs);
 }

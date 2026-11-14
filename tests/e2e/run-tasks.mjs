@@ -250,22 +250,49 @@ try {
     if (process.env.TW_TASK_SHOTS) await page.screenshot({ path: path.join(process.env.TW_TASK_SHOTS, 'task-changes-panel.png') });
   });
 
-  await step('choosing a file shows its diff; keyboard: arrows move, Enter opens, Escape returns to the terminal', async () => {
+  await step('a file’s changes open as a diff tab in a pane beside the terminal; opening it again focuses that tab; Enter opens the next in the same pane', async () => {
+    const diffTabs = () => page.$$eval('[role="tab"][data-diff-path]', (els) => els.map((e) => e.getAttribute('data-diff-path')));
     await page.click('[data-testid="changes-files"] [data-path="login.js"]');
-    await until(async () => (await page.textContent('[data-testid="review-diff"]').catch(() => ''))?.includes('export const logout'), 'login.js diff');
-    await page.keyboard.press('Escape');
-    await page.waitForSelector('[data-testid="review-diff"]', { state: 'detached' });
+    await page.waitForSelector('[role="tab"][data-diff-path="login.js"]', { timeout: 10_000 });
+    await until(async () => (await page.textContent('.diffview:not([hidden]) [data-testid="diff-body"]').catch(() => ''))?.includes('export const logout'), 'login.js diff');
+    // The terminal stays in view: the diff got its own pane.
+    if (!(await page.isVisible(`.tabview[data-tab-id="${fixTab}"] .pane__terminal`))) throw new Error('terminal hidden');
+    const panes = await page.$$eval('.workspace:not([hidden]) [data-pane-id]', (els) => els.length);
+    if (panes !== 2) throw new Error(`${panes} panes`);
+    await page.click('[data-testid="changes-files"] [data-path="login.js"]');
+    if ((await diffTabs()).join('|') !== 'login.js') throw new Error(`duplicate: ${(await diffTabs()).join('|')}`);
     await page.focus('[data-testid="changes-files"] [data-path="login.js"]');
     await page.keyboard.press('ArrowDown');
     if ((await page.evaluate(() => document.activeElement?.getAttribute('data-path'))) !== 'notes.md') throw new Error('arrow didn’t move');
     await page.keyboard.press('Enter');
-    await until(async () => (await page.textContent('[data-testid="review-diff"]').catch(() => ''))?.includes('# notes'), 'notes.md diff');
-    await page.keyboard.press('Escape');
-    await page.waitForSelector('[data-testid="review-diff"]', { state: 'detached' });
+    await page.waitForSelector('[role="tab"][data-diff-path="notes.md"]', { timeout: 10_000 });
+    const sameDiffPane = await page.$$eval('[data-pane-id]', (els) => els.filter((e) => e.querySelector('[data-diff-path]')).map((e) => e.querySelectorAll('[data-diff-path]').length));
+    if (sameDiffPane.join() !== '2') throw new Error(`diff tabs per pane: ${sameDiffPane.join()}`);
+    await until(async () => (await page.textContent('.diffview:not([hidden]) [data-testid="diff-body"]').catch(() => ''))?.includes('# notes'), 'notes.md diff');
+    if (process.env.TW_TASK_SHOTS) await page.screenshot({ path: path.join(process.env.TW_TASK_SHOTS, 'task-diff-tab.png') });
     await page.focus('[data-testid="changes-files"] [data-path="notes.md"]');
     await page.keyboard.press('Escape');
-    const inTerminal = await page.evaluate(() => !!document.activeElement?.closest('.tabview'));
-    if (!inTerminal) throw new Error('Escape didn’t return to the terminal');
+    if (!(await page.evaluate(() => !!document.activeElement?.closest('.tabview')))) throw new Error('Escape didn’t return to the terminal');
+  });
+
+  await step('an open diff follows the agent’s edits; a file with no changes anymore says so; diff tabs are never in the saved state', async () => {
+    await page.click('[role="tab"][data-diff-path="login.js"]');
+    writeFileSync(path.join(fixRoot, 'login.js'), 'export const login = () => true;\nexport const logout = () => false;\n// session timeout\n');
+    await until(async () => (await page.textContent('.diffview:not([hidden]) [data-testid="diff-body"]').catch(() => ''))?.includes('// session timeout'), 'diff refreshed by itself', 20_000);
+    // notes.md goes away: its tab says so instead of going blank.
+    rmSync(path.join(fixRoot, 'notes.md'));
+    await page.click('[role="tab"][data-diff-path="notes.md"]');
+    await until(async () => (await page.textContent('.diffview:not([hidden]) [data-testid="diff-note"]').catch(() => ''))?.includes('no changes in the task anymore'), 'no-longer-changed note', 20_000);
+    writeFileSync(path.join(fixRoot, 'notes.md'), '# notes\n');
+    // Saved: no diff tab anywhere, and the pane that held only diffs isn't saved either.
+    await until(() => {
+      const w = saved()?.workspaces?.find((x) => x.name === 'Fix login');
+      if (!w) return false;
+      const tabs = [];
+      const walk = (n) => (n?.type === 'pane' ? tabs.push(...n.tabs) : n?.children?.forEach(walk));
+      walk(w.layout);
+      return tabs.length > 0 && !tabs.some((t) => t.kind === 'diff') && w.layout.type === 'pane';
+    }, 'saved without diff tabs');
   });
 
   await step('Ctrl+Shift+G hides and shows it (the folder watch stops while hidden); keyboard resizing is saved for this workspace', async () => {
@@ -390,7 +417,8 @@ try {
     const rows = await page.$$eval('.sidebar__list .ws-item:not(.ws-item--page)', (els) => els.map((e) => `${e.classList.contains('ws-item--task') ? 'task:' : ''}${e.querySelector('.ws-item__label')?.textContent}`));
     if (rows.join('|') !== 'shop app|task:Fix login|task:Add tests|not a repo') throw new Error(rows.join('|'));
     await selectWorkspace(page, 'Fix login');
-    // The panel comes back open, at the width it had.
+    // Diff tabs aren't restored (they were never saved); the panel comes back open, at the width it had.
+    if (await page.$('[role="tab"][data-diff-path]')) throw new Error('a diff tab was restored');
     const want = saved()?.workspaces?.find((w) => w.name === 'Fix login')?.changesPanel?.width;
     await page.waitForSelector('[data-testid="changes-panel"]', { timeout: 15_000 });
     const got = Math.round(await page.$eval('[data-testid="changes-panel"]', (e) => e.getBoundingClientRect().width));

@@ -101,6 +101,8 @@ function validateTab(value: unknown, tabSeen: Set<string>): PaneTab {
     if (!p) fail('file tab path is invalid');
     return { id: tab.id, kind: 'file', path: p };
   }
+  // Diff tabs are stripped before every save (withoutDiffTabs); one arriving here is a bug.
+  if (tab.kind === 'diff') fail('diff tabs are never saved');
   if (tab.kind !== undefined && tab.kind !== 'terminal') fail('tab kind is invalid');
   if (!isProfileId(tab.profileId)) fail('tab profile is invalid');
   const name = normalizeTabName(tab.name);

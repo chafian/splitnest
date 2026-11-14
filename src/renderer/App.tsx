@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { cleanTitle, RESUME_LABEL, type AgentResume } from '../shared/agent-resume';
 import { activeTab, findPane, findPaneOfTab, listFileTabs, listPanes, listTabs, listTerminalTabs, neighborPane, type FocusDirection } from '../shared/layout';
 import { PRODUCT } from '../shared/product';
-import { isFileTab, isTerminalTab, LIMITS, type GitStatus, type LoadStateResult, type ShellDiscovery, type SplitDirection, type Workspace } from '../shared/types';
+import { isDiffTab, isFileTab, isTerminalTab, LIMITS, type GitStatus, type LoadStateResult, type ShellDiscovery, type SplitDirection, type Workspace } from '../shared/types';
 import { api } from './api';
 import { CommandPalette, type PaletteCommand } from './components/CommandPalette';
 import { ConfirmDialog, type ConfirmRequest } from './components/Dialog';
@@ -38,7 +38,7 @@ import { Sidebar } from './features/workspaces/Sidebar';
 import { WorkspaceView } from './features/workspaces/WorkspaceView';
 import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
 import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialog';
-import { ReviewDialog } from './features/tasks/ReviewDialog';
+import { TaskSummaryContext } from './features/tasks/DiffTab';
 import { ChangesPanel } from './features/tasks/ChangesPanel';
 import { taskShells } from './features/tasks/task-text';
 import { FinishTaskDialog, type BranchResult, type FinishOutcome } from './features/tasks/FinishTaskDialog';
@@ -104,7 +104,6 @@ export function App() {
   /** Agent tasks: the workspace the New task dialog is open for, and each task's commits against its base. */
   const [taskFor, setTaskFor] = useState<string | null>(null);
   /** The task workspace whose Review dialog is open. */
-  const [reviewFor, setReviewFor] = useState<{ id: string; path?: string } | null>(null);
   /** The task workspace whose Finish dialog is open. */
   const [finishFor, setFinishFor] = useState<string | null>(null);
   /** Re-render after saving editors from Finish (their dirty state lives outside React). */
@@ -317,7 +316,7 @@ export function App() {
 
   // Switching workspace (sidebar, palette, shortcuts) always shows that workspace.
   useEffect(() => setView('workspace'), [state.activeWorkspaceId]);
-  const anyDialogOpen = paletteOpen || shortcutsOpen || !!renameId || !!confirm || !!renamingTabId || !!taskFor || !!reviewFor || !!finishFor;
+  const anyDialogOpen = paletteOpen || shortcutsOpen || !!renameId || !!confirm || !!renamingTabId || !!taskFor || !!finishFor;
 
   // Keep keyboard focus on the active pane's active tab.
   const activePaneId = activeWorkspace?.activePaneId ?? null;
@@ -638,6 +637,35 @@ export function App() {
     if (stateRef.current.settings.focusMode) dispatch({ type: 'updateSettings', patch: { focusMode: false } });
     dispatch({ type: 'setChangesPanel', workspaceId, panel: { ...(ws.changesPanel ?? newChangesPanel(window.innerWidth)), open: true } });
     setChangesFocus((n) => n + 1);
+  };
+
+  /**
+   * Shows a task's changes to one file as a tab. A file already open just gets the focus. Otherwise it
+   * opens next to the terminals: in the pane that already holds this task's changes, or a new pane to
+   * the right, so the agent's terminal stays in view; with `here` (Ctrl), as a tab in the active pane.
+   */
+  const openDiff = (workspaceId: string, path: string, here = false) => {
+    const ws = stateRef.current.workspaces.find((w) => w.id === workspaceId);
+    if (!ws?.task) return;
+    const existing = listTabs(ws.layout).find((t) => isDiffTab(t) && t.path === path);
+    if (existing) {
+      dispatch({ type: 'activateTab', workspaceId, tabId: existing.id });
+      requestAnimationFrame(() => focusTab(existing.id));
+      return;
+    }
+    const tabId = uid();
+    const active = (ws.activePaneId ? findPane(ws.layout, ws.activePaneId) : null) ?? listPanes(ws.layout)[0] ?? null;
+    const changesPane = listPanes(ws.layout).find((p) => p.tabs.some(isDiffTab)) ?? null;
+    const target = here ? active : changesPane;
+    if (target && canAddTab(ws, target.id)) {
+      dispatch({ type: 'addTab', workspaceId, paneId: target.id, tabId, profileId: '', diffPath: path });
+    } else if (canAddPane(ws)) {
+      dispatch({ type: 'addPane', workspaceId, paneId: uid(), tabId, splitId: uid(), profileId: '', diffPath: path, direction: 'row', ...(active ? { targetPaneId: active.id } : {}) });
+    } else {
+      pushToast('warning', `A workspace can have at most ${LIMITS.maxPanesPerWorkspace} panes and ${LIMITS.maxTabsPerPane} tabs per pane.`);
+      return;
+    }
+    requestAnimationFrame(() => focusTab(tabId));
   };
 
   /** Opens the New agent task dialog for a workspace (preview setting on). */
@@ -1368,6 +1396,7 @@ export function App() {
       <main className="main">
         <UpdateNotices status={updateStatus} onChoose={(updateCheck) => chooseUpdates(updateCheck)} />
         {whatsNew && <WhatsNewNotice version={whatsNew} onDone={whatsNewDone} />}
+        <TaskSummaryContext.Provider value={taskSummaries}>
         <div className="main__views">
         {settingsShown && (
           <SettingsView
@@ -1476,7 +1505,7 @@ export function App() {
                   focusToken={changesFocus}
                   onWidthChange={(width) => dispatch({ type: 'setChangesPanel', workspaceId: w.id, panel: { open: true, width } })}
                   onClose={() => dispatch({ type: 'setChangesPanel', workspaceId: w.id, panel: { open: false, width: activePanel.width } })}
-                  onOpenDiff={(path) => setReviewFor({ id: w.id, path })}
+                  onOpenDiff={(path, here) => openDiff(w.id, path, here)}
                   onFinish={() => setFinishFor(w.id)}
                   onRefresh={() => api.refreshGit(w.id)}
                   onEscape={() => activeTabId && focusTab(activeTabId)}
@@ -1486,6 +1515,7 @@ export function App() {
           />
         ))}
         </div>
+        </TaskSummaryContext.Provider>
       </main>
       </div>
 
@@ -1507,16 +1537,6 @@ export function App() {
         defaultProfileId={state.settings.defaultProfileId ?? discovery?.fallbackProfileId ?? null}
         onCreate={(choice) => (taskFor ? createTask(taskFor, choice) : Promise.resolve(null))}
         onClose={() => setTaskFor(null)}
-      />
-      <ReviewDialog
-        open={!!reviewFor}
-        workspace={state.workspaces.find((w) => w.id === reviewFor?.id && w.task) ?? null}
-        initialPath={reviewFor?.path}
-        onFinish={() => {
-          setFinishFor(reviewFor?.id ?? null);
-          setReviewFor(null);
-        }}
-        onClose={() => setReviewFor(null)}
       />
       {(() => {
         const ws = state.workspaces.find((w) => w.id === finishFor && w.task) ?? null;
