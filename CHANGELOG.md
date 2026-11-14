@@ -6,6 +6,8 @@ All notable changes to SplitNest. Release notes on GitHub are taken from the sec
 
 - **Paste screenshots into agents**: with an image on the clipboard (Win+Shift+S, *Copy image* in a browser), **Ctrl+V** or right-click in a terminal saves it as a PNG and types its path at the prompt, so Claude Code, Codex or Gemini CLI attaches it. Files copied in Explorer paste as their paths, and files dragged onto a terminal type their paths too. In WSL tabs the paths are Linux paths (from the distribution's `wslpath`). Pasted images stay on this PC, in SplitNest's own temp folder, and are deleted after a day and when SplitNest quits. Text paste is unchanged.
 
+- **Notifications from any program, and `splitnest notify`**: a program in a terminal can raise SplitNest's notifications (in-app notice, Windows notification, taskbar flash, inbox) with the escape codes other terminals use: OSC 9 (iTerm2: Codex, Claude Code's `iterm2` channel), OSC 777 (Ghostty, WezTerm) and OSC 99 (kitty). Windows Terminal's progress and folder codes (`9;4`, `9;9`) don't notify. In SplitNest's PowerShell and WSL terminals, `splitnest notify "Tests passed"` (with `--title` for a title) does the same, for example `npm test; splitnest notify "Tests done"`. A notice reads "PowerShell sent a notification" and names the workspace and tab; the program's text is included only with *Include what the agent wrote* on. One notification per tab per event (an agent that sends OSC 9 as it finishes notifies once), at most six a minute per tab. *Settings → Notifications → Notifications sent by programs* turns them off.
+
 ## 0.3.0 (2026-11-14)
 
 Agent tasks: run several agents on one repository at once, each in its own Git worktree, and review and merge their work from SplitNest.

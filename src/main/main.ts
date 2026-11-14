@@ -25,6 +25,7 @@ import { createWindowsGitRunner, createWslGitRunner } from './git-runner';
 import { TaskService } from './task-service';
 import { TaskSummaries } from './task-summaries';
 import { TaskFolderWatcher } from './task-watch';
+import { installCommandScripts, type CommandDirs } from './command-scripts';
 import { createPasteService, MAX_PASTE_IMAGE_BYTES, PASTE_MAX_AGE_MS } from './paste';
 import { NotificationService, notifyIdPrefix, showAgainOnceRegistered, type NativeNotification } from './notifications';
 import { githubFeedUrl, Updater, type AutoUpdaterLike } from './updater';
@@ -105,6 +106,8 @@ const paste = createPasteService({
   env: process.env,
 });
 let pasteCleanupTimer: NodeJS.Timeout | null = null;
+/** The `splitnest` command's folders once written (sessions started before that go without it). */
+let commandDirs: CommandDirs | null = null;
 
 const rendererIndex = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
 const devServerUrl = typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'string' ? MAIN_WINDOW_VITE_DEV_SERVER_URL : '';
@@ -156,6 +159,7 @@ broker = new SessionBroker(
     // Automated runs must not write test commands into the user's PowerShell history, nor
     // take its shared lock (they kill shells at the end). Never in packaged builds.
     isolatePowerShellHistory: !app.isPackaged && process.env.TW_E2E === '1',
+    commandDirs: () => commandDirs,
   }),
   deliver,
   log,
@@ -679,6 +683,18 @@ void app.whenReady().then(async () => {
   });
   host.start();
   agentMonitor.start();
+  await installCommandScripts(path.join(app.getPath('userData'), 'bin'), {
+    mkdir: async (dir) => {
+      await fsp.mkdir(dir, { recursive: true });
+    },
+    readText: (file) => fsp.readFile(file, 'utf8').catch(() => null),
+    writeText: (file, text) => fsp.writeFile(file, text, 'utf8'),
+  }).then(
+    (dirs) => {
+      commandDirs = dirs;
+    },
+    (e: unknown) => log.warn(`the splitnest command could not be set up: ${(e as NodeJS.ErrnoException).code ?? 'error'}`),
+  );
   void paste.cleanup(PASTE_MAX_AGE_MS).catch(() => 0);
   pasteCleanupTimer = setInterval(() => void paste.cleanup(PASTE_MAX_AGE_MS).catch(() => 0), 60 * 60 * 1000);
   pasteCleanupTimer.unref();

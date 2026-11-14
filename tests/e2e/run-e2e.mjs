@@ -649,6 +649,32 @@ async function main() {
     if ((await status(page, ps)) !== 'running') throw new Error('session not running after switch');
   });
 
+  await step('splitnest notify in PowerShell and WSL raises a notice and an inbox entry when that tab is not on screen', async () => {
+    // Sent a moment later, from tabs in a workspace that is then switched away from.
+    await typeIn(page, ps, 'Start-Sleep -Seconds 2; splitnest notify --title Build "Tests passed"');
+    if (wsl) await typeIn(page, wsl, "sleep 2; splitnest notify 'from WSL'");
+    await page.click('.ws-item:nth-child(2) .ws-item__main');
+    const want = wsl ? 2 : 1;
+    await page.waitForFunction(
+      (n) => [...document.querySelectorAll('.toast')].filter((e) => e.textContent.includes('sent a notification')).length >= n,
+      want,
+      { timeout: 20_000 },
+    );
+    const toasts = await page.$$eval('.toast', (els) => els.map((e) => e.textContent).filter((t) => t.includes('sent a notification')));
+    if (!toasts.some((t) => t.includes('PowerShell sent a notification'))) throw new Error(`no PowerShell notice: ${toasts}`);
+    // What the program wrote stays out unless "Include what the agent wrote" is on (off by default).
+    if (toasts.some((t) => t.includes('Tests passed') || t.includes('from WSL'))) throw new Error(`program text shown: ${toasts}`);
+    const inbox = await page.getAttribute('button[aria-label^="Agent inbox"]', 'aria-label');
+    if (inbox !== `Agent inbox: ${want} to look at`) throw new Error(`inbox: ${inbox}`);
+    await shot(page, '05b-program-notification.png');
+    // Looking at the tabs clears them from the inbox.
+    await page.click('.ws-item:nth-child(1) .ws-item__main');
+    await page.waitForFunction(() => document.querySelector('button[aria-label^="Agent inbox"]')?.getAttribute('aria-label') === 'Agent inbox: no agents are waiting', null, {
+      timeout: 10_000,
+    });
+    return { toasts };
+  });
+
   await step('compact folders: java-app/src/main/java/com/example is one row; segments and files keep their real paths', async () => {
     const row = (p) => `.workspace:not([hidden]) .explorer__row[data-path="${p}"]`;
     const pkg = 'java-app/src/main/java/com/example';

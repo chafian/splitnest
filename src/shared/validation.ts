@@ -206,6 +206,7 @@ export function validateSettings(value: unknown): AppSettings {
     notifyNeedsYou: s.notifyNeedsYou !== false,
     notifyFinished: s.notifyFinished !== false,
     notifyErrors: s.notifyErrors !== false,
+    notifyPrograms: s.notifyPrograms !== false,
     notifyWindows: s.notifyWindows !== false,
     notifyFlash: s.notifyFlash !== false,
     notifySound: s.notifySound !== false,

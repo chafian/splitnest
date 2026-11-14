@@ -99,6 +99,8 @@ export interface LaunchInput {
   isolateHistory?: boolean;
   /** PowerShell only: start here instead of the workspace root (checked by the resolver). */
   startPath?: string;
+  /** The session's PATH, with the `splitnest` command's folder added (see command-scripts.ts). */
+  path?: { key: string; value: string };
 }
 
 /**
@@ -143,7 +145,8 @@ export function buildLaunch(input: LaunchInput): LaunchSpec {
   const { profile, executable, workspaceRoot, startIn, homeDir } = input;
   if (profile.kind === 'wsl') {
     if (!profile.distro) throw new Error('WSL profile without distribution');
-    const env = input.shortPrompt ? { ...SHORT_PROMPT_WSL_ENV } : undefined;
+    const vars = { ...(input.shortPrompt ? SHORT_PROMPT_WSL_ENV : {}), ...(input.path ? { [input.path.key]: input.path.value } : {}) };
+    const env = Object.keys(vars).length ? vars : undefined;
     if (startIn === 'home') {
       return {
         file: executable,
@@ -165,5 +168,11 @@ export function buildLaunch(input: LaunchInput): LaunchSpec {
   const cwd = startIn === 'home' ? homeDir : (input.startPath ?? workspaceRoot);
   const commands = [input.isolateHistory ? ISOLATE_HISTORY_POWERSHELL : '', input.shortPrompt ? SHORT_PROMPT_POWERSHELL : ''].filter(Boolean);
   const args = commands.length ? ['-NoLogo', '-NoExit', '-Command', commands.join('; ')] : ['-NoLogo'];
-  return { file: executable, args, cwd, cwdLabel: startIn === 'home' ? `~ (${homeDir})` : cwd };
+  return {
+    file: executable,
+    args,
+    cwd,
+    cwdLabel: startIn === 'home' ? `~ (${homeDir})` : cwd,
+    ...(input.path ? { env: { [input.path.key]: input.path.value } } : {}),
+  };
 }

@@ -9,6 +9,7 @@ import { api } from '../../api';
 import { flushSave } from '../workspaces/persistence';
 import { countRunningShells } from './shell-count';
 import { TerminalController } from './terminal-controller';
+import type { ProgramNotice } from './program-notify';
 
 interface EarlyBuffer {
   events: SessionEvent[];
@@ -36,6 +37,7 @@ export class TerminalRegistry {
   private resumeHandler: (tabId: string, resume: AgentResume | null) => void = () => undefined;
   private settings = { fontSize: 14, scrollback: 10_000, shortPrompt: true };
   private noticeHandler: (kind: 'warning' | 'error', message: string, detail?: string) => void = () => undefined;
+  private programNoticeHandler: (tabId: string, notice: ProgramNotice) => void = () => undefined;
 
   constructor() {
     api.onSessionEvent((event) => this.route(event));
@@ -73,6 +75,11 @@ export class TerminalRegistry {
   /** Problems a terminal reports to the user (a paste that failed). */
   setNoticeHandler(handler: (kind: 'warning' | 'error', message: string, detail?: string) => void): void {
     this.noticeHandler = handler;
+  }
+
+  /** Notifications programs ask for (OSC 9/777/99), by tab id. */
+  setProgramNoticeHandler(handler: (tabId: string, notice: ProgramNotice) => void): void {
+    this.programNoticeHandler = handler;
   }
 
   setFocusHandler(handler: (paneId: string) => void): void {
@@ -117,6 +124,7 @@ export class TerminalRegistry {
         wslAgent: (agent) => this.resumeHandler(paneId, agent ? { agent, sessionId: null, cwd: '', exact: false, at: Date.now() } : null),
         unbindSession: (sessionId) => this.unbind(sessionId),
         notice: (kind, message, detail) => this.noticeHandler(kind, message, detail),
+        programNotice: (n) => this.programNoticeHandler(paneId, n),
       },
     });
     this.controllers.set(paneId, controller);

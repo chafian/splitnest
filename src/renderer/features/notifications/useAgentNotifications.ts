@@ -2,10 +2,12 @@
 // screen, the in-app notice, and Windows notifications through main.
 import { useEffect, useRef, useState } from 'react';
 import { findPaneOfTab, listTerminalTabs } from '../../../shared/layout';
-import { noticeBody, noticeTitle, type NoticeTarget } from '../../../shared/notifications';
+import { NOTICE_LIMITS, noticeBody, noticeTitle, plainText, type NoticeTarget } from '../../../shared/notifications';
 import type { AppSettings, Workspace } from '../../../shared/types';
 import { api } from '../../api';
 import { registry } from '../terminal/terminal-registry';
+import type { AgentView } from '../terminal/agent-status';
+import type { ProgramNotice } from '../terminal/program-notify';
 import { AgentNotifier, type AgentEvent, type InboxItem } from './agent-notifier';
 
 export interface AgentNotificationOptions {
@@ -85,6 +87,33 @@ export function useAgentNotifications(o: AgentNotificationOptions): { dismissed(
       inboxChanged: () => setInbox(notifier.current?.inbox() ?? []),
     });
   }
+
+  // Notifications programs ask for. Named after the tab's agent only when SplitNest confirmed that
+  // agent is running there; otherwise after the shell (a program can't pose as another agent).
+  useEffect(() => {
+    registry.setProgramNoticeHandler((tabId, n: ProgramNotice) => {
+      const ws = ref.current.workspaces.find((w) => findPaneOfTab(w.layout, tabId));
+      const c = registry.get(tabId);
+      if (!ws || !c) return;
+      const agent = c.getSnapshot().agent;
+      const known = agent?.confirmed ? agent : null;
+      const text = [plainText(n.title, 120), plainText(n.body, NOTICE_LIMITS.message)].filter(Boolean).join(' — ');
+      const view: AgentView = {
+        id: known?.id ?? null,
+        label: known?.label ?? c.shellName(),
+        state: 'idle',
+        kind: null,
+        title: known?.title ?? null,
+        message: plainText(text, NOTICE_LIMITS.message),
+        progress: null,
+        source: 'protocol',
+        attention: false,
+        confirmed: true,
+      };
+      notifier.current!.message(tabId, ws.id, view);
+    });
+    return () => registry.setProgramNoticeHandler(() => undefined);
+  }, []);
 
   // Agent state changes (the registry notifies on any terminal snapshot change).
   useEffect(() => {

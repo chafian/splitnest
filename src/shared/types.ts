@@ -176,6 +176,8 @@ export interface AppSettings {
   notifyFinished: boolean;
   /** Notifications: an agent reported an error. */
   notifyErrors: boolean;
+  /** Notifications programs ask for with OSC 9, 777 or 99 (and `splitnest notify`). */
+  notifyPrograms: boolean;
   /** Windows notifications while SplitNest is in the background or minimized (else in-app notices only). */
   notifyWindows: boolean;
   /** Flash the taskbar button when an agent needs you while SplitNest is in the background. */
@@ -293,6 +295,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifyNeedsYou: true,
   notifyFinished: true,
   notifyErrors: true,
+  notifyPrograms: true,
   notifyWindows: true,
   notifyFlash: true,
   notifySound: true,

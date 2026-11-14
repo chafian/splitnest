@@ -107,7 +107,7 @@ export class NotificationService {
       entry.n = this.native({ title, body, silent: !s.notifySound }, () => this.activate(tabId), () => this.close(tabId));
       this.live.set(tabId, entry);
     }
-    if (isNeedsKind(notice.kind) && s.notifyFlash && win && !win.isFocused()) win.flashFrame(true);
+    if ((isNeedsKind(notice.kind) || notice.kind === 'message') && s.notifyFlash && win && !win.isFocused()) win.flashFrame(true);
     this.updateBadge();
     return 'shown';
   }

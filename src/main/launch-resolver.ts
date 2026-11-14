@@ -7,6 +7,7 @@ import type { Runner } from './exec';
 import type { LaunchResolver } from './session-broker';
 import { buildLaunch, discoverShells, type DiscoveredShells, type ExistsFn, type ShellEnvironment } from './shells';
 import { resolveWslDirectory } from './wsl';
+import { pathWith, type CommandDirs } from './command-scripts';
 
 export const isDirectory = async (p: string): Promise<boolean> => {
   try {
@@ -42,6 +43,8 @@ export interface ResolverDeps {
   homeDir: string;
   /** Test runs only: PowerShell sessions don't read or write the shared PSReadLine history. */
   isolatePowerShellHistory?: boolean;
+  /** The `splitnest` command's folders, once written (see command-scripts.ts). */
+  commandDirs?(): CommandDirs | null;
 }
 
 export function createLaunchResolver(deps: ResolverDeps): LaunchResolver {
@@ -88,6 +91,7 @@ export function createLaunchResolver(deps: ResolverDeps): LaunchResolver {
       if (!resolved.ok) return resolved;
       linuxPath = resolved.linuxPath;
     }
+    const dirs = deps.commandDirs?.() ?? null;
     const launch = buildLaunch({
       profile,
       executable,
@@ -97,6 +101,7 @@ export function createLaunchResolver(deps: ResolverDeps): LaunchResolver {
       linuxPath,
       shortPrompt: request.shortPrompt === true,
       isolateHistory: deps.isolatePowerShellHistory === true,
+      ...(dirs ? { path: pathWith(deps.env, profile.kind === 'wsl' ? dirs.wsl : dirs.windows) } : {}),
       ...(request.startPath !== undefined ? { startPath: request.startPath } : {}),
     });
     return { ok: true, launch, profileLabel: profile.label };

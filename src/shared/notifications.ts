@@ -8,9 +8,10 @@ import type { AppSettings } from './types';
  * - `permission` / `question` / `auth` / `needs-you`: the agent reported it is blocked (with that
  *   reason, or none);
  * - `maybe`: estimated "may need you" (a bell from an agent that does not report);
- * - `done`: the agent reported it finished; `error`: it reported an error.
+ * - `done`: the agent reported it finished; `error`: it reported an error;
+ * - `message`: a program in the terminal asked for a notification (OSC 9/777/99, `splitnest notify`).
  */
-export const NOTICE_KINDS = ['permission', 'question', 'auth', 'needs-you', 'maybe', 'done', 'error'] as const;
+export const NOTICE_KINDS = ['permission', 'question', 'auth', 'needs-you', 'maybe', 'done', 'error', 'message'] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 
 /** What the page sends main for a Windows notification. */
@@ -43,10 +44,11 @@ export const NOTICE_LIMITS = { workspace: 64, tab: 64, session: 120, message: 30
 
 const APP_NAME = /^[A-Za-z0-9_.+-]{1,32}$/;
 
-export const isNeedsKind = (kind: NoticeKind): boolean => kind !== 'done' && kind !== 'error';
+export const isNeedsKind = (kind: NoticeKind): boolean => kind !== 'done' && kind !== 'error' && kind !== 'message';
 
 /** The settings that decide whether this kind of event notifies at all. */
-export function kindEnabled(kind: NoticeKind, s: Pick<AppSettings, 'notifyNeedsYou' | 'notifyFinished' | 'notifyErrors' | 'notifyEstimated'>): boolean {
+export function kindEnabled(kind: NoticeKind, s: Pick<AppSettings, 'notifyNeedsYou' | 'notifyFinished' | 'notifyErrors' | 'notifyEstimated' | 'notifyPrograms'>): boolean {
+  if (kind === 'message') return s.notifyPrograms;
   if (kind === 'done') return s.notifyFinished;
   if (kind === 'error') return s.notifyErrors;
   if (kind === 'maybe') return s.notifyNeedsYou && s.notifyEstimated;
@@ -74,6 +76,8 @@ export function noticeTitle(kind: NoticeKind, label: string): string {
       return `${label} finished`;
     case 'error':
       return `${label} stopped with an error`;
+    case 'message':
+      return `${label} sent a notification`;
   }
 }
 

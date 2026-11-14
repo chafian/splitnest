@@ -17,6 +17,7 @@ import { agentFromTitle, deriveAgentView, hasTitleStatus, parseProgramStatus, PR
 import { StartGate, type StartOutcome } from './bulk-start';
 import { partOfLineAbove, removeCutLinePart, type CutLinePart } from './cut-line';
 import { RedrawReader } from './redraw-reader';
+import { KittyNotices, parseOsc777, parseOsc9, type ProgramNotice } from './program-notify';
 
 /** Output silence after which a heuristically tracked agent counts as idle. */
 const QUIET_AFTER_MS = 2000;
@@ -74,6 +75,8 @@ export interface ControllerHooks {
   unbindSession(sessionId: string): void;
   /** Tells the user about a problem in this terminal (a paste that failed). */
   notice(kind: 'warning' | 'error', message: string, detail?: string): void;
+  /** A program here asked for a notification (OSC 9, 777 or 99). */
+  programNotice(notice: ProgramNotice): void;
 }
 
 /** A drag that carries files from Windows (Explorer, a browser's download bar), not a tab or file-tree drag. */
@@ -254,6 +257,7 @@ export class TerminalController {
   private isWsl = false;
   /** The shell profile of the current (or last) session: pasted paths are typed for that shell. */
   private profileId: string | null = null;
+  private readonly kittyNotices = new KittyNotices();
   /** E2E diagnostics: false = use xterm's DOM renderer instead of WebGL. */
   private testWebgl = true;
   /** Tests only: the numbers behind each anchored resize (off unless enabled). */
@@ -397,6 +401,14 @@ export class TerminalController {
       if (this.records.apply(command)) this.refreshAgent();
       return true;
     });
+    // Notifications programs ask for (see program-notify.ts). Handled, so xterm ignores them.
+    const programNotice = (n: ProgramNotice | null) => {
+      if (n) this.hooks.programNotice(n);
+      return true;
+    };
+    this.term.parser.registerOscHandler(9, (data) => programNotice(parseOsc9(data)));
+    this.term.parser.registerOscHandler(777, (data) => programNotice(parseOsc777(data)));
+    this.term.parser.registerOscHandler(99, (data) => programNotice(this.kittyNotices.feed(data)));
     // Shell integration prompt marker (OSC 133;A): the shell's prompt is back, the program ended.
     this.term.parser.registerOscHandler(133, (body) => {
       if (body.startsWith('A')) this.endAgentRun(true, true);
@@ -1305,6 +1317,12 @@ export class TerminalController {
 
   focus(): void {
     this.term.focus();
+  }
+
+  /** What notifications call the shell: "PowerShell", or the WSL distribution's name. */
+  shellName(): string {
+    const id = this.profileId;
+    return id?.startsWith('wsl:') ? id.slice(4) : 'PowerShell';
   }
 
   setFontSize(size: number): void {

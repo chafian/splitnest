@@ -9,7 +9,7 @@ import { inboxLabel, waitedLabel } from '../../src/renderer/features/notificatio
 
 const recordings = JSON.parse(readFileSync(path.join(__dirname, '..', 'fixtures', 'agent-status-recordings.json'), 'utf8')) as Record<string, { t: number; body: string }[]>;
 const recording = (prefix: string) => Object.entries(recordings).find(([k]) => k.startsWith(prefix))![1];
-const ON: NotifySettings = { notifyNeedsYou: true, notifyFinished: true, notifyErrors: true, notifyEstimated: false, notifyWindows: true };
+const ON: NotifySettings = { notifyNeedsYou: true, notifyFinished: true, notifyErrors: true, notifyPrograms: true, notifyEstimated: false, notifyWindows: true };
 
 function setup(settings: Partial<NotifySettings> = {}) {
   const env = { focused: true, looking: new Set<string>(), settings: { ...ON, ...settings }, changes: 0 };

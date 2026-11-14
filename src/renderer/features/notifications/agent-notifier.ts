@@ -11,6 +11,10 @@
 //   agent starts working (or waits for you) again in that time. `working → idle` alone is never
 //   "finished": Codex does exactly that while it starts up.
 // - error: the agent reported `error`.
+// - message: a program in the tab asked for a notification (OSC 9/777/99, `splitnest notify`). At
+//   most MESSAGE_LIMIT per tab per minute. Dropped when another notice of the tab went out less
+//   than MESSAGE_MERGE_MS ago (Codex sends OSC 9 as it reports `done`): one notification per
+//   event. A state notice that follows a message replaces it (one notice per tab).
 //
 // Where: nothing while the user is looking at that tab (window focused, tab on screen). With the
 // window focused but another tab, workspace or Settings shown: an in-app notice. With the window
@@ -22,15 +26,17 @@
 // of the notice (shown, dismissed, suppressed because the tab was on screen).
 // - needs you: listed from the moment the agent waits until it moves on or exits. Looking at the
 //   tab doesn't remove it: the agent is still blocked.
-// - finished / error: listed until the user looks at the tab, or the agent works again.
+// - finished / error / message: listed until the user looks at the tab, or the agent works again.
 // Order: needs you first, then errors, then finished; within each, the longest-waiting first.
 import { isNeedsKind, kindEnabled, type NoticeKind } from '../../../shared/notifications';
 import type { AppSettings } from '../../../shared/types';
 import type { AgentView } from '../terminal/agent-status';
 
 export const DONE_SETTLE_MS = 1500;
+export const MESSAGE_MERGE_MS = 5000;
+export const MESSAGE_LIMIT = { count: 6, windowMs: 60_000 } as const;
 
-export type NotifySettings = Pick<AppSettings, 'notifyNeedsYou' | 'notifyFinished' | 'notifyErrors' | 'notifyEstimated' | 'notifyWindows'>;
+export type NotifySettings = Pick<AppSettings, 'notifyNeedsYou' | 'notifyFinished' | 'notifyErrors' | 'notifyEstimated' | 'notifyPrograms' | 'notifyWindows'>;
 
 export interface AgentEvent {
   tabId: string;
@@ -107,6 +113,10 @@ interface TabState {
   live: NoticeKind | null;
   /** This tab's inbox item, or null. */
   pending: InboxItem | null;
+  /** When this tab's last notice was delivered. */
+  lastAt: number;
+  /** When its recent program messages arrived (rate limit). */
+  messages: number[];
 }
 
 export class AgentNotifier {
@@ -119,7 +129,7 @@ export class AgentNotifier {
     let t = this.tabs.get(tabId);
     if (!t) {
       if (!view) return;
-      t = { workspaceId, view: null, needsHandled: null, doneTimer: null, live: null, pending: null };
+      t = this.newTab(workspaceId);
       this.tabs.set(tabId, t);
     }
     const prev = t.view;
@@ -168,6 +178,28 @@ export class AgentNotifier {
     }
   }
 
+  /**
+   * A program in this tab asked for a notification. `view` names the program (the tab's agent, or
+   * its shell) and carries the program's text as its message.
+   */
+  message(tabId: string, workspaceId: string, view: AgentView): void {
+    let t = this.tabs.get(tabId);
+    if (!t) {
+      t = this.newTab(workspaceId);
+      this.tabs.set(tabId, t);
+    }
+    t.workspaceId = workspaceId;
+    const now = this.now();
+    t.messages = t.messages.filter((at) => now - at < MESSAGE_LIMIT.windowMs);
+    if (t.messages.length >= MESSAGE_LIMIT.count) return;
+    t.messages.push(now);
+    if (t.live !== null && now - t.lastAt < MESSAGE_MERGE_MS) return;
+    // A blocked agent's place in the inbox is kept: it is still blocked.
+    if (!t.pending || !isNeedsKind(t.pending.kind)) this.note(tabId, t, 'message', view);
+    this.fire(tabId, t, 'message', view);
+    this.dropIfIdle(tabId, t);
+  }
+
   /** Tabs that no longer exist (closed, or their workspace removed): everything about them goes. */
   retain(tabIds: ReadonlySet<string>): void {
     for (const [id, t] of [...this.tabs]) {
@@ -208,14 +240,22 @@ export class AgentNotifier {
     this.tabs.clear();
   }
 
-  /** A finished turn or an error enters the inbox unless the user is looking at it right now. */
+  private newTab(workspaceId: string): TabState {
+    return { workspaceId, view: null, needsHandled: null, doneTimer: null, live: null, pending: null, lastAt: -Infinity, messages: [] };
+  }
+
+  private now(): number {
+    return (this.deps.now ?? Date.now)();
+  }
+
+  /** A finished turn, an error or a message enters the inbox unless the user is looking at it right now. */
   private note(tabId: string, t: TabState, kind: NoticeKind, view: AgentView): void {
     if (kindEnabled(kind, this.deps.settings()) && !this.deps.looking(tabId)) this.setPending(tabId, t, kind, view);
   }
 
   private setPending(tabId: string, t: TabState, kind: NoticeKind | null, view?: AgentView): void {
     if (kind === null && t.pending === null) return;
-    t.pending = kind === null || !view ? null : { tabId, workspaceId: t.workspaceId, kind, since: (this.deps.now ?? Date.now)(), view };
+    t.pending = kind === null || !view ? null : { tabId, workspaceId: t.workspaceId, kind, since: this.now(), view };
     this.deps.inboxChanged?.();
   }
 
@@ -231,6 +271,7 @@ export class AgentNotifier {
     }
     this.deps.deliver({ tabId, workspaceId: t.workspaceId, kind, view }, where);
     t.live = kind;
+    t.lastAt = this.now();
     return true;
   }
 

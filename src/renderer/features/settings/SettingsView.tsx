@@ -195,6 +195,14 @@ function NotificationsSection({ settings, onChange }: { settings: AppSettings; o
       {toggle('notifyFinished', 'Notify when an agent finishes', 'When the agent reports that it finished. Not sent if it starts working again within a second and a half.')}
       {toggle('notifyErrors', 'Notify when an agent stops with an error', 'When the agent reports an error.')}
       {toggle(
+        'notifyPrograms',
+        'Notifications sent by programs',
+        <>
+          When a program in a terminal asks for one with the escape codes other terminals use (OSC 9, 777 or 99), or you run <code>splitnest notify &quot;Tests passed&quot;</code>{' '}
+          (<code>--title</code> for a title). Codex and Claude Code can send them too. What the program wrote is shown only with <em>Include what the agent wrote</em> on.
+        </>,
+      )}
+      {toggle(
         'notifyWindows',
         'Windows notifications while SplitNest is in the background',
         <>
