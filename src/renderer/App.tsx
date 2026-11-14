@@ -40,7 +40,7 @@ import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
 import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialog';
 import { ReviewDialog } from './features/tasks/ReviewDialog';
 import { taskShells } from './features/tasks/task-text';
-import { FinishTaskDialog, type FinishOutcome } from './features/tasks/FinishTaskDialog';
+import { FinishTaskDialog, type BranchResult, type FinishOutcome } from './features/tasks/FinishTaskDialog';
 import type { TaskError, TaskProgress } from '../shared/tasks';
 import { canAddPane, canAddTab, initialState, reducer } from './features/workspaces/workspace-state';
 
@@ -641,6 +641,8 @@ export function App() {
    * with one terminal that starts the shell and types the agent's command.
    */
   const createTask = async (parentId: string, choice: NewTaskChoice): Promise<TaskError | null> => {
+    // Each task is a workspace: never create a folder that couldn't be listed.
+    if (stateRef.current.workspaces.length >= LIMITS.maxWorkspaces) return { code: 'NAME_TAKEN', message: `At most ${LIMITS.maxWorkspaces} workspaces are supported, and each task is one. Remove one first.` };
     // Main checks the setting and the parent in its own copy of the state.
     await flushSave();
     const r = await api.createTask(parentId, choice.name);
@@ -679,7 +681,7 @@ export function App() {
   };
 
   /** Finish: the task's folder is gone, so its workspace leaves the list (no question: the user just chose it). */
-  const taskFinished = (workspaceId: string, outcome: FinishOutcome) => {
+  const taskFinished = (workspaceId: string, outcome: FinishOutcome, branch: BranchResult) => {
     const ws = stateRef.current.workspaces.find((w) => w.id === workspaceId);
     if (!ws?.task) return;
     for (const t of listTabs(ws.layout)) {
@@ -693,13 +695,17 @@ export function App() {
       dispatch({ type: 'activateWorkspace', workspaceId: parent.id });
       api.refreshGit(parent.id);
     }
+    // Says what happened to the branch as main reported it (kept when it has unmerged commits).
+    const b = ws.task.branch;
+    const branchText =
+      branch === 'deleted' ? 'its branch was deleted' : branch === 'missing' ? 'its branch was already gone' : `its branch ${b} was kept${branch === 'unmerged' ? ` (it has commits ${ws.task.baseBranch} doesn’t have)` : ''}`;
     const what = {
-      merged: `“${ws.name}” was merged into ${ws.task.baseBranch}; its folder and branch were deleted.`,
-      removed: `“${ws.name}” had nothing to merge; its folder and branch were deleted.`,
-      'kept-branch': `The folder of “${ws.name}” was deleted; its branch ${ws.task.branch} was kept.`,
-      discarded: `“${ws.name}” was discarded: its folder and branch were deleted.`,
+      merged: `“${ws.name}” was merged into ${ws.task.baseBranch}; its folder was deleted and ${branchText}.`,
+      removed: `“${ws.name}” was removed; its folder is gone and ${branchText}.`,
+      'kept-branch': `The folder of “${ws.name}” was deleted; ${branchText}.`,
+      discarded: `“${ws.name}” was discarded: its folder was deleted and ${branchText}.`,
     }[outcome];
-    pushToast('info', what);
+    pushToast(branch === 'unmerged' ? 'warning' : 'info', what);
   };
 
   const relinkWorkspace = async (workspaceId: string) => {
@@ -1475,7 +1481,7 @@ export function App() {
               setEditorsSaved((n) => n + 1);
             }}
             onEndTerminals={() => ws && endTaskTerminals(ws.id)}
-            onDone={(outcome) => ws && taskFinished(ws.id, outcome)}
+            onDone={(outcome, branch) => ws && taskFinished(ws.id, outcome, branch)}
             onClose={() => setFinishFor(null)}
           />
         );

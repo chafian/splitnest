@@ -33,7 +33,7 @@ function repoGit(add: Handler, nul = true): Handler {
     const a = args.join(' ');
     if (a === 'rev-parse --show-prefix') return ok('\n');
     if (a.startsWith('worktree list')) return ok(list);
-    if (a === 'symbolic-ref --quiet --short HEAD') return ok('main\n');
+    if (a === 'symbolic-ref --quiet HEAD') return ok('refs/heads/main\n');
     if (a === 'rev-parse --verify --quiet HEAD^{commit}') return ok(`${BASE}\n`);
     if (a.startsWith('for-each-ref')) return ok('refs/heads/main\n');
     if (a.startsWith('worktree add')) return add(cwd, args);
@@ -75,7 +75,7 @@ describe('TaskService (scripted Git)', () => {
   it('an invalid name is refused before Git runs', async () => {
     const { git, calls } = fakeGit(repoGit(() => ok()));
     const s = new TaskService({ git, isDirectory });
-    for (const name of ['', '   ', '!!!', 'a\nb', 'x'.repeat(81), 42, null, { name: 'x' }]) expect(await s.create('C:\\fake\\app', name)).toMatchObject({ ok: false, error: { code: 'INVALID_NAME' } });
+    for (const name of ['', '   ', 'a\nb', 'x'.repeat(81), 42, null, { name: 'x' }]) expect(await s.create('C:\\fake\\app', name)).toMatchObject({ ok: false, error: { code: 'INVALID_NAME' } });
     expect(calls).toEqual([]);
   });
 

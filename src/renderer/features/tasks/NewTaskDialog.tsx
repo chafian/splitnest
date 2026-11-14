@@ -79,7 +79,7 @@ export function NewTaskDialog(props: Props) {
 
   const inWsl = workspace ? wslDistroOf(workspace.rootPath) : null;
   const typed = name.trim();
-  const nameOk = isTaskName(typed) && /[A-Za-z0-9]/.test(typed.normalize('NFKD'));
+  const nameOk = isTaskName(typed);
   const canCreate = !!workspace && nameOk && !!profileId && !!preview && !problem && !busy;
   const submit = async () => {
     if (!canCreate) return;
@@ -130,7 +130,7 @@ export function NewTaskDialog(props: Props) {
           }}
         />
       </label>
-      {typed && !nameOk && <p className="task-dialog__error">Use at least one letter or digit.</p>}
+      {typed && !nameOk && <p className="task-dialog__error">Up to {TASK_LIMITS.maxNameLength} characters, without control characters.</p>}
 
       <div className="field">
         <span className="field__label" id="task-agent-label">

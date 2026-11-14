@@ -52,6 +52,8 @@ export type TaskErrorCode =
   | 'MERGE_FAILED'
   | 'MERGE_NOT_UNDONE'
   | 'STALE'
+  | 'TASK_FOLDER_MISSING'
+  | 'PATH_TOO_LONG'
   | 'GIT_FAILED';
 
 export interface TaskError {
@@ -129,6 +131,8 @@ export interface TaskChanges {
   files: TaskChange[];
   /** More files than listed (at most TASK_LIMITS.maxChangedFiles are). */
   truncated: boolean;
+  /** Changed files left out because their names can't be passed back to Git safely (`:` or `\\` in a Linux name). */
+  unlisted: number;
 }
 
 export interface TaskDiff {
@@ -146,9 +150,16 @@ export interface TaskFinishCheck {
   /** Files changed or new in the task folder that aren't committed (first 50), and how many. */
   uncommitted: string[];
   uncommittedCount: number;
-  /** Commits the merge would bring into the base branch, and commits the base branch got since the task started. */
-  commitsToMerge: number;
-  behind: number;
+  /** Anything at all is uncommitted in the task folder (Git's own status; also files the list leaves out). */
+  hasUncommitted: boolean;
+  /**
+   * Commits the merge would bring into the base branch, and commits the base branch got since the task
+   * started. Null when that can't be told (the base branch was renamed or deleted, or Git failed).
+   */
+  commitsToMerge: number | null;
+  behind: number | null;
+  /** Commits on the task branch since the task started (shown by Discard when commitsToMerge is unknown). */
+  branchCommits: number;
   /** Where the base branch is checked out (the merge happens there), or null when nowhere. */
   mergeFolder: string | null;
   /** That folder has changes to tracked files (a merge there is refused). */
@@ -165,6 +176,11 @@ export interface TaskFinishCheck {
   ignoredCount: number;
   /** Terminals running in the task's workspace (main's count). */
   runningTerminals: number;
+  /**
+   * Fingerprint of what Discard lists (branch commit, every uncommitted and ignored entry). Discard
+   * sends it back and is refused (STALE) if anything changed since.
+   */
+  discardKey: string;
 }
 
 export type TaskMergeResult =

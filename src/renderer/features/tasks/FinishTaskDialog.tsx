@@ -10,6 +10,8 @@ import type { Workspace } from '../../../shared/types';
 import { finishPlan } from './finish-plan';
 
 export type FinishOutcome = 'merged' | 'removed' | 'kept-branch' | 'discarded';
+/** What happened to the task branch (from main; the toast says it as it is). */
+export type BranchResult = 'deleted' | 'kept' | 'unmerged' | 'missing';
 
 interface Props {
   open: boolean;
@@ -20,7 +22,7 @@ interface Props {
   /** Ends the task workspace's terminals (before its folder is deleted). */
   onEndTerminals(): void;
   /** The task's folder is gone: remove its workspace from the list. */
-  onDone(outcome: FinishOutcome): void;
+  onDone(outcome: FinishOutcome, branch: BranchResult): void;
   onClose(): void;
 }
 
@@ -77,13 +79,19 @@ export function FinishTaskDialog({ open, workspace, dirtyEditors, onSaveEditors,
     }
   };
 
-  /** Ends the terminals, then deletes the folder once main sees none running (they take a moment to end). */
-  const removeFolder = async (fn: () => Promise<{ ok: true } | { ok: false; error: TaskError }>): Promise<TaskError | null> => {
-    onEndTerminals();
+  /**
+   * Deletes the folder. Main first refuses what would fail anyway (uncommitted files, a changed task);
+   * only then are the terminals ended, and it is retried until main sees none running.
+   */
+  const removeFolder = async <T extends object>(fn: () => Promise<({ ok: true } & T) | { ok: false; error: TaskError }>): Promise<({ ok: true } & T) | { ok: false; error: TaskError }> => {
+    let ended = false;
     for (let i = 0; ; i++) {
       const r = await fn();
-      if (r.ok) return null;
-      if (r.error.code !== 'TERMINALS_RUNNING' || i >= 20) return r.error;
+      if (r.ok || r.error.code !== 'TERMINALS_RUNNING' || i >= 20) return r;
+      if (!ended) {
+        onEndTerminals();
+        ended = true;
+      }
       await pause(500);
     }
   };
@@ -103,32 +111,41 @@ export function FinishTaskDialog({ open, workspace, dirtyEditors, onSaveEditors,
       if (r.result.outcome === 'conflicts') return `Conflicts are now in the task folder, in ${list(r.result.conflicts, r.result.conflicts.length)}. Resolve them there (or ask the agent), then Commit all.`;
       return r.result.outcome === 'updated' ? `Brought in the newer commits from ${base}.` : `${base} has nothing new.`;
     });
+  const toMerge = check?.commitsToMerge ?? 0;
   const mergeAndClean = () =>
     run('Merging…', async () => {
-      if (check && check.commitsToMerge > 0) {
+      if (toMerge > 0) {
         const m = await api.taskMerge(id!);
         if (!m.ok) return m.error.message;
         if (m.result.outcome === 'conflicts') return `Merging would conflict in ${list(m.result.conflicts, m.result.conflicts.length)}, so it was undone: ${base} is exactly as before. Bring in ${base} to resolve the conflicts in the task first.`;
       }
       setBusy('Cleaning up…');
-      const err = await removeFolder(() => api.taskRemove(id!, true));
-      if (err) return `${check && check.commitsToMerge > 0 ? `Merged into ${base}. ` : ''}The task folder wasn’t deleted: ${err.message}`;
-      onDone(check && check.commitsToMerge > 0 ? 'merged' : 'removed');
+      const r = await removeFolder(() => api.taskRemove(id!, true));
+      if (!r.ok) return `${toMerge > 0 ? `Merged into ${base}. ` : ''}The task folder wasn’t deleted: ${r.error.message}`;
+      onDone(toMerge > 0 ? 'merged' : 'removed', r.branch === 'kept' ? 'kept' : r.branch);
       return null;
     });
   const keepBranch = () =>
     run('Removing the folder…', async () => {
-      const err = await removeFolder(() => api.taskRemove(id!, false));
-      if (err) return err.message;
-      onDone('kept-branch');
+      const r = await removeFolder(() => api.taskRemove(id!, false));
+      if (!r.ok) return r.error.message;
+      onDone('kept-branch', 'kept');
+      return null;
+    });
+  /** The task's folder is already gone: tidy up (the branch is deleted only if merged). */
+  const removeMissing = () =>
+    run('Removing the task…', async () => {
+      const r = await removeFolder(() => api.taskRemove(id!, true));
+      if (!r.ok) return r.error.message;
+      onDone('removed', r.branch === 'kept' ? 'kept' : r.branch);
       return null;
     });
   const discard = () =>
     run('Discarding…', async () => {
-      const err = await removeFolder(() => api.taskDiscard(id!, check?.head ?? ''));
+      const r = await removeFolder(() => api.taskDiscard(id!, check?.discardKey ?? ''));
       setConfirmDiscard(false);
-      if (err) return err.message;
-      onDone('discarded');
+      if (!r.ok) return r.error.code === 'STALE' ? `${r.error.message} The list below is up to date now.` : r.error.message;
+      onDone('discarded', r.branch);
       return null;
     });
 
@@ -168,9 +185,16 @@ export function FinishTaskDialog({ open, workspace, dirtyEditors, onSaveEditors,
       }
     >
       {error ? (
-        <p className="task-dialog__error" data-testid="finish-error">
-          {error.message}
-        </p>
+        <>
+          <p className="task-dialog__error" data-testid="finish-error">
+            {error.message}
+          </p>
+          {error.code === 'TASK_FOLDER_MISSING' && (
+            <button type="button" className="button" data-testid="finish-remove-missing" onClick={() => void removeMissing()} disabled={!!busy}>
+              Remove the task
+            </button>
+          )}
+        </>
       ) : !check || !task || !plan ? (
         <p className="settings__hint">Checking the task…</p>
       ) : confirmDiscard ? (
@@ -179,12 +203,23 @@ export function FinishTaskDialog({ open, workspace, dirtyEditors, onSaveEditors,
           <ul className="finish__list">
             <li>
               The folder <code>{task.worktreePath}</code> is deleted
-              {check.uncommittedCount > 0 ? <>, with {check.uncommittedCount} uncommitted {check.uncommittedCount === 1 ? 'file' : 'files'}: {list(check.uncommitted, check.uncommittedCount)}</> : null}
+              {check.uncommittedCount > 0 ? <>, with {check.uncommittedCount} uncommitted {check.uncommittedCount === 1 ? 'file' : 'files'}: {list(check.uncommitted, check.uncommittedCount)}</> : check.hasUncommitted ? <>, with uncommitted changes (not all can be listed)</> : null}
               {check.ignoredCount > 0 ? <>, and files Git ignores there ({list(check.ignored, check.ignoredCount)})</> : null}.
             </li>
             <li>
               The branch <code>{task.branch}</code> is deleted
-              {check.commitsToMerge > 0 ? <>, with {check.commitsToMerge} {check.commitsToMerge === 1 ? 'commit' : 'commits'} that {base} doesn’t have</> : null}.
+              {check.commitsToMerge === null ? (
+                check.branchCommits > 0 ? (
+                  <>
+                    , with {check.branchCommits} {check.branchCommits === 1 ? 'commit' : 'commits'} made since the task started (whether {base} has them can’t be told)
+                  </>
+                ) : null
+              ) : check.commitsToMerge > 0 ? (
+                <>
+                  , with {check.commitsToMerge} {check.commitsToMerge === 1 ? 'commit' : 'commits'} that {base} doesn’t have
+                </>
+              ) : null}
+              .
             </li>
             {check.runningTerminals > 0 && <li>The task’s {check.runningTerminals === 1 ? 'terminal is' : `${check.runningTerminals} terminals are`} ended.</li>}
           </ul>

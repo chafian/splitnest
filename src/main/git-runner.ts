@@ -99,11 +99,16 @@ export function createWslGitRunner(deps: WslGitDeps): GitRunner {
     return loc && loc.distro.toLowerCase() === deps.distro.toLowerCase() ? loc.linuxPath : '/nonexistent/splitnest';
   };
   const exec = async (args: string[], timeoutMs: number): Promise<GitResult> => {
+    // Stopping wsl.exe doesn't stop the Git inside Linux, so Git runs under coreutils `timeout` there
+    // (TERM, then KILL 10 s later), and wsl.exe gets a little longer than that.
+    const seconds = Math.max(1, Math.ceil(timeoutMs / 1000));
     const r = await deps.run(
       deps.wslExe,
-      ['--distribution', deps.distro, '--exec', 'env', 'LC_ALL=C', 'LANGUAGE=C', 'GIT_TERMINAL_PROMPT=0', 'GIT_OPTIONAL_LOCKS=0', 'git', ...args],
-      { timeoutMs, env: { ...process.env, WSL_UTF8: '1' } },
+      ['--distribution', deps.distro, '--exec', 'env', 'LC_ALL=C', 'LANGUAGE=C', 'GIT_TERMINAL_PROMPT=0', 'GIT_OPTIONAL_LOCKS=0', 'timeout', '-k', '10', String(seconds), 'git', ...args],
+      { timeoutMs: timeoutMs + 20_000, env: { ...process.env, WSL_UTF8: '1' } },
     );
+    // 124: `timeout` stopped it; 137: it had to be killed.
+    if (r.code === 124 || r.code === 137) return { code: r.code, stdout: r.stdout.toString('utf8'), stderr: decodeWslOutput(r.stderr), timedOut: true };
     // Git's own output is UTF-8; wsl.exe's messages (no such distribution…) may be UTF-16.
     return { code: r.code, stdout: r.stdout.toString('utf8'), stderr: decodeWslOutput(r.stderr), timedOut: r.timedOut, ...(r.overflow ? { overflow: true } : {}) };
   };

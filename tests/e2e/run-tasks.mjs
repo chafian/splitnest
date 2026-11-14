@@ -138,16 +138,23 @@ try {
   await page.click('button:has-text("Open folder…")');
   await page.waitForSelector('[data-pane-id][data-status="running"]');
 
-  await step('off by default: no New agent task command and no task button', async () => {
-    if (await hasCommand(page, 'New agent task')) throw new Error('command listed');
-    if (await page.$('[aria-label^="New agent task from"]')) throw new Error('button shown');
+  await step('on by default: the task button on a repository’s row and the palette command', async () => {
+    await page.waitForSelector('[aria-label="New agent task from shop app"]', { state: 'attached', timeout: 15_000 });
+    if (!(await hasCommand(page, 'New agent task'))) throw new Error('command not listed');
   });
 
-  await step('Settings › Workspaces › Agent tasks (preview) turns it on', async () => {
+  await step('Settings › Workspaces › Agent tasks off hides them, and on brings them back', async () => {
     await page.keyboard.press('Control+Comma');
     await page.click('.settings-nav__item:has-text("Workspaces")');
-    await page.click('.setting:has-text("Agent tasks (preview)") [role="switch"]');
-    await until(() => saved()?.settings?.agentTasks === true, 'setting saved');
+    await page.click('.setting:has-text("Agent tasks") [role="switch"]');
+    await until(() => saved()?.settings?.agentTasks === false, 'setting saved off');
+    await selectWorkspace(page, 'shop app');
+    if (await page.$('[aria-label="New agent task from shop app"]')) throw new Error('button shown while off');
+    if (await hasCommand(page, 'New agent task')) throw new Error('command listed while off');
+    await page.keyboard.press('Control+Comma');
+    await page.click('.settings-nav__item:has-text("Workspaces")');
+    await page.click('.setting:has-text("Agent tasks") [role="switch"]');
+    await until(() => saved()?.settings?.agentTasks === true, 'setting saved on');
     await selectWorkspace(page, 'shop app');
     await page.waitForSelector('[aria-label="New agent task from shop app"]', { state: 'attached', timeout: 15_000 });
   });

@@ -324,16 +324,22 @@ export function registerIpc(ctx: IpcContext): void {
   handle(IPC.taskRemove, async (_event, workspaceId, deleteBranch) => {
     const t = taskOf(workspaceId);
     if (!t.ok) return t;
+    // What Git would refuse anyway comes first, so the page ends the terminals only when removal can go ahead.
+    const blocked = await ctx.tasks.removalBlocked(t.task);
+    if (blocked) return { ok: false, error: blocked };
     if (ctx.broker.liveInWorkspace(t.id) > 0) return taskFailure('TERMINALS_RUNNING');
     const r = await ctx.tasks.remove(t.task, { deleteBranch: deleteBranch === true });
     ctx.log.info(`agent task removed: ${r.ok ? r.branch : r.error.code}`);
     return r;
   });
-  handle(IPC.taskDiscard, async (_event, workspaceId, head) => {
+  handle(IPC.taskDiscard, async (_event, workspaceId, confirmedKey) => {
     const t = taskOf(workspaceId);
     if (!t.ok) return t;
+    const blocked = await ctx.tasks.discardBlocked(t.task, confirmedKey);
+    if (blocked) return { ok: false, error: blocked };
     if (ctx.broker.liveInWorkspace(t.id) > 0) return taskFailure('TERMINALS_RUNNING');
-    const r = await ctx.tasks.discard(t.task, head);
+    // Checked again inside: anything written while the terminals were ending makes it STALE.
+    const r = await ctx.tasks.discard(t.task, confirmedKey);
     ctx.log.info(`agent task discarded: ${r.ok ? 'ok' : r.error.code}`);
     return r;
   });

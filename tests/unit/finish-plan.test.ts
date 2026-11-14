@@ -6,6 +6,9 @@ const ready: TaskFinishCheck = {
   head: 'a'.repeat(40),
   uncommitted: [],
   uncommittedCount: 0,
+  hasUncommitted: false,
+  branchCommits: 2,
+  discardKey: 'k'.repeat(64),
   commitsToMerge: 2,
   behind: 0,
   mergeFolder: 'C:\\code\\app',
@@ -64,6 +67,16 @@ describe('Finish plan', () => {
     expect(p.canMerge).toBe(true);
     expect(p.merge.text).toMatch(/can’t check for conflicts first; if the merge conflicts, it is undone\. main has 3 newer commits/);
     expect(p.merge.canUpdate).toBe(true);
+  });
+
+  it('the base branch gone (unknown commits): no Clean up, only keeping the branch', () => {
+    const p = plan({ commitsToMerge: null, behind: null, preview: 'unknown' });
+    expect(p).toMatchObject({ canMerge: false, canRemove: true, merge: { state: 'blocked', canUpdate: false } });
+    expect(p.merge.text).toMatch(/can’t tell how the task relates to main/);
+  });
+
+  it('uncommitted changes the list can’t show still count', () => {
+    expect(plan({ hasUncommitted: true })).toMatchObject({ canMerge: false, canRemove: false, commit: { state: 'ready', canCommit: true } });
   });
 
   it('unsaved editor files in the task block cleaning up', () => {

@@ -179,7 +179,7 @@ describe.skipIf(!git)('agent tasks with real Git', { timeout: 60_000 }, () => {
     await g(repo, 'checkout', '-q', '--detach');
     expect(await service.create(repo, 'x')).toMatchObject({ ok: false, error: { code: 'DETACHED_HEAD' } });
 
-    expect(await service.create(repo, '!!!')).toMatchObject({ ok: false, error: { code: 'INVALID_NAME' } });
+    expect(await service.create(repo, '   ')).toMatchObject({ ok: false, error: { code: 'INVALID_NAME' } });
     expect(await service.create(repo, 'a'.repeat(81))).toMatchObject({ ok: false, error: { code: 'INVALID_NAME' } });
     expect(await service.create('\\\\wsl.localhost\\Ubuntu\\home\\me\\app', 'x')).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_LOCATION' } });
     expect(existsSync(`${repo}.worktrees`)).toBe(false);
@@ -566,19 +566,88 @@ describe.skipIf(!git)('agent tasks with real Git', { timeout: 60_000 }, () => {
       w(t.worktreePath, 'f.txt', 'f\n');
       await service.commitAll(t, 'f');
       w(t.worktreePath, 'draft.txt', 'uncommitted\n');
-      const shown = (await check(t)).head!;
+      let shown = (await check(t)).discardKey;
       // New commits after the list was shown: refused.
       w(t.worktreePath, 'g.txt', 'g\n');
       await g(t.worktreePath, 'add', 'g.txt');
       await g(t.worktreePath, 'commit', '-q', '-m', 'g');
       expect(await service.discard(t, shown)).toMatchObject({ ok: false, error: { code: 'STALE' } });
+      expect(await service.discardBlocked(t, shown)).toMatchObject({ code: 'STALE' });
+      // A new file written after the list was shown (an agent still running): refused too.
+      shown = (await check(t)).discardKey;
+      w(t.worktreePath, 'late.txt', 'written while the confirmation was open\n');
+      expect(await service.discard(t, shown)).toMatchObject({ ok: false, error: { code: 'STALE' } });
+      // So is a change to an already-listed file, and a new ignored file.
+      shown = (await check(t)).discardKey;
+      w(t.worktreePath, 'draft.txt', 'changed again\n');
+      await g(t.worktreePath, 'add', 'draft.txt');
+      expect(await service.discard(t, shown)).toMatchObject({ ok: false, error: { code: 'STALE' } });
       expect(existsSync(path.join(t.worktreePath, 'draft.txt'))).toBe(true);
-      expect(await service.discard(t, 'not-a-commit')).toMatchObject({ ok: false, error: { code: 'STALE' } });
-      expect(await service.discard(t, (await check(t)).head)).toEqual({ ok: true });
+      expect(await service.discard(t, 'not-a-key')).toMatchObject({ ok: false, error: { code: 'STALE' } });
+      const now = (await check(t)).discardKey;
+      expect(await service.discardBlocked(t, now)).toBeNull();
+      expect(await service.discard(t, now)).toEqual({ ok: true, branch: 'deleted' });
       expect(existsSync(t.worktreePath)).toBe(false);
       expect(await branches(repo)).toEqual(['main']);
       // Never anything that isn't a task.
-      expect(await service.discard({ ...t, worktreePath: repo }, 'a'.repeat(40))).toMatchObject({ ok: false, error: { code: 'NOT_A_TASK' } });
+      expect(await service.discard({ ...t, worktreePath: repo }, 'a'.repeat(64))).toMatchObject({ ok: false, error: { code: 'NOT_A_TASK' } });
+    });
+
+    it('a tag with the base branch’s name doesn’t confuse it (Git’s short name would be heads/main)', async () => {
+      await g(repo, 'tag', 'main');
+      const t = await created(repo, 'tagged');
+      expect(t.baseBranch).toBe('main');
+      w(t.worktreePath, 'f.txt', 'f\n');
+      await service.commitAll(t, 'f');
+      expect(await check(t)).toMatchObject({ commitsToMerge: 1, mergeFolder: repo });
+      expect(await service.merge(t)).toMatchObject({ ok: true, result: { outcome: 'merged' } });
+    });
+
+    it('Commit all refuses conflict markers in files already staged with git add (as agents often do)', async () => {
+      const t = await created(repo, 'staged-markers');
+      w(t.worktreePath, 'a.txt', 'task\n');
+      await service.commitAll(t, 'task side');
+      w(repo, 'a.txt', 'main\n');
+      await g(repo, 'commit', '-q', '-am', 'main side');
+      expect(await service.updateFromBase(t)).toMatchObject({ ok: true, result: { outcome: 'conflicts' } });
+      // "Resolved" by staging the file with its markers still in it.
+      await g(t.worktreePath, 'add', 'a.txt');
+      expect(await check(t)).toMatchObject({ unresolved: [] });
+      expect(await service.commitAll(t, 'resolve')).toMatchObject({ ok: false, error: { code: 'CONFLICTS_UNRESOLVED' } });
+      w(t.worktreePath, 'a.txt', 'both\n');
+      expect((await service.commitAll(t, 'resolve')).ok).toBe(true);
+    });
+
+    it('the base branch deleted or renamed: not “nothing to merge”; Clean up isn’t offered and the branch is kept', async () => {
+      const t = await created(repo, 'orphan');
+      w(t.worktreePath, 'f.txt', 'f\n');
+      await service.commitAll(t, 'work');
+      await g(repo, 'switch', '-q', '-c', 'trunk');
+      await g(repo, 'branch', '-q', '-D', 'main');
+      const c = await check(t);
+      expect(c).toMatchObject({ commitsToMerge: null, behind: null, preview: 'unknown', branchCommits: 1 });
+      // Removing the folder keeps the unmerged branch, and says so.
+      expect(await service.remove(t, { deleteBranch: true })).toEqual({ ok: true, branch: 'unmerged' });
+      expect(await branches(repo)).toContain('splitnest/orphan');
+    });
+
+    it('uncommitted work is found by Git’s own status, also beyond what the list shows; removal is refused before anything is ended', async () => {
+      const t = await created(repo, 'dirty-check');
+      w(t.worktreePath, 'x.txt', 'x\n');
+      expect(await check(t)).toMatchObject({ hasUncommitted: true });
+      expect(await service.removalBlocked(t)).toMatchObject({ code: 'TASK_DIRTY' });
+      expect(await service.merge(t)).toMatchObject({ ok: false, error: { code: 'TASK_UNCOMMITTED' } });
+      rmSync(path.join(t.worktreePath, 'x.txt'));
+      expect(await service.removalBlocked(t)).toBeNull();
+    });
+
+    it('a name without Latin letters or digits still gets a branch; a folder deleted outside SplitNest says so and can be removed', async () => {
+      const t = await created(repo, '日本語のタスク');
+      expect(t.branch).toBe('splitnest/task');
+      rmSync(t.worktreePath, { recursive: true, force: true });
+      expect(await service.finishCheck(t)).toMatchObject({ ok: false, error: { code: 'TASK_FOLDER_MISSING' } });
+      expect(await service.removalBlocked(t)).toBeNull();
+      expect(await service.remove(t, { deleteBranch: true })).toEqual({ ok: true, branch: 'deleted' });
     });
   });
 

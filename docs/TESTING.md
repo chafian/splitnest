@@ -2,6 +2,29 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Agent tasks, M6: review fixes and on by default (2026-11-14)
+
+- **Independent review** of the whole feature (a separate reviewer reading the code, not my notes). Its findings, each verified before fixing:
+  - "nothing to merge" when the base branch is gone;
+  - `heads/main` with a same-named tag (reproduced);
+  - markers in staged files (reproduced: `diff --diff-filter=U` is empty after `git add`, while `diff --check` reports them);
+  - Discard confirming only the commit;
+  - the capped list hiding uncommitted files;
+  - WSL Git surviving a timeout.
+
+  It found no way for the page to make main act on folders or branches it didn't create.
+- **Real Git** (`task-service-real.test.ts`, now 43):
+  - a tag named `main`;
+  - staged conflict markers refused, then committed once resolved;
+  - base branch deleted: unknown, not nothing, and the unmerged branch kept on removal;
+  - uncommitted work found by status, with removal refused before anything is ended;
+  - a Japanese name gets `splitnest/task`;
+  - a folder deleted outside, reported and removable;
+  - Discard refused after a new commit, after a file written while the confirmation was open, and after a change to a listed file.
+- **Unit:** the Finish plan for an unknown base and for unlisted uncommitted changes; agent tasks on by default (also for settings saved before the setting existed), off only with `false`.
+- **E2E:** `run-tasks.mjs` 19 / 19 (on by default; turning the setting off hides the button and command, on brings them back); `run-tasks-wsl.mjs` 4 / 4 (no setting needed now; Git in WSL under `timeout`).
+- **Regressions:** unit 532 / 532; WSL 11 / 11; `run-e2e.mjs` 36 / 36. Type check and lint are clean.
+
 ## Agent tasks, M5: repositories inside WSL (2026-11-14)
 
 - **E2E** (`node tests/e2e/run-tasks-wsl.mjs`, 4 / 4; Ubuntu-22.04, Git 2.34.1; repository in a temporary folder under `/tmp`): the WSL workspace gets *New agent task* (it has no sidebar Git status); the dialog offers only `wsl:Ubuntu-22.04` and shows the task folder as `\\wsl.localhost\…\app.worktrees\fix-parser`; Linux Git makes the worktree (its `.git` names a Linux path) and `git status` works in the task's WSL terminal; Review lists a file written from Windows; Finish commits, says it can't check for conflicts first (Git 2.34), merges into main and deletes folder and branch.

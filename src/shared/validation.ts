@@ -199,7 +199,7 @@ export function validateSettings(value: unknown): AppSettings {
     notifySound: s.notifySound !== false,
     notifyDetails: s.notifyDetails === true,
     notifyEstimated: s.notifyEstimated === true,
-    agentTasks: s.agentTasks === true,
+    agentTasks: s.agentTasks !== false,
   };
 }
 

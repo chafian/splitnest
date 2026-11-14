@@ -190,6 +190,6 @@ export interface AppApi {
   taskUpdate(workspaceId: string): Promise<TaskResult<{ result: TaskUpdateResult }>>;
   /** Finish: delete the task folder (refused with uncommitted files) and, if asked, its branch once merged. */
   taskRemove(workspaceId: string, deleteBranch: boolean): Promise<TaskResult<{ branch: BranchOutcome }>>;
-  /** Finish: delete the task folder and branch whatever they contain; `head` is the commit the user confirmed for. */
-  taskDiscard(workspaceId: string, head: string): Promise<TaskResult<object>>;
+  /** Finish: delete the task folder and branch whatever they contain; `confirmedKey` is the check's discardKey the user confirmed. */
+  taskDiscard(workspaceId: string, confirmedKey: string): Promise<TaskResult<{ branch: 'deleted' | 'kept' | 'missing' }>>;
 }

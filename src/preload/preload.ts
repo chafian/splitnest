@@ -131,7 +131,7 @@ const api: AppApi = {
   taskMerge: (workspaceId) => ipcRenderer.invoke(IPC.taskMerge, workspaceId),
   taskUpdate: (workspaceId) => ipcRenderer.invoke(IPC.taskUpdate, workspaceId),
   taskRemove: (workspaceId, deleteBranch) => ipcRenderer.invoke(IPC.taskRemove, workspaceId, deleteBranch),
-  taskDiscard: (workspaceId, head) => ipcRenderer.invoke(IPC.taskDiscard, workspaceId, head),
+  taskDiscard: (workspaceId, confirmedKey) => ipcRenderer.invoke(IPC.taskDiscard, workspaceId, confirmedKey),
   onGitStatus: (listener) => {
     gitListeners.add(listener);
     return () => {

@@ -17,6 +17,7 @@
 // - Operations that change a repository run one at a time per repository (two tasks created at
 //   once never pick the same name). Different repositories don't wait for each other.
 // - Nothing about repositories is logged; error messages name no path, branch or Git output.
+import { createHash } from 'node:crypto';
 import { access, lstat, open, readdir, readFile, realpath, rmdir } from 'node:fs/promises';
 import path from 'node:path';
 import { isWslRoot, repositoryFilterKeys } from './git-status';
@@ -80,7 +81,7 @@ const MESSAGES: Record<TaskErrorCode, string> = {
   DETACHED_HEAD: 'Check out a branch first: no branch is checked out here, so there is nothing to merge a task back into.',
   NO_COMMITS: 'Make a first commit first: a task branch starts from the current commit.',
   UNSUPPORTED_LOCATION: 'Tasks aren’t available for this folder’s location yet.',
-  INVALID_NAME: 'Give the task a name with at least one letter or digit (up to 80 characters).',
+  INVALID_NAME: 'Give the task a name (up to 80 characters, no control characters).',
   NAME_TAKEN: 'Branches or folders with this name already exist. Choose another name.',
   NOT_A_TASK: 'This folder isn’t a SplitNest task of this repository anymore, so SplitNest leaves it alone.',
   REPOSITORY_MISSING: 'The repository this task belongs to can’t be found.',
@@ -91,6 +92,8 @@ const MESSAGES: Record<TaskErrorCode, string> = {
   TIMEOUT: 'Git took too long and was stopped.',
   CHANGES_NOT_CHECKED: 'This repository’s own Git configuration names a filter program, which Git would start to compare files, so SplitNest doesn’t compare them here. Review the changes with Git yourself.',
   NOT_CHANGED: 'That file isn’t among the task’s changes (anymore).',
+  TASK_FOLDER_MISSING: 'The task’s folder is gone (deleted or moved outside SplitNest). Remove the task: its branch is deleted only if it is merged.',
+  PATH_TOO_LONG: 'Some paths in the repository are too long for Windows in the task folder. Turn on Git’s long paths (git config --global core.longpaths true) and try again.',
   TERMINALS_RUNNING: 'Terminals are still running in this task. They are ended first; try again in a moment.',
   BASE_NOT_CHECKED_OUT: 'The branch the task came from isn’t checked out in any folder, so there is nowhere to merge it. Check it out (for example in the workspace the task came from) and try again.',
   BASE_DIRTY: 'The folder where the task would be merged has uncommitted changes. Commit or stash them there first, so the merge can’t mix with them.',
@@ -135,8 +138,9 @@ export class TaskService {
 
   /** What a task created from `root` with this name would be, without creating anything. */
   async preview(root: string, name: unknown): Promise<TaskResult<{ preview: TaskPreview }>> {
-    const slug = isTaskName(name) ? taskSlug(name) : null;
-    if (!slug) return fail('INVALID_NAME');
+    if (!isTaskName(name)) return fail('INVALID_NAME');
+    // A name with no Latin letter or digit (日本語, emoji) still gets a branch: `splitnest/task`, `-2`…
+    const slug = taskSlug(name) ?? 'task';
     const repo = await this.inspect(root);
     if (!repo.ok) return repo;
     const picked = await this.pick(repo.repo, slug);
@@ -146,8 +150,8 @@ export class TaskService {
 
   /** Creates the task's branch and worktree from the branch checked out in `root`. */
   async create(root: string, name: unknown): Promise<TaskResult<{ task: TaskRecord }>> {
-    const slug = isTaskName(name) ? taskSlug(name) : null;
-    if (!slug) return fail('INVALID_NAME');
+    if (!isTaskName(name)) return fail('INVALID_NAME');
+    const slug = taskSlug(name) ?? 'task';
     const inspected = await this.inspect(root);
     if (!inspected.ok) return inspected;
     const repo = inspected.repo;
@@ -165,6 +169,8 @@ export class TaskService {
         if (add !== null && !entry && !list?.some((e) => e.branch === branch)) {
           await this.run(repoRoot, ['update-ref', '-d', `refs/heads/${branch}`, baseCommit]);
         }
+        // Windows' path limit (260 characters) without Git's long paths turned on.
+        if (add && /Filename too long|path too long/i.test(add.stderr)) return fail('PATH_TOO_LONG');
         return gitFailure(add);
       }
       if (!entry || entry.branch !== branch) return fail('GIT_FAILED');
@@ -238,7 +244,7 @@ export class TaskService {
    */
   async changes(task: TaskRecord): Promise<TaskResult<{ changes: TaskChanges }>> {
     const cwd = task.worktreePath;
-    if (!(await this.deps.isDirectory(cwd))) return fail('NOT_A_TASK');
+    if (!(await this.deps.isDirectory(cwd))) return fail('TASK_FOLDER_MISSING');
     const cfg = await this.read(cwd, ['config', '--show-scope', '--includes', '--null', '--get-regexp', '^filter\\..*\\.(clean|process)$']);
     if (cfg === null) return fail('GIT_NOT_FOUND');
     if (cfg.code !== 0 && cfg.code !== 1) return gitFailure(cfg);
@@ -257,8 +263,12 @@ export class TaskService {
     const counts = parseNumstat(nums!.stdout);
     const uncommitted = new Set(parsePaths(dirty!.stdout));
     const files: TaskChange[] = [];
+    let unlisted = 0;
     for (const n of parseNameStatus(names!.stdout)) {
-      if (!isSafeRelative(n.path) || (n.oldPath !== undefined && !isSafeRelative(n.oldPath))) continue;
+      if (!isSafeRelative(n.path) || (n.oldPath !== undefined && !isSafeRelative(n.oldPath))) {
+        unlisted++;
+        continue;
+      }
       const c = counts.get(n.path) ?? { added: null, removed: null };
       files.push({
         path: n.path,
@@ -272,10 +282,11 @@ export class TaskService {
     }
     for (const p of parsePaths(others!.stdout)) {
       if (isSafeRelative(p)) files.push({ path: p, kind: 'untracked', added: null, removed: null, binary: false, uncommitted: true });
+      else unlisted++;
     }
     files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     const truncated = files.length > TASK_LIMITS.maxChangedFiles || !!names!.overflow || !!others!.overflow;
-    return { ok: true, changes: { baseBranch: task.baseBranch, mergeBase, files: files.slice(0, TASK_LIMITS.maxChangedFiles), truncated } };
+    return { ok: true, changes: { baseBranch: task.baseBranch, mergeBase, files: files.slice(0, TASK_LIMITS.maxChangedFiles), truncated, unlisted } };
   }
 
   /** Review: one changed file's diff against the merge base (only a file `changes` lists). */
@@ -316,10 +327,18 @@ export class TaskService {
     const listed = await this.changes(task);
     if (!listed.ok) return listed;
     const uncommitted = listed.changes.files.filter((f) => f.uncommitted).map((f) => f.path);
+    // Git's own answer, not the (capped, filtered) list: anything uncommitted at all.
+    const hasUncommitted = await this.anyUncommitted(task.worktreePath);
+    if (hasUncommitted === null) return fail('GIT_FAILED');
     const head = await this.refId(task.repoRoot, task.branch);
     const progress = await this.progress(task);
-    const commitsToMerge = progress.ok ? (progress.progress.ahead ?? 0) : 0;
-    const behind = progress.ok ? (progress.progress.behind ?? 0) : 0;
+    // Unknown (base branch gone, Git failed) is not "nothing to merge".
+    const commitsToMerge = progress.ok ? progress.progress.ahead : null;
+    const behind = progress.ok ? progress.progress.behind : null;
+    const bc = head ? await this.read(task.repoRoot, ['rev-list', '--count', `${task.baseCommit}..refs/heads/${task.branch}`]) : null;
+    const branchCommits = bc?.code === 0 ? Number(bc.stdout.trim()) || 0 : 0;
+    const key = await this.discardKey(task);
+    if (key === null) return fail('GIT_FAILED');
     const mergeFolder = await this.mergeFolder(task);
     const mergeFolderDirty = mergeFolder ? await this.trackedChanges(mergeFolder) : false;
     const inProgress = (await this.operationInProgress(task.worktreePath)) ? 'task' : mergeFolder && (await this.operationInProgress(mergeFolder)) ? 'base' : null;
@@ -327,7 +346,7 @@ export class TaskService {
     if (unresolved === null) return fail('GIT_FAILED');
     let preview: TaskFinishCheck['preview'] = commitsToMerge === 0 ? 'nothing' : 'unknown';
     let conflicts: string[] = [];
-    if (commitsToMerge > 0 && head && versionAtLeast(await this.versionAt(task.repoRoot), [2, 38])) {
+    if (commitsToMerge !== null && commitsToMerge > 0 && head && versionAtLeast(await this.versionAt(task.repoRoot), [2, 38])) {
       // Computes the merge without touching any folder or branch (it only adds Git objects).
       const r = await this.read(task.repoRoot, ['merge-tree', '--write-tree', '--name-only', '--no-messages', '-z', `refs/heads/${task.baseBranch}`, `refs/heads/${task.branch}`]);
       if (r?.code === 0) preview = 'clean';
@@ -336,16 +355,18 @@ export class TaskService {
         conflicts = [...new Set(parsePaths(r.stdout).slice(1))].filter(isSafeRelative);
       }
     }
-    const ig = await this.read(task.worktreePath, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z']);
-    const ignoredAll = ig?.code === 0 ? parsePaths(ig.stdout) : [];
+    const ignoredAll = key.ignored;
     return {
       ok: true,
       check: {
         head,
         uncommitted: uncommitted.slice(0, 50),
         uncommittedCount: uncommitted.length,
+        hasUncommitted,
         commitsToMerge,
         behind,
+        branchCommits,
+        discardKey: key.key,
         mergeFolder,
         mergeFolderDirty,
         inProgress,
@@ -371,6 +392,13 @@ export class TaskService {
       const unresolved = await this.unmergedOrNull(task.worktreePath);
       if (unresolved === null) return fail('GIT_FAILED');
       if (unresolved.length > 0 && (await stillConflicted(task.worktreePath, unresolved)).length > 0) return fail('CONFLICTS_UNRESOLVED');
+      // Concluding a merge: files already `git add`ed are no longer "unmerged", so also ask Git for
+      // leftover conflict markers in everything that changed since HEAD (staged or not).
+      if (await this.operationInProgress(task.worktreePath)) {
+        const check = await this.read(task.worktreePath, ['diff', '--check', '--no-color', '--no-ext-diff', 'HEAD']);
+        if (check === null || (check.code !== 0 && check.code !== 2)) return gitFailure(check);
+        if (/leftover conflict marker/.test(check.stdout)) return fail('CONFLICTS_UNRESOLVED');
+      }
       const add = await this.run(task.worktreePath, ['add', '-A']);
       if (add === null || add.code !== 0) return gitFailure(add);
       const staged = await this.run(task.worktreePath, ['diff', '--cached', '--quiet', '--ignore-submodules=all']);
@@ -395,7 +423,9 @@ export class TaskService {
     return this.serial(task.repoRoot, async () => {
       const listed = await this.changes(task);
       if (!listed.ok) return listed;
-      if (listed.changes.files.some((f) => f.uncommitted)) return fail('TASK_UNCOMMITTED');
+      const dirty = await this.anyUncommitted(task.worktreePath);
+      if (dirty === null) return fail('GIT_FAILED');
+      if (dirty) return fail('TASK_UNCOMMITTED');
       if (await this.operationInProgress(task.worktreePath)) return fail('OPERATION_IN_PROGRESS');
       const folder = await this.mergeFolder(task);
       if (!folder) return fail('BASE_NOT_CHECKED_OUT');
@@ -455,15 +485,16 @@ export class TaskService {
    * The user confirmed with the list of what is lost; `head` is the branch commit that list was
    * made for, and anything newer is refused (STALE). A locked worktree is still refused.
    */
-  async discard(task: TaskRecord, head: unknown): Promise<TaskResult<object>> {
+  async discard(task: TaskRecord, confirmedKey: unknown): Promise<TaskResult<{ branch: 'deleted' | 'kept' | 'missing' }>> {
     const dir = worktreesDir(task.repoRoot);
     if (!dir || !isStrictlyInside(task.worktreePath, dir) || !task.branch.startsWith(TASK_BRANCH_PREFIX)) return fail('NOT_A_TASK');
-    if (typeof head !== 'string' || !/^[0-9a-f]{40,64}$/.test(head)) return fail('STALE');
+    if (typeof confirmedKey !== 'string' || !/^[0-9a-f]{64}$/.test(confirmedKey)) return fail('STALE');
     return this.serial(task.repoRoot, async () => {
       const list = await this.list(task.repoRoot);
       if (!list || !list[0] || !samePath(list[0].path, task.repoRoot)) return fail('NOT_A_TASK');
+      // Exactly what the user saw listed, or nothing (new commits, files written since…).
+      if ((await this.discardKey(task))?.key !== confirmedKey) return fail('STALE');
       const now = await this.refId(task.repoRoot, task.branch);
-      if (now !== null && now !== head) return fail('STALE');
       const entry = list.find((e) => samePath(e.path, task.worktreePath));
       if (entry) {
         if (entry.branch !== task.branch) return fail('NOT_A_TASK');
@@ -479,12 +510,12 @@ export class TaskService {
         const left = await removeEmptyFolders(task.worktreePath);
         if (left !== 'removed') return fail(left === 'files' ? 'LEFTOVER_FILES' : 'FOLDER_IN_USE');
       }
-      if (now !== null) {
-        const others = await this.list(task.repoRoot);
-        // Checked out somewhere else (by the user): the branch stays.
-        if (others && !others.some((e) => e.branch === task.branch)) await this.run(task.repoRoot, ['update-ref', '-d', `refs/heads/${task.branch}`, now]);
-      }
-      return { ok: true };
+      if (now === null) return { ok: true, branch: 'missing' };
+      const others = await this.list(task.repoRoot);
+      // Checked out somewhere else (by the user): the branch stays.
+      if (!others || others.some((e) => e.branch === task.branch)) return { ok: true, branch: 'kept' };
+      const del = await this.run(task.repoRoot, ['update-ref', '-d', `refs/heads/${task.branch}`, now]);
+      return { ok: true, branch: del?.code === 0 ? 'deleted' : 'kept' };
     });
   }
 
@@ -493,6 +524,43 @@ export class TaskService {
     const list = await this.list(task.repoRoot);
     const e = list?.find((x) => x.branch === task.baseBranch && !x.bare && !samePath(x.path, task.worktreePath));
     return e && (await this.deps.isDirectory(e.path)) ? e.path : null;
+  }
+
+  /** Anything uncommitted in a folder: changed tracked files or new untracked ones (null: Git failed). */
+  private async anyUncommitted(cwd: string): Promise<boolean | null> {
+    const r = await this.read(cwd, ['status', '--porcelain=v2', '-z', '--untracked-files=normal']);
+    return r === null || r.code !== 0 ? null : r.stdout.length > 0;
+  }
+
+  /**
+   * What Discard would delete, as a fingerprint: the branch commit, Git's full status of the task
+   * folder (every changed and untracked entry) and every ignored entry. Null when Git can't tell.
+   */
+  private async discardKey(task: TaskRecord): Promise<{ key: string; ignored: string[] } | null> {
+    const cwd = task.worktreePath;
+    const [status, ignored] = await Promise.all([
+      this.read(cwd, ['status', '--porcelain=v2', '-z', '--untracked-files=all']),
+      this.read(cwd, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z']),
+    ]);
+    if (status?.code !== 0 || ignored?.code !== 0 || status.overflow || ignored.overflow) return null;
+    const head = (await this.refId(task.repoRoot, task.branch)) ?? '';
+    const key = createHash('sha256').update(JSON.stringify([head, status.stdout, ignored.stdout])).digest('hex');
+    return { key, ignored: parsePaths(ignored.stdout) };
+  }
+
+  /** Before deleting the folder (Clean up): refuses what Git would refuse anyway, so terminals are only ended when it can go ahead. */
+  async removalBlocked(task: TaskRecord): Promise<TaskError | null> {
+    if (!(await this.deps.isDirectory(task.worktreePath))) return null; // gone already: removal only tidies up
+    const dirty = await this.anyUncommitted(task.worktreePath);
+    if (dirty === null) return fail('GIT_FAILED').error;
+    return dirty ? fail('TASK_DIRTY').error : null;
+  }
+
+  /** Before Discard: refuses at once when the task changed since the user saw the list. */
+  async discardBlocked(task: TaskRecord, confirmedKey: unknown): Promise<TaskError | null> {
+    if (!(await this.deps.isDirectory(task.worktreePath))) return null;
+    const now = await this.discardKey(task);
+    return now && now.key === confirmedKey ? null : fail('STALE').error;
   }
 
   /** Changes to tracked files (staged or not) in a folder. */
@@ -504,7 +572,8 @@ export class TaskService {
   /** Files Git lists as unmerged (conflicts) in a folder. */
   /** Files Git lists as unmerged (conflicts) in a folder, or null when Git couldn't tell. */
   private async unmergedOrNull(cwd: string): Promise<string[] | null> {
-    const r = await this.read(cwd, ['diff', '--name-only', '--diff-filter=U', '-z', '--no-ext-diff', '--no-textconv', '--ignore-submodules=all']);
+    // Submodules included: an unmerged submodule entry is a conflict too (`add -A` would resolve it silently).
+    const r = await this.read(cwd, ['diff', '--name-only', '--diff-filter=U', '-z', '--no-ext-diff', '--no-textconv']);
     if (r?.code !== 0) return null;
     const all = [...new Set(parsePaths(r.stdout))];
     // A path Git lists that can't be checked safely counts as unresolved.
@@ -594,15 +663,17 @@ export class TaskService {
     // The workspace is a folder inside the repository: the task workspace is the same folder in the task's worktree.
     const subPath = prefix.stdout.trim().replace(/\/+$/, '').replace(/\//g, '\\');
     if (subPath.split('\\').some((part) => part === '..' || part === '.')) return fail('UNSUPPORTED_LOCATION');
-    const sym = await this.run(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+    // The full name: `--short` prints `heads/main` when a tag is also called `main`.
+    const sym = await this.run(root, ['symbolic-ref', '--quiet', 'HEAD']);
     if (sym === null) return fail('GIT_NOT_FOUND');
-    if (sym.code !== 0) return fail('DETACHED_HEAD');
+    const ref = sym.stdout.trim();
+    if (sym.code !== 0 || !ref.startsWith('refs/heads/') || ref.length <= 11) return fail('DETACHED_HEAD');
     const head = await this.run(root, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
     if (head === null) return fail('GIT_NOT_FOUND');
     if (head.code !== 0) return fail('NO_COMMITS');
     const dir = worktreesDir(main.path);
     if (!dir) return fail('UNSUPPORTED_LOCATION');
-    return { ok: true, repo: { dir, base: { repoRoot: main.path, subPath, baseBranch: sym.stdout.trim(), baseCommit: head.stdout.trim() } } };
+    return { ok: true, repo: { dir, base: { repoRoot: main.path, subPath, baseBranch: ref.slice(11), baseCommit: head.stdout.trim() } } };
   }
 
   /** The first free name: no branch (case-insensitive, nor one it would clash with as a folder), no worktree, no folder. */

@@ -169,7 +169,7 @@ export interface AppSettings {
   notifyDetails: boolean;
   /** Also notify for estimated states ("may need you" after a terminal bell). */
   notifyEstimated: boolean;
-  /** Preview: agent tasks (a Git worktree and branch per task). Off by default until finishing tasks exists. */
+  /** Agent tasks: a Git worktree and branch per task (New agent task, Review, Finish). On by default; off hides them. */
   agentTasks: boolean;
 }
 
@@ -274,7 +274,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifySound: true,
   notifyDetails: false,
   notifyEstimated: false,
-  agentTasks: false,
+  agentTasks: true,
 };
 
 export function emptyState(): PersistedState {

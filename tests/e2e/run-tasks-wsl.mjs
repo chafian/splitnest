@@ -5,7 +5,7 @@
 import { _electron as electron } from 'playwright-core';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -46,13 +46,6 @@ const until = async (fn, what, timeout = 30_000) => {
     await new Promise((r) => setTimeout(r, 250));
   }
 };
-const saved = () => {
-  try {
-    return JSON.parse(readFileSync(path.join(ud, 'workspace-state.json'), 'utf8'));
-  } catch {
-    return null;
-  }
-};
 const palette = async (page, title) => {
   await page.keyboard.press('Control+Shift+P');
   await page.keyboard.type(title);
@@ -71,11 +64,7 @@ try {
   await page.click('button:has-text("Open folder…")');
   await page.waitForSelector('.ws-item__label:text-is("app")');
 
-  await step('a workspace inside WSL gets New agent task (it has no sidebar Git status)', async () => {
-    await page.keyboard.press('Control+Comma');
-    await page.click('.settings-nav__item:has-text("Workspaces")');
-    await page.click('.setting:has-text("Agent tasks (preview)") [role="switch"]');
-    await until(() => saved()?.settings?.agentTasks === true, 'setting saved');
+  await step('a workspace inside WSL gets New agent task by default (it has no sidebar Git status)', async () => {
     await selectWorkspace(page, 'app');
     await page.waitForSelector('[aria-label="New agent task from app"]', { state: 'attached', timeout: 15_000 });
   });

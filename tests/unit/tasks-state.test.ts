@@ -87,11 +87,11 @@ describe('saved tasks', () => {
     expect(r.ok && r.state.workspaces[0]).toEqual(ws('a'));
   });
 
-  it('the preview setting is off by default and only `true` turns it on', () => {
-    expect(DEFAULT_SETTINGS.agentTasks).toBe(false);
-    expect(validateSettings({}).agentTasks).toBe(false);
-    expect(validateSettings({ agentTasks: 'yes' }).agentTasks).toBe(false);
-    expect(validateSettings({ agentTasks: true }).agentTasks).toBe(true);
+  it('agent tasks are on by default (also for settings saved before the setting existed); only `false` turns them off', () => {
+    expect(DEFAULT_SETTINGS.agentTasks).toBe(true);
+    expect(validateSettings({}).agentTasks).toBe(true);
+    expect(validateSettings({ agentTasks: 'no' }).agentTasks).toBe(true);
+    expect(validateSettings({ agentTasks: false }).agentTasks).toBe(false);
   });
 
   it('the key main checks saved tasks against covers every path and the branch; only folders ignore letter case', () => {

@@ -101,7 +101,7 @@ describe.skipIf(!hasGit)(`agent tasks in WSL (${distro ?? 'none'})`, () => {
     expect(await service.remove(t, { deleteBranch: true })).toMatchObject({ ok: false, error: { code: 'TASK_DIRTY' } });
     const check = await service.finishCheck(t);
     if (!check.ok) throw new Error(check.error.code);
-    expect(await service.discard(t, check.check.head)).toEqual({ ok: true });
+    expect(await service.discard(t, check.check.discardKey)).toEqual({ ok: true, branch: 'deleted' });
     expect(existsSync(t.worktreePath)).toBe(false);
     expect(g(`${tmp}/app`, 'branch', '--list', 'splitnest/throwaway')).toBe('');
   });
