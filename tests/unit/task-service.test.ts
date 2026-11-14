@@ -146,6 +146,22 @@ describe('Commit all fails closed', () => {
     expect(calls.some((c) => c.args.includes('add') || c.args.includes('commit'))).toBe(false);
   });
 
+  it('Bring in the base: when Git can’t tell whether conflicts are left, the task folder is left as it is (no abort)', async () => {
+    const { git, calls } = fakeGit((_cwd, args) => {
+      const a = args.join(' ');
+      if (args[0] === 'worktree' && args[1] === 'list') return ok(list);
+      if (a.includes('rev-parse --git-path')) return ok(''); // nothing in progress before
+      if (a.includes('status --porcelain=v2')) return ok(''); // clean
+      if (a.includes('rev-parse --verify --quiet refs/heads/')) return ok(`${BASE}\n`);
+      if (args[0] === 'merge' && args[1] === '--no-edit') return err(1, 'CONFLICT');
+      if (args.includes('--diff-filter=U')) return err(128, 'fatal');
+      return ok();
+    });
+    const s = new TaskService({ git, isDirectory: async () => true });
+    expect(await s.updateFromBase(task)).toMatchObject({ ok: false, error: { code: 'GIT_FAILED' } });
+    expect(calls.some((c) => c.args.includes('--abort'))).toBe(false);
+  });
+
   it('when Git lists an unresolved path that can’t be checked safely, nothing is committed', async () => {
     const { git, calls } = fakeGit((_cwd, args) => {
       if (args[0] === 'worktree' && args[1] === 'list') return ok(list);

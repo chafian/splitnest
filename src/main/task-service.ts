@@ -17,7 +17,7 @@
 // - Operations that change a repository run one at a time per repository (two tasks created at
 //   once never pick the same name). Different repositories don't wait for each other.
 // - Nothing about repositories is logged; error messages name no path, branch or Git output.
-import { access, lstat, readdir, readFile, realpath, rmdir } from 'node:fs/promises';
+import { access, lstat, open, readdir, readFile, realpath, rmdir } from 'node:fs/promises';
 import path from 'node:path';
 import { isWslRoot, repositoryFilterKeys } from './git-status';
 import type { GitResult, GitRunner } from './git-runner';
@@ -319,7 +319,8 @@ export class TaskService {
     const mergeFolder = await this.mergeFolder(task);
     const mergeFolderDirty = mergeFolder ? await this.trackedChanges(mergeFolder) : false;
     const inProgress = (await this.operationInProgress(task.worktreePath)) ? 'task' : mergeFolder && (await this.operationInProgress(mergeFolder)) ? 'base' : null;
-    const unresolved = await this.unmerged(task.worktreePath);
+    const unresolved = await this.unmergedOrNull(task.worktreePath);
+    if (unresolved === null) return fail('GIT_FAILED');
     let preview: TaskFinishCheck['preview'] = commitsToMerge === 0 ? 'nothing' : 'unknown';
     let conflicts: string[] = [];
     if (commitsToMerge > 0 && head && versionAtLeast(await this.deps.git.version(), [2, 38])) {
@@ -405,7 +406,8 @@ export class TaskService {
       }
       if (r === null) return fail('GIT_NOT_FOUND');
       // Stopped: undo whatever it left.
-      const conflicts = await this.unmerged(folder);
+      // Unknown (Git couldn't list them): still undone and verified below, reported as a failed merge.
+      const conflicts = (await this.unmergedOrNull(folder)) ?? [];
       if (await this.operationInProgress(folder)) {
         const abort = await this.deps.git.run(folder, ['merge', '--abort'], { timeoutMs: MERGE_TIMEOUT_MS });
         if (abort === null || abort.code !== 0) return fail('MERGE_NOT_UNDONE');
@@ -434,7 +436,9 @@ export class TaskService {
         const after = await this.refId(task.repoRoot, task.branch);
         return { ok: true, result: { outcome: after === before ? 'up-to-date' : 'updated' } };
       }
-      const conflicts = await this.unmerged(task.worktreePath);
+      const conflicts = await this.unmergedOrNull(task.worktreePath);
+      // Can't tell whether conflicts are left: the task folder stays as Git left it (nothing is aborted).
+      if (conflicts === null) return fail('GIT_FAILED');
       if (conflicts.length > 0) return { ok: true, result: { outcome: 'conflicts', conflicts } };
       // Stopped another way: undo it in the task folder too.
       if (await this.operationInProgress(task.worktreePath)) await this.deps.git.run(task.worktreePath, ['merge', '--abort']);
@@ -494,11 +498,7 @@ export class TaskService {
   }
 
   /** Files Git lists as unmerged (conflicts) in a folder. */
-  private async unmerged(cwd: string): Promise<string[]> {
-    return (await this.unmergedOrNull(cwd)) ?? [];
-  }
-
-  /** As `unmerged`, but null when Git couldn't tell (callers that must fail closed). */
+  /** Files Git lists as unmerged (conflicts) in a folder, or null when Git couldn't tell. */
   private async unmergedOrNull(cwd: string): Promise<string[] | null> {
     const r = await this.read(cwd, ['diff', '--name-only', '--diff-filter=U', '-z', '--no-ext-diff', '--no-textconv', '--ignore-submodules=all']);
     if (r?.code !== 0) return null;
@@ -748,7 +748,22 @@ export async function stillConflicted(folder: string, files: string[]): Promise<
         out.push(f);
         continue;
       }
-      const text = (await readFile(full)).toString('utf8');
+      // Read through one handle that is checked to be the very file examined above (not swapped for a
+      // link or another file in between), and never more than the size limit.
+      const handle = await open(full, 'r');
+      let text: string;
+      try {
+        const hs = await handle.stat();
+        if (!hs.isFile() || hs.ino !== st.ino || hs.dev !== st.dev || hs.size > MAX_CONFLICT_FILE_BYTES) {
+          out.push(f);
+          continue;
+        }
+        const buf = Buffer.alloc(Math.min(hs.size, MAX_CONFLICT_FILE_BYTES));
+        const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
+        text = buf.subarray(0, bytesRead).toString('utf8');
+      } finally {
+        await handle.close();
+      }
       // The opening and closing markers (a line of seven `=` alone can be a Markdown heading underline).
       if (/^(<{7}|>{7})( |\r?$)/m.test(text)) out.push(f);
     } catch (e) {
