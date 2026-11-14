@@ -8,7 +8,7 @@ Open your project folders as workspaces, run real **PowerShell** and **WSL** she
 
 **[⬇ Download for Windows (installer)](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-Setup.exe)** · [Portable ZIP](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-portable.zip) · [All releases](https://github.com/chafian/splitnest/releases) · [splitnest.dev](https://splitnest.dev)
 
-> **Early release (v0.2).** Windows 11 x64. Free and open source (MIT). The installer is **not code signed yet**, so Windows SmartScreen may warn the first time you run it; see [Getting started](#getting-started) and the [code signing policy](CODE_SIGNING.md). Known limitations are listed in [Status and limitations](#status-and-limitations).
+> **Early release (v0.3).** Windows 11 x64. Free and open source (MIT). The installer is **not code signed yet**, so Windows SmartScreen may warn the first time you run it; see [Getting started](#getting-started) and the [code signing policy](CODE_SIGNING.md). Known limitations are listed in [Status and limitations](#status-and-limitations).
 
 ![SplitNest demo: a Claude Code tab turns to "Needs you", an in-app notice opens the tab where Codex finished, and the agent inbox lists every waiting agent](docs/readme/demo.gif)
 
@@ -18,6 +18,7 @@ Open your project folders as workspaces, run real **PowerShell** and **WSL** she
 
 ## Why SplitNest
 
+- **Parallel agents, each in its own worktree.** *New agent task* gives an agent its own Git worktree and branch, so several agents can work on one repository at once. Watch what each one changes in a Changes panel next to its terminal, then merge it back with *Finish*.
 - **Agent-aware tabs.** Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor Agent, Aider, OpenCode, Qwen Code and Amp get their logo and a live state on the tab: *Working*, *Needs you*, *Done* or *Error*.
 - **Never miss a prompt.** In-app notices, Windows notifications and a taskbar flash tell you when an agent needs a permission, asks a question, finishes or fails.
 - **One inbox for every agent.** A bell in the title bar lists every waiting agent across all workspaces; one shortcut jumps to the next.
@@ -49,6 +50,15 @@ The bell in the title bar (**Ctrl+Shift+A**) lists every agent waiting for you i
 ![A restored terminal: "Claude Code was running here" with a Resume Claude Code button](docs/readme/resume.png)
 
 If Claude Code, Codex or Gemini CLI was running when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex, or Gemini CLI). The text above the button states exactly what will run, and nothing runs until you click. Only the conversation id, folder and an optional title are saved, never conversation text.
+
+## Agent tasks
+
+*New agent task* (the branch button on a repository's row, or the command palette) creates a Git worktree next to the repository on a new branch `splitnest/<name>`, opens it as a workspace under the one it came from, and starts Claude Code, Codex or Gemini CLI there. Each agent works in its own folder and branch, so agents never edit the same files, and your own folder, branch and uncommitted changes stay as they are.
+
+- **Changes panel** (**Ctrl+Shift+G**): docked next to the task's terminal, it lists what the task changed compared with where it left its branch (committed or not, new files included) and updates by itself while the agent works. Each file's changes open as a diff tab beside the terminal.
+- **In the sidebar**, each task is one line with its `+added −removed`.
+- **Finish** commits what is left, merges the task into the branch it came from (checked for conflicts first; a merge that stops is undone at once) and deletes the task's folder and branch. Conflicts are resolved inside the task with *Bring in latest*; *Discard* deletes a task after listing exactly what is lost.
+- **WSL:** for a repository stored inside WSL, tasks use that distribution's own Git and run in WSL.
 
 ## Workspaces, splits and tabs
 
@@ -119,6 +129,7 @@ Also listed in the app (**Ctrl+Shift+/**). Plain Ctrl+letter keys always go to t
 | Next / previous workspace | Ctrl+Shift+PgDn / Ctrl+Shift+PgUp |
 | Collapse / expand workspace sidebar | Ctrl+Shift+B |
 | Show / hide file explorer | Ctrl+Shift+E |
+| Show / hide a task's Changes panel | Ctrl+Shift+G |
 | Focus terminals (hide / restore both sidebars) | Ctrl+Shift+Enter |
 | Maximise pane / restore layout | Ctrl+Shift+M |
 | Font size bigger / smaller / reset | Ctrl+= / Ctrl+− / Ctrl+0 |
@@ -144,12 +155,13 @@ Details on restoring, cleanup and troubleshooting are in the [user guide](docs/U
 
 ## Status and limitations
 
-SplitNest is an **early release (v0.2)**. It works for daily use, but it has been tested on few machines so far; please [report problems](https://github.com/chafian/splitnest/issues/new/choose).
+SplitNest is an **early release (v0.3)**. It works for daily use, but it has been tested on few machines so far; please [report problems](https://github.com/chafian/splitnest/issues/new/choose).
 
 - Windows 11 x64 only; builds are **unsigned** (Windows SmartScreen may warn; see the [code signing policy](CODE_SIGNING.md)). Since version 0.2.0 there is an installer with automatic updates; see [CHANGELOG.md](CHANGELOG.md).
 - The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.
 - Full-screen programs work, but ConPTY repaints them itself, so their screens can leave frames in the scrollback.
 - In WSL tabs, Resume reopens the exact conversation when the terminal started in the workspace folder; otherwise (a terminal started in the Linux home, or an agent known only from its own reports) it opens the agent's own conversation list.
+- Agent tasks get WSL terminals only for repositories stored inside WSL; tasks of a repository on a Windows drive run in PowerShell (Git before 2.48 can't share one worktree between Windows and Linux Git).
 - Display scaling, Windows 10 and PowerShell 7 are untested.
 - Scrollback is per pane and lives only in memory.
 

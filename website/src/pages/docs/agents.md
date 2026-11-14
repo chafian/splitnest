@@ -43,6 +43,18 @@ The bell in the title bar, **Ctrl+Shift+A**. Every agent that is waiting for you
 - **Ctrl+Shift+U** goes to the next waiting agent, also from Settings or another workspace; pressing it again walks through all of them. Clicking a row does the same for that one. Both are in the command palette too, together with one entry per waiting agent.
 - **Same rules as notifications:** the kinds you turned off in Settings → Notifications are not listed, and what the agent wrote appears only with *Include what the agent wrote*. Nothing is saved: the inbox is what is waiting right now, not a history.
 
+## Agent tasks
+
+*New agent task* (the branch button on a repository's row in the sidebar, or the command palette) gives an agent its own Git worktree: a second folder of the same repository, next to it (`C:\code\app.worktrees\<name>`), on a new branch `splitnest/<name>` that starts at the current commit of the branch you are on. It opens as a workspace listed under the one it came from, and SplitNest can start Claude Code, Codex or Gemini CLI there. The dialog shows the branch, folder and starting commit before anything is created. Your folder, its branch and its uncommitted changes are not touched; files Git ignores (`node_modules`, `.env`) aren't in the new folder.
+
+- **Sidebar:** each task is one line with `+added −removed`: the lines the task adds and removes compared with where it left its branch (committed and uncommitted, new files included; binary files count no lines; `≥` when some new files weren't counted).
+- **Changes panel** (**Ctrl+Shift+G**, or the title-bar button): docked next to the task's terminal. It lists every changed file and updates by itself; while it is shown, SplitNest watches a task folder on a Windows drive, so edits show within seconds even while the agent keeps printing. Choosing a file opens its changes as a diff tab beside the terminal (Ctrl: in the current pane). Diff tabs aren't saved.
+- **Finish:** *Commit all* stages and commits what is left (your Git name and email; hooks run). The merge into the starting branch happens in the folder where that branch is checked out, only when nothing is uncommitted there; it is checked for conflicts first (Git 2.38+) and undone at once if it stops. Then the terminals end and the task's folder and branch are deleted; files Git ignores in it are deleted too, and Finish lists them first.
+- **Conflicts:** *Bring in latest <branch>* merges the starting branch into the task instead, so conflicts are resolved there by you or the agent. *Commit all* refuses files that still contain conflict markers.
+- **Discard** deletes the task's folder and branch even if not merged, after listing what is lost; it refuses if anything changed since that list was shown.
+- **WSL:** a repository stored inside WSL gets tasks made and finished by that distribution's own Git, in WSL terminals. A repository on a Windows drive gets PowerShell tasks (Git before 2.48 can't share a worktree between Windows and Linux Git).
+- On by default; *Settings → Workspaces → Agent tasks* turns them off.
+
 ## Resume agent conversations
 
 Available for Claude Code, Codex and Gemini CLI. If an agent was running in a terminal when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex, or Gemini CLI) next to *Start PowerShell only*. The restore notice offers **Resume agents (N)**.

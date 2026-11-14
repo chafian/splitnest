@@ -22,6 +22,7 @@ Also listed in the app (**Ctrl+Shift+/**). Plain Ctrl+letter keys always go to t
 | Next / previous workspace | Ctrl+Shift+PgDn / Ctrl+Shift+PgUp |
 | Collapse / expand workspace sidebar | Ctrl+Shift+B |
 | Show / hide file explorer | Ctrl+Shift+E |
+| Show / hide a task's Changes panel | Ctrl+Shift+G |
 | Focus terminals (hide / restore both sidebars) | Ctrl+Shift+Enter |
 | Maximise pane / restore layout | Ctrl+Shift+M |
 | Font size bigger / smaller / reset | Ctrl+= / Ctrl+− / Ctrl+0 |

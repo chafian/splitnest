@@ -204,6 +204,37 @@ export const features: Feature[] = [
     ],
   },
   {
+    slug: 'agent-tasks',
+    name: 'Agent tasks',
+    summary: 'Run several agents on one repository at once, each in its own Git worktree; review and merge their work from SplitNest.',
+    title: 'Parallel AI agents in Git worktrees on Windows',
+    description:
+      'SplitNest gives each agent task its own Git worktree and branch, shows what it changed in a Changes panel next to its terminal, and merges it back safely with Finish.',
+    intro:
+      'New agent task creates a Git worktree next to the repository on a new branch, opens it as a workspace under the one it came from, and starts Claude Code, Codex or Gemini CLI there. Each agent works in its own folder and branch, so agents never edit the same files.',
+    shots: [],
+    related: ['agent-aware-tabs', 'git-status', 'workspaces-splits-tabs'],
+    docs: { label: 'Agent tasks in the user guide', href: '/docs/agents/' },
+    blocks: [
+      {
+        h: 'Watch what each agent changes',
+        html: `<p>The <strong>Changes panel</strong> (${k('Ctrl+Shift+G')}) is docked next to the task's terminal. It lists every file the task changed compared with where it left its branch, committed or not, and updates by itself while the agent works. Choosing a file opens its changes as a diff tab beside the terminal. In the sidebar, each task is one line with its <code>+added −removed</code>.</p>`,
+      },
+      {
+        h: 'Merge it back safely',
+        html: `<p><strong>Finish</strong> commits what is left, merges the task into the branch it came from and deletes its folder and branch. The merge is checked for conflicts first and undone at once if it stops, so your branch is never left half-merged. Conflicts are resolved inside the task with <em>Bring in latest</em>. <em>Discard</em> deletes a task only after listing exactly what is lost.</p>`,
+      },
+      {
+        h: 'Your folder stays yours',
+        html: `<p>Creating a task never touches your workspace folder, its branch or its uncommitted changes. Nothing is forced: a folder with uncommitted files isn't deleted, and a branch is deleted only when its commits are merged.</p>`,
+      },
+      {
+        h: 'PowerShell and WSL',
+        html: `<p>Tasks of a repository on a Windows drive run in PowerShell with Windows Git. For a repository stored inside WSL, tasks use that distribution's own Git and run in WSL.</p>`,
+      },
+    ],
+  },
+  {
     slug: 'workspaces-splits-tabs',
     name: 'Workspaces, splits and tabs',
     summary: 'One workspace per project, resizable split panes, named tabs, and layouts that come back after a restart.',
