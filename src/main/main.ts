@@ -421,7 +421,9 @@ function createWindow(): BrowserWindow {
     // minimize / maximize / close buttons (with snap layouts) on top of it.
     titleBarStyle: 'hidden',
     // Must match --bg-titlebar (Sidebar surface) in tokens.css.
-    titleBarOverlay: { color: '#111113', symbolColor: '#b4b4be', height: TITLE_BAR_HEIGHT },
+    // 1 px shorter than the title bar: the overlay (Windows' own minimise/maximise/close buttons) would
+    // otherwise cover the title bar's bottom border under the buttons.
+    titleBarOverlay: { color: '#111113', symbolColor: '#b4b4be', height: TITLE_BAR_HEIGHT - 1 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
