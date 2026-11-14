@@ -362,8 +362,10 @@ export class TaskService {
     if (!isCommitMessage(message)) return fail('INVALID_MESSAGE');
     if (!(await this.isTaskFolder(task))) return fail('NOT_A_TASK');
     return this.serial(task.repoRoot, async () => {
-      const unresolved = await this.unmerged(task.worktreePath);
-      if (unresolved.length > 0 && (await withMarkers(task.worktreePath, unresolved)).length > 0) return fail('CONFLICTS_UNRESOLVED');
+      // Fails closed: if Git can't list the unresolved files, or one can't be checked, nothing is committed.
+      const unresolved = await this.unmergedOrNull(task.worktreePath);
+      if (unresolved === null) return fail('GIT_FAILED');
+      if (unresolved.length > 0 && (await stillConflicted(task.worktreePath, unresolved)).length > 0) return fail('CONFLICTS_UNRESOLVED');
       const add = await this.deps.git.run(task.worktreePath, ['add', '-A']);
       if (add === null || add.code !== 0) return gitFailure(add);
       const staged = await this.deps.git.run(task.worktreePath, ['diff', '--cached', '--quiet', '--ignore-submodules=all']);
@@ -493,8 +495,16 @@ export class TaskService {
 
   /** Files Git lists as unmerged (conflicts) in a folder. */
   private async unmerged(cwd: string): Promise<string[]> {
+    return (await this.unmergedOrNull(cwd)) ?? [];
+  }
+
+  /** As `unmerged`, but null when Git couldn't tell (callers that must fail closed). */
+  private async unmergedOrNull(cwd: string): Promise<string[] | null> {
     const r = await this.read(cwd, ['diff', '--name-only', '--diff-filter=U', '-z', '--no-ext-diff', '--no-textconv', '--ignore-submodules=all']);
-    return r?.code === 0 ? [...new Set(parsePaths(r.stdout))].filter(isSafeRelative) : [];
+    if (r?.code !== 0) return null;
+    const all = [...new Set(parsePaths(r.stdout))];
+    // A path Git lists that can't be checked safely counts as unresolved.
+    return all.every(isSafeRelative) ? all : null;
   }
 
   /** A merge, rebase, cherry-pick or revert is in progress in that folder's worktree. */
@@ -710,16 +720,40 @@ export async function untrackedDiff(folder: string, rel: string): Promise<TaskDi
   }
 }
 
-/** Of these files in a folder, those that still contain a conflict marker line. */
-async function withMarkers(folder: string, files: string[]): Promise<string[]> {
+/** Unresolved files checked for conflict markers at most (more: all count as unresolved). */
+export const MAX_CONFLICT_FILES = 500;
+/** A conflicted file larger than this isn't read; it counts as unresolved. */
+export const MAX_CONFLICT_FILE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Of these unmerged files in the task folder, those that may still be conflicted: they contain a
+ * conflict marker line, or they can't be checked safely (fails closed). Only regular files whose real
+ * path is inside the folder are read, never through a link, up to MAX_CONFLICT_FILE_BYTES each. A file
+ * deleted in the resolution is resolved.
+ */
+export async function stillConflicted(folder: string, files: string[]): Promise<string[]> {
+  if (files.length > MAX_CONFLICT_FILES) return files;
   const out: string[] = [];
+  let realFolder: string;
+  try {
+    realFolder = await realpath(folder);
+  } catch {
+    return files;
+  }
   for (const f of files) {
+    const full = win.join(folder, ...f.split('/'));
     try {
-      const text = (await readFile(win.join(folder, ...f.split('/')))).toString('utf8');
+      const st = await lstat(full);
+      if (!st.isFile() || st.size > MAX_CONFLICT_FILE_BYTES || !isStrictlyInside(await realpath(full), realFolder)) {
+        out.push(f);
+        continue;
+      }
+      const text = (await readFile(full)).toString('utf8');
       // The opening and closing markers (a line of seven `=` alone can be a Markdown heading underline).
       if (/^(<{7}|>{7})( |\r?$)/m.test(text)) out.push(f);
-    } catch {
-      // Deleted in the resolution: nothing to check.
+    } catch (e) {
+      // Deleted in the resolution: resolved. Anything else: can't tell, so unresolved.
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') out.push(f);
     }
   }
   return out;

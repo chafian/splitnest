@@ -2,7 +2,7 @@
 // creating worktrees and branches, names that are taken, two tasks at once, removing without ever
 // losing work, and refusing folders that aren't SplitNest tasks.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
@@ -11,7 +11,7 @@ import { createWindowsGitRunner } from '../../src/main/git-runner';
 import { gitEnv } from '../../src/main/git-status';
 import { isDirectory } from '../../src/main/launch-resolver';
 import { fileExists, findOnPath } from '../../src/main/shells';
-import { TaskService } from '../../src/main/task-service';
+import { MAX_CONFLICT_FILES, stillConflicted, TaskService } from '../../src/main/task-service';
 import type { TaskRecord } from '../../src/shared/tasks';
 
 const git = await findOnPath('git.exe', process.env, fileExists);
@@ -579,6 +579,25 @@ describe.skipIf(!git)('agent tasks with real Git', { timeout: 60_000 }, () => {
       expect(await branches(repo)).toEqual(['main']);
       // Never anything that isn't a task.
       expect(await service.discard({ ...t, worktreePath: repo }, 'a'.repeat(40))).toMatchObject({ ok: false, error: { code: 'NOT_A_TASK' } });
+    });
+  });
+
+  describe('conflict markers: which unmerged files count as still conflicted', () => {
+    it('markers, resolved, deleted, folders, links, oversized and too many files', async () => {
+      const dir = path.join(work, `${n++}`, 'conflicts');
+      mkdirSync(path.join(dir, 'sub'), { recursive: true });
+      writeFileSync(path.join(dir, 'marked.txt'), 'a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> main\n');
+      writeFileSync(path.join(dir, 'crlf.txt'), 'a\r\n>>>>>>>\r\n');
+      writeFileSync(path.join(dir, 'resolved.md'), 'Title\n=======\n\ntext\n');
+      writeFileSync(path.join(dir, 'big.txt'), Buffer.alloc(10 * 1024 * 1024 + 1, 97));
+      const outside = path.join(work, `${n++}`, 'outside');
+      mkdirSync(outside, { recursive: true });
+      symlinkSync(outside, path.join(dir, 'link'), 'junction');
+      const files = ['marked.txt', 'crlf.txt', 'resolved.md', 'gone.txt', 'sub', 'link', 'big.txt'];
+      expect((await stillConflicted(dir, files)).sort()).toEqual(['big.txt', 'crlf.txt', 'link', 'marked.txt', 'sub']);
+      const many = Array.from({ length: MAX_CONFLICT_FILES + 1 }, (_, i) => `f${i}.txt`);
+      expect(await stillConflicted(dir, many)).toEqual(many);
+      expect(await stillConflicted(path.join(dir, 'missing-folder'), ['resolved.md'])).toEqual(['resolved.md']);
     });
   });
 });

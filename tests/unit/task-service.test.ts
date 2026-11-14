@@ -122,3 +122,38 @@ describe('TaskService (scripted Git)', () => {
     expect(n).toBe(2);
   });
 });
+
+describe('Commit all fails closed', () => {
+  const task = {
+    repoRoot: 'C:\\fake\\app',
+    subPath: '',
+    baseBranch: 'main',
+    baseCommit: BASE,
+    branch: 'splitnest/t',
+    worktreePath: 'C:\\fake\\app.worktrees\\t',
+    taskRoot: 'C:\\fake\\app.worktrees\\t',
+  };
+  const list = ['worktree C:/fake/app', `HEAD ${BASE}`, 'branch refs/heads/main', '', 'worktree C:/fake/app.worktrees/t', `HEAD ${BASE}`, 'branch refs/heads/splitnest/t', '', ''].join('\0');
+
+  it('when Git can’t list the unresolved files, nothing is staged or committed', async () => {
+    const { git, calls } = fakeGit((_cwd, args) => {
+      if (args[0] === 'worktree' && args[1] === 'list') return ok(list);
+      if (args.includes('--diff-filter=U')) return err(128, 'fatal: something');
+      return ok();
+    });
+    const s = new TaskService({ git, isDirectory: async () => true });
+    expect(await s.commitAll(task, 'message')).toMatchObject({ ok: false, error: { code: 'GIT_FAILED' } });
+    expect(calls.some((c) => c.args.includes('add') || c.args.includes('commit'))).toBe(false);
+  });
+
+  it('when Git lists an unresolved path that can’t be checked safely, nothing is committed', async () => {
+    const { git, calls } = fakeGit((_cwd, args) => {
+      if (args[0] === 'worktree' && args[1] === 'list') return ok(list);
+      if (args.includes('--diff-filter=U')) return ok('../outside.txt\0');
+      return ok();
+    });
+    const s = new TaskService({ git, isDirectory: async () => true });
+    expect(await s.commitAll(task, 'message')).toMatchObject({ ok: false, error: { code: 'GIT_FAILED' } });
+    expect(calls.some((c) => c.args.includes('commit'))).toBe(false);
+  });
+});
