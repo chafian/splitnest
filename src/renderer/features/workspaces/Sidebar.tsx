@@ -1,5 +1,5 @@
 import type { TaskProgress } from '../../../shared/tasks';
-import { taskProgressText } from '../tasks/task-text';
+import { taskProgressText, wslDistroOf } from '../tasks/task-text';
 import { useRef, type PointerEvent } from 'react';
 import type { GitStatus, Workspace } from '../../../shared/types';
 import { listPanes, listTerminalTabs } from '../../../shared/layout';
@@ -166,7 +166,7 @@ export function Sidebar(props: Props) {
                   {props.tasksEnabled && w.task && (
                     <IconButton icon="files" label={`Review changes in ${w.name}`} description="Files the task changed and their diffs." size="sm" onClick={() => props.onReviewTask(w.id)} />
                   )}
-                  {props.tasksEnabled && gitStatus && !w.task && (
+                  {props.tasksEnabled && !w.task && (gitStatus || wslDistroOf(w.rootPath)) && (
                     <IconButton
                       icon="gitBranch"
                       label={`New agent task from ${w.name}`}

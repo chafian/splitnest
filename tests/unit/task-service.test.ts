@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GitResult, GitRunner } from '../../src/main/git-runner';
 import { TaskService } from '../../src/main/task-service';
+import { fromGitPath } from '../../src/main/git-worktree';
 
 const BASE = 'a'.repeat(40);
 const ok = (stdout = ''): GitResult => ({ code: 0, stdout, stderr: '', timedOut: false });
@@ -14,6 +15,8 @@ function fakeGit(handler: Handler, version: [number, number, number] | null = [2
   const calls: { cwd: string; args: string[] }[] = [];
   const git: GitRunner = {
     side: 'windows',
+    toGit: (p) => p,
+    toWindows: fromGitPath,
     version: async () => version,
     run: async (cwd, args) => {
       calls.push({ cwd, args });

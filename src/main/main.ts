@@ -21,7 +21,7 @@ import { OpenFileWatcher } from './file-watch';
 import { AgentMonitor } from './agent-monitor';
 import { AgentSessionTracker } from './agent-sessions';
 import { GitStatusService } from './git-status';
-import { createWindowsGitRunner } from './git-runner';
+import { createWindowsGitRunner, createWslGitRunner } from './git-runner';
 import { TaskService } from './task-service';
 import { NotificationService, notifyIdPrefix, showAgainOnceRegistered, type NativeNotification } from './notifications';
 import { githubFeedUrl, Updater, type AutoUpdaterLike } from './updater';
@@ -206,6 +206,8 @@ const gitStatus = new GitStatusService({
 // Agent tasks: a Git worktree and branch per task (see task-service.ts).
 const tasks = new TaskService({
   git: createWindowsGitRunner({ run: runFile, findGit: () => findOnPath('git.exe', process.env, fileExists), env: process.env, home: os.homedir() }),
+  // Repositories stored inside WSL: that distribution's own Git (Windows Git can't share their worktrees).
+  wslGit: (distro, host) => createWslGitRunner({ run: runFile, wslExe: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe'), distro, host }),
   isDirectory,
 });
 // Development-only: E2E checks count Git checks (how often terminal output causes one).

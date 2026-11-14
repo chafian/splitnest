@@ -5,7 +5,27 @@ import { parseWorkspaceTask, taskAgentCommand, taskRecordKey, TASK_AGENTS, type 
 import { DEFAULT_SETTINGS, type PersistedState, type Workspace } from '../../src/shared/types';
 import { parsePersistedState, validateSettings, validateWorkspace } from '../../src/shared/validation';
 import { insertionIndex, reducer } from '../../src/renderer/features/workspaces/workspace-state';
-import { taskProgressText, uncommittedNote } from '../../src/renderer/features/tasks/task-text';
+import { taskProgressText, taskShells, uncommittedNote, wslDistroOf } from '../../src/renderer/features/tasks/task-text';
+
+describe('which shells a task can start in', () => {
+  const profiles = [
+    { id: 'windows-powershell', kind: 'windows-powershell' },
+    { id: 'pwsh', kind: 'pwsh' },
+    { id: 'wsl:Ubuntu-22.04', kind: 'wsl', distro: 'Ubuntu-22.04' },
+    { id: 'wsl:Debian', kind: 'wsl', distro: 'Debian' },
+  ];
+  it('a repository inside WSL: only that distribution (its Git made the task folder)', () => {
+    expect(wslDistroOf('\\\\wsl.localhost\\Ubuntu-22.04\\home\\me\\app')).toBe('Ubuntu-22.04');
+    expect(wslDistroOf('\\\\wsl$\\Debian\\srv')).toBe('Debian');
+    expect(wslDistroOf('//wsl.localhost/Ubuntu-22.04/home')).toBe('Ubuntu-22.04');
+    expect(wslDistroOf('C:\\code\\app')).toBeNull();
+    expect(wslDistroOf('\\\\server\\share\\app')).toBeNull();
+    expect(taskShells(profiles, '\\\\wsl.localhost\\ubuntu-22.04\\home\\me\\app').map((p) => p.id)).toEqual(['wsl:Ubuntu-22.04']);
+  });
+  it('a repository on a Windows drive: PowerShell only (Git in WSL can’t use a task folder Windows Git made)', () => {
+    expect(taskShells(profiles, 'C:\\code\\app').map((p) => p.id)).toEqual(['windows-powershell', 'pwsh']);
+  });
+});
 
 const task: WorkspaceTask = {
   repoRoot: 'C:\\code\\app',

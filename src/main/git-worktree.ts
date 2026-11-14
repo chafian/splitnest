@@ -85,7 +85,7 @@ export interface WorktreeEntry {
  * `git worktree list --porcelain` output. With `-z` (Git 2.36+) fields end with NUL and records
  * with an empty field; without it, lines and blank lines. The first entry is the main worktree.
  */
-export function parseWorktreeList(stdout: string, nul: boolean): WorktreeEntry[] {
+export function parseWorktreeList(stdout: string, nul: boolean, toWindows: (p: string) => string = fromGitPath): WorktreeEntry[] {
   const fields = stdout.split(nul ? '\0' : /\r?\n/);
   const out: WorktreeEntry[] = [];
   let cur: WorktreeEntry | null = null;
@@ -100,7 +100,7 @@ export function parseWorktreeList(stdout: string, nul: boolean): WorktreeEntry[]
     const value = space < 0 ? '' : f.slice(space + 1);
     if (key === 'worktree') {
       if (cur) out.push(cur);
-      cur = { path: fromGitPath(value), head: null, branch: null, bare: false, detached: false, locked: false, prunable: false };
+      cur = { path: toWindows(value), head: null, branch: null, bare: false, detached: false, locked: false, prunable: false };
       continue;
     }
     if (!cur) continue;
@@ -202,4 +202,31 @@ export const parsePaths = (stdout: string): string[] => stdout.split('\0').filte
 export function isSafeRelative(p: string): boolean {
   if (!p || p.length > 4096 || p.startsWith('/') || /^[A-Za-z]:/.test(p) || p.includes('\\') || p.includes('\0') || p.includes(':')) return false;
   return p.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
+}
+
+// ------------------------------------------------------------------ WSL
+
+/** A folder inside a WSL distribution, as Windows reaches it (`\\wsl.localhost\Ubuntu\home\me\app`). */
+export interface WslLocation {
+  /** `wsl.localhost` or `wsl$`, as the path was written. */
+  host: string;
+  distro: string;
+  /** The Linux path (`/home/me/app`). */
+  linuxPath: string;
+}
+
+/** `\\wsl.localhost\<distro>\…` or `\\wsl$\<distro>\…`, else null. No `..`, no odd characters. */
+export function parseWslUnc(p: string): WslLocation | null {
+  const m = /^[\\/]{2}(wsl\$|wsl\.localhost)[\\/]([A-Za-z0-9._-]+)([\\/].*)?$/i.exec(p);
+  if (!m) return null;
+  const rest = (m[3] ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+  const linuxPath = rest === '' ? '/' : rest;
+  if (linuxPath.split('/').some((part) => part === '..' || part === '.') || /[\0\r\n]/.test(linuxPath)) return null;
+  return { host: m[1]!.toLowerCase() === 'wsl$' ? 'wsl$' : 'wsl.localhost', distro: m[2]!, linuxPath };
+}
+
+/** A Linux path of that distribution as Windows reaches it. */
+export function wslUnc(host: string, distro: string, linuxPath: string): string {
+  const rest = linuxPath.replace(/\/+$/, '').replace(/\//g, '\\');
+  return `\\\\${host}\\${distro}${rest || '\\'}`;
 }

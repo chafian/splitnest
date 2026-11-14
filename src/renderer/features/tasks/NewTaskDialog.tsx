@@ -6,7 +6,7 @@ import { api } from '../../api';
 import { agentById } from '../../../shared/agents';
 import { TASK_AGENTS, TASK_LIMITS, isTaskName, type TaskAgent, type TaskError, type TaskPreview } from '../../../shared/tasks';
 import type { GitStatus, ShellProfile, Workspace } from '../../../shared/types';
-import { uncommittedNote } from './task-text';
+import { uncommittedNote, wslDistroOf } from './task-text';
 
 export interface NewTaskChoice {
   name: string;
@@ -18,8 +18,10 @@ interface Props {
   open: boolean;
   workspace: Workspace | null;
   gitStatus: GitStatus | null;
-  /** Shells a task can start in (PowerShell profiles; WSL comes later). */
+  /** Shells a task can start in: that distribution's WSL for a repository inside WSL, else PowerShell (see taskShells). */
   profiles: ShellProfile[];
+  /** Some WSL distribution is installed (then a repository on a Windows drive gets a note on why it is PowerShell). */
+  wslAvailable: boolean;
   defaultProfileId: string | null;
   /** Creates the task; resolves with an error to show, or null when it was created. */
   onCreate(choice: NewTaskChoice): Promise<TaskError | null>;
@@ -75,6 +77,7 @@ export function NewTaskDialog(props: Props) {
     return () => clearTimeout(timer);
   }, [open, workspace, name]);
 
+  const inWsl = workspace ? wslDistroOf(workspace.rootPath) : null;
   const typed = name.trim();
   const nameOk = isTaskName(typed) && /[A-Za-z0-9]/.test(typed.normalize('NFKD'));
   const canCreate = !!workspace && nameOk && !!profileId && !!preview && !problem && !busy;
@@ -160,7 +163,17 @@ export function NewTaskDialog(props: Props) {
           ))}
         </select>
       </label>
-      {props.profiles.length === 0 && <p className="task-dialog__error">Tasks start in PowerShell, which wasn’t found. WSL support for tasks comes in a later version.</p>}
+      {props.profiles.length === 0 && (
+        <p className="task-dialog__error">
+          {inWsl ? `No WSL profile for ${inWsl} was found; refresh the shell list in Settings › Shells.` : 'Tasks of a repository on a Windows drive start in PowerShell, which wasn’t found.'}
+        </p>
+      )}
+      {!inWsl && props.wslAvailable && props.profiles.length > 0 && (
+        <p className="settings__hint" data-testid="task-wsl-note">
+          This repository is on a Windows drive, so its tasks run in PowerShell: Git inside WSL can’t use a task folder that Windows Git made. To give
+          tasks WSL terminals, keep the repository inside WSL (for example in your Linux home) and open it from there.
+        </p>
+      )}
 
       <div className="task-dialog__preview" data-testid="task-preview" aria-live="polite">
         {problem ? (

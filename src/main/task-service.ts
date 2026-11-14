@@ -20,6 +20,7 @@
 import { access, lstat, open, readdir, readFile, realpath, rmdir } from 'node:fs/promises';
 import path from 'node:path';
 import { isWslRoot, repositoryFilterKeys } from './git-status';
+import { parseWslUnc } from './git-worktree';
 import type { GitResult, GitRunner } from './git-runner';
 import {
   fromGitPath,
@@ -114,7 +115,10 @@ export const taskFailure = fail;
 const gitFailure = (r: GitResult | null, otherwise: TaskErrorCode = 'GIT_FAILED') => fail(r === null ? 'GIT_NOT_FOUND' : r.timedOut ? 'TIMEOUT' : otherwise);
 
 export interface TaskServiceDeps {
+  /** Windows' git.exe, for folders on Windows drives and shares. */
   git: GitRunner;
+  /** A WSL distribution's own Git, for folders inside it (`\\wsl.localhost\<distro>\…`). Without it, those are refused. */
+  wslGit?: (distro: string, host: string) => GitRunner;
   isDirectory(p: string): Promise<boolean>;
 }
 
@@ -152,14 +156,14 @@ export class TaskService {
       if (!picked.ok) return picked;
       const { branch, worktreePath } = picked.names;
       const { repoRoot, baseCommit } = repo.base;
-      const add = await this.deps.git.run(repoRoot, ['worktree', 'add', '-b', branch, worktreePath, baseCommit], { timeoutMs: ADD_TIMEOUT_MS });
+      const add = await this.run(repoRoot, ['worktree', 'add', '-b', branch, this.gitPath(repoRoot, worktreePath), baseCommit], { timeoutMs: ADD_TIMEOUT_MS });
       const list = await this.list(repoRoot);
       const entry = list?.find((e) => samePath(e.path, worktreePath)) ?? null;
       if (add === null || add.code !== 0) {
         // Git cleans up after a failed add; if it got as far as the branch (but no worktree uses
         // it), delete that branch, only while it is still exactly the base commit.
         if (add !== null && !entry && !list?.some((e) => e.branch === branch)) {
-          await this.deps.git.run(repoRoot, ['update-ref', '-d', `refs/heads/${branch}`, baseCommit]);
+          await this.run(repoRoot, ['update-ref', '-d', `refs/heads/${branch}`, baseCommit]);
         }
         return gitFailure(add);
       }
@@ -179,7 +183,7 @@ export class TaskService {
     let ahead: number | null = null;
     let behind: number | null = null;
     if (branchExists && (await this.refId(task.repoRoot, task.baseBranch)) !== null) {
-      const r = await this.deps.git.run(task.repoRoot, ['rev-list', '--left-right', '--count', `refs/heads/${task.baseBranch}...refs/heads/${task.branch}`]);
+      const r = await this.run(task.repoRoot, ['rev-list', '--left-right', '--count', `refs/heads/${task.baseBranch}...refs/heads/${task.branch}`]);
       const counts = r?.code === 0 ? parseLeftRight(r.stdout) : null;
       if (counts) [behind, ahead] = counts;
     }
@@ -204,7 +208,7 @@ export class TaskService {
       if (entry) {
         if (entry.branch !== task.branch) return fail('NOT_A_TASK');
         if (entry.locked) return fail('TASK_LOCKED');
-        const r = await this.deps.git.run(task.repoRoot, ['worktree', 'remove', task.worktreePath], { timeoutMs: REMOVE_TIMEOUT_MS });
+        const r = await this.run(task.repoRoot, ['worktree', 'remove', this.gitPath(task.repoRoot, task.worktreePath)], { timeoutMs: REMOVE_TIMEOUT_MS });
         if (r === null || r.code !== 0) {
           const why = r ? removeRefusal(r.stderr) : null;
           if (why === 'dirty') return fail('TASK_DIRTY');
@@ -323,7 +327,7 @@ export class TaskService {
     if (unresolved === null) return fail('GIT_FAILED');
     let preview: TaskFinishCheck['preview'] = commitsToMerge === 0 ? 'nothing' : 'unknown';
     let conflicts: string[] = [];
-    if (commitsToMerge > 0 && head && versionAtLeast(await this.deps.git.version(), [2, 38])) {
+    if (commitsToMerge > 0 && head && versionAtLeast(await this.versionAt(task.repoRoot), [2, 38])) {
       // Computes the merge without touching any folder or branch (it only adds Git objects).
       const r = await this.read(task.repoRoot, ['merge-tree', '--write-tree', '--name-only', '--no-messages', '-z', `refs/heads/${task.baseBranch}`, `refs/heads/${task.branch}`]);
       if (r?.code === 0) preview = 'clean';
@@ -367,12 +371,12 @@ export class TaskService {
       const unresolved = await this.unmergedOrNull(task.worktreePath);
       if (unresolved === null) return fail('GIT_FAILED');
       if (unresolved.length > 0 && (await stillConflicted(task.worktreePath, unresolved)).length > 0) return fail('CONFLICTS_UNRESOLVED');
-      const add = await this.deps.git.run(task.worktreePath, ['add', '-A']);
+      const add = await this.run(task.worktreePath, ['add', '-A']);
       if (add === null || add.code !== 0) return gitFailure(add);
-      const staged = await this.deps.git.run(task.worktreePath, ['diff', '--cached', '--quiet', '--ignore-submodules=all']);
+      const staged = await this.run(task.worktreePath, ['diff', '--cached', '--quiet', '--ignore-submodules=all']);
       const merging = await this.operationInProgress(task.worktreePath);
       if (staged?.code === 0 && !merging) return fail('NOTHING_TO_COMMIT');
-      const commit = await this.deps.git.run(task.worktreePath, ['commit', '--quiet', '-m', message.trim()], { timeoutMs: MERGE_TIMEOUT_MS });
+      const commit = await this.run(task.worktreePath, ['commit', '--quiet', '-m', message.trim()], { timeoutMs: MERGE_TIMEOUT_MS });
       if (commit === null || commit.timedOut) return gitFailure(commit);
       if (commit.code !== 0) return fail('COMMIT_FAILED');
       const id = await this.refId(task.repoRoot, task.branch);
@@ -399,7 +403,7 @@ export class TaskService {
       if (await this.trackedChanges(folder)) return fail('BASE_DIRTY');
       const before = await this.refId(folder, task.baseBranch);
       if (!before) return fail('BASE_NOT_CHECKED_OUT');
-      const r = await this.deps.git.run(folder, ['merge', '--no-edit', '--no-stat', `refs/heads/${task.branch}`], { timeoutMs: MERGE_TIMEOUT_MS });
+      const r = await this.run(folder, ['merge', '--no-edit', '--no-stat', `refs/heads/${task.branch}`], { timeoutMs: MERGE_TIMEOUT_MS });
       if (r !== null && r.code === 0 && !r.timedOut) {
         const after = await this.refId(folder, task.baseBranch);
         return after ? { ok: true, result: { outcome: 'merged', commit: after } } : fail('GIT_FAILED');
@@ -409,7 +413,7 @@ export class TaskService {
       // Unknown (Git couldn't list them): still undone and verified below, reported as a failed merge.
       const conflicts = (await this.unmergedOrNull(folder)) ?? [];
       if (await this.operationInProgress(folder)) {
-        const abort = await this.deps.git.run(folder, ['merge', '--abort'], { timeoutMs: MERGE_TIMEOUT_MS });
+        const abort = await this.run(folder, ['merge', '--abort'], { timeoutMs: MERGE_TIMEOUT_MS });
         if (abort === null || abort.code !== 0) return fail('MERGE_NOT_UNDONE');
       }
       const now = await this.refId(folder, task.baseBranch);
@@ -430,7 +434,7 @@ export class TaskService {
       if (await this.trackedChanges(task.worktreePath)) return fail('TASK_UNCOMMITTED');
       if (!(await this.refId(task.repoRoot, task.baseBranch))) return fail('BASE_NOT_CHECKED_OUT');
       const before = await this.refId(task.repoRoot, task.branch);
-      const r = await this.deps.git.run(task.worktreePath, ['merge', '--no-edit', '--no-stat', `refs/heads/${task.baseBranch}`], { timeoutMs: MERGE_TIMEOUT_MS });
+      const r = await this.run(task.worktreePath, ['merge', '--no-edit', '--no-stat', `refs/heads/${task.baseBranch}`], { timeoutMs: MERGE_TIMEOUT_MS });
       if (r === null) return fail('GIT_NOT_FOUND');
       if (r.code === 0 && !r.timedOut) {
         const after = await this.refId(task.repoRoot, task.branch);
@@ -441,7 +445,7 @@ export class TaskService {
       if (conflicts === null) return fail('GIT_FAILED');
       if (conflicts.length > 0) return { ok: true, result: { outcome: 'conflicts', conflicts } };
       // Stopped another way: undo it in the task folder too.
-      if (await this.operationInProgress(task.worktreePath)) await this.deps.git.run(task.worktreePath, ['merge', '--abort']);
+      if (await this.operationInProgress(task.worktreePath)) await this.run(task.worktreePath, ['merge', '--abort']);
       return fail(r.timedOut ? 'TIMEOUT' : 'MERGE_FAILED');
     });
   }
@@ -464,7 +468,7 @@ export class TaskService {
       if (entry) {
         if (entry.branch !== task.branch) return fail('NOT_A_TASK');
         if (entry.locked) return fail('TASK_LOCKED');
-        const r = await this.deps.git.run(task.repoRoot, ['worktree', 'remove', '--force', task.worktreePath], { timeoutMs: REMOVE_TIMEOUT_MS });
+        const r = await this.run(task.repoRoot, ['worktree', 'remove', '--force', this.gitPath(task.repoRoot, task.worktreePath)], { timeoutMs: REMOVE_TIMEOUT_MS });
         if (r === null || r.code !== 0) {
           const after = r && !r.timedOut ? await this.list(task.repoRoot) : null;
           if (!after || after.some((e) => samePath(e.path, task.worktreePath))) return gitFailure(r);
@@ -478,7 +482,7 @@ export class TaskService {
       if (now !== null) {
         const others = await this.list(task.repoRoot);
         // Checked out somewhere else (by the user): the branch stays.
-        if (others && !others.some((e) => e.branch === task.branch)) await this.deps.git.run(task.repoRoot, ['update-ref', '-d', `refs/heads/${task.branch}`, now]);
+        if (others && !others.some((e) => e.branch === task.branch)) await this.run(task.repoRoot, ['update-ref', '-d', `refs/heads/${task.branch}`, now]);
       }
       return { ok: true };
     });
@@ -513,7 +517,8 @@ export class TaskService {
     const r = await this.read(cwd, ['rev-parse', ...names.flatMap((n) => ['--git-path', n])]);
     if (r === null || r.code !== 0) return true;
     for (const line of r.stdout.split('\n').map((l) => l.trim()).filter(Boolean)) {
-      const full = win.isAbsolute(fromGitPath(line)) ? fromGitPath(line) : win.join(cwd, fromGitPath(line));
+      // Absolute paths come in the Git's own form (a Linux path from a WSL Git); relative ones are under `cwd`.
+      const full = line.startsWith('/') || /^[A-Za-z]:/.test(line) ? (this.gitFor(cwd)?.toWindows(line) ?? line) : win.join(cwd, line.replace(/\//g, '\\'));
       if (await pathExists(full)) return true;
     }
     return false;
@@ -527,9 +532,37 @@ export class TaskService {
     return !!list?.some((e) => samePath(e.path, task.worktreePath) && e.branch === task.branch) && (await this.deps.isDirectory(task.worktreePath));
   }
 
+  private readonly wslRunners = new Map<string, GitRunner>();
+
+  /** The Git for a folder: the distribution's own inside WSL, else Windows' (null: none can work there). */
+  private gitFor(folder: string): GitRunner | null {
+    if (!isWslRoot(folder)) return this.deps.git;
+    const loc = parseWslUnc(folder);
+    if (!loc || !this.deps.wslGit) return null;
+    const key = `${loc.host}|${loc.distro.toLowerCase()}`;
+    let g = this.wslRunners.get(key);
+    if (!g) this.wslRunners.set(key, (g = this.deps.wslGit(loc.distro, loc.host)));
+    return g;
+  }
+
+  /** Runs Git for `cwd` with the Git of that folder (null: none, or not installed). */
+  private run(cwd: string, args: string[], options?: { timeoutMs?: number }): Promise<GitResult | null> {
+    const git = this.gitFor(cwd);
+    return git ? git.run(cwd, args, options) : Promise.resolve(null);
+  }
+
+  /** A folder as an argument for the Git of `cwd` (a Linux path for a WSL Git). */
+  private gitPath(cwd: string, folder: string): string {
+    return this.gitFor(cwd)?.toGit(folder) ?? folder;
+  }
+
+  private async versionAt(cwd: string): Promise<[number, number, number] | null> {
+    return (await this.gitFor(cwd)?.version()) ?? null;
+  }
+
   /** A read-only Git command (no optional locks). */
   private read(cwd: string, args: string[]): Promise<GitResult | null> {
-    return this.deps.git.run(cwd, ['--no-optional-locks', ...args]);
+    return this.run(cwd, ['--no-optional-locks', ...args]);
   }
 
   /** Deletes the task branch only if the base branch has all its commits and nothing checks it out. */
@@ -539,19 +572,20 @@ export class TaskService {
     const list = await this.list(task.repoRoot);
     if (!list || list.some((e) => e.branch === task.branch)) return 'unmerged';
     if ((await this.refId(task.repoRoot, task.baseBranch)) === null) return 'unmerged';
-    const merged = await this.deps.git.run(task.repoRoot, ['merge-base', '--is-ancestor', id, `refs/heads/${task.baseBranch}`]);
+    const merged = await this.run(task.repoRoot, ['merge-base', '--is-ancestor', id, `refs/heads/${task.baseBranch}`]);
     if (merged?.code !== 0) return 'unmerged';
-    const del = await this.deps.git.run(task.repoRoot, ['update-ref', '-d', `refs/heads/${task.branch}`, id]);
+    const del = await this.run(task.repoRoot, ['update-ref', '-d', `refs/heads/${task.branch}`, id]);
     return del?.code === 0 ? 'deleted' : 'unmerged';
   }
 
   /** The repository, branch and commit a task created from `root` starts from. */
   private async inspect(root: string): Promise<TaskResult<{ repo: Repo }>> {
-    if (isWslRoot(root)) return fail('UNSUPPORTED_LOCATION');
+    // A folder inside WSL uses that distribution's Git; one in no supported place is refused.
+    if (!this.gitFor(root)) return fail('UNSUPPORTED_LOCATION');
     // Where the workspace folder is inside its worktree ('' at the top), as Git sees it. Asking Git
     // rather than comparing paths: the folder may be spelled differently from what Git prints (a
     // short 8.3 name such as RUNNER~1, a junction, other letter case).
-    const prefix = await this.deps.git.run(root, ['rev-parse', '--show-prefix']);
+    const prefix = await this.run(root, ['rev-parse', '--show-prefix']);
     if (prefix === null || prefix.code !== 0) return gitFailure(prefix, 'NOT_A_REPOSITORY');
     const list = await this.list(root);
     const main = list?.[0];
@@ -560,10 +594,10 @@ export class TaskService {
     // The workspace is a folder inside the repository: the task workspace is the same folder in the task's worktree.
     const subPath = prefix.stdout.trim().replace(/\/+$/, '').replace(/\//g, '\\');
     if (subPath.split('\\').some((part) => part === '..' || part === '.')) return fail('UNSUPPORTED_LOCATION');
-    const sym = await this.deps.git.run(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+    const sym = await this.run(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
     if (sym === null) return fail('GIT_NOT_FOUND');
     if (sym.code !== 0) return fail('DETACHED_HEAD');
-    const head = await this.deps.git.run(root, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
+    const head = await this.run(root, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
     if (head === null) return fail('GIT_NOT_FOUND');
     if (head.code !== 0) return fail('NO_COMMITS');
     const dir = worktreesDir(main.path);
@@ -573,7 +607,7 @@ export class TaskService {
 
   /** The first free name: no branch (case-insensitive, nor one it would clash with as a folder), no worktree, no folder. */
   private async pick(repo: Repo, slug: string): Promise<TaskResult<{ names: { branch: string; worktreePath: string } }>> {
-    const refs = await this.deps.git.run(repo.base.repoRoot, ['for-each-ref', '--format=%(refname)', 'refs/heads/']);
+    const refs = await this.run(repo.base.repoRoot, ['for-each-ref', '--format=%(refname)', 'refs/heads/']);
     if (refs === null || refs.code !== 0) return gitFailure(refs);
     const branches = refs.stdout
       .split('\n')
@@ -599,15 +633,17 @@ export class TaskService {
 
   /** The repository's worktrees (main first), or null when Git can't list them. */
   private async list(cwd: string): Promise<WorktreeEntry[] | null> {
-    const nul = versionAtLeast(await this.deps.git.version(), [2, 36]);
-    const r = await this.deps.git.run(cwd, ['worktree', 'list', '--porcelain', ...(nul ? ['-z'] : [])]);
+    const git = this.gitFor(cwd);
+    if (!git) return null;
+    const nul = versionAtLeast(await git.version(), [2, 36]);
+    const r = await this.run(cwd, ['worktree', 'list', '--porcelain', ...(nul ? ['-z'] : [])]);
     if (r === null || r.code !== 0) return null;
-    return parseWorktreeList(r.stdout, nul);
+    return parseWorktreeList(r.stdout, nul, (p) => git.toWindows(p));
   }
 
   /** A branch's commit id, or null when there is no such branch. */
   private async refId(cwd: string, branch: string): Promise<string | null> {
-    const r = await this.deps.git.run(cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}^{commit}`]);
+    const r = await this.run(cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}^{commit}`]);
     return r?.code === 0 ? r.stdout.trim() || null : null;
   }
 

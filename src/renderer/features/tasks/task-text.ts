@@ -16,3 +16,20 @@ export function uncommittedNote(status: GitStatus | null, baseBranch: string): s
   if (!status || (status.changedFiles === 0 && status.untracked === 0)) return null;
   return `This workspace has uncommitted changes. They are not part of the task, which starts from the last commit on ${baseBranch}.`;
 }
+
+/** The WSL distribution a folder is in (`\\wsl.localhost\<distro>\…`, `\\wsl$\<distro>\…`), or null. */
+export function wslDistroOf(folder: string): string | null {
+  const m = /^[\\/]{2}(?:wsl\$|wsl\.localhost)[\\/]([A-Za-z0-9._-]+)(?:[\\/]|$)/i.exec(folder);
+  return m ? m[1]! : null;
+}
+
+/**
+ * The shells a task can start in: for a repository inside WSL, that distribution's WSL profile (its own
+ * Git made the task folder); otherwise PowerShell, since Git inside WSL can't use a task folder that
+ * Windows Git made (their worktree records hold each other's paths).
+ */
+export function taskShells<P extends { kind: string; distro?: string }>(profiles: readonly P[], parentRoot: string): P[] {
+  const distro = wslDistroOf(parentRoot);
+  if (distro) return profiles.filter((p) => p.kind === 'wsl' && p.distro?.toLowerCase() === distro.toLowerCase());
+  return profiles.filter((p) => p.kind !== 'wsl');
+}

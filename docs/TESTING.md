@@ -2,6 +2,13 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Agent tasks, M5: repositories inside WSL (2026-11-14)
+
+- **E2E** (`node tests/e2e/run-tasks-wsl.mjs`, 4 / 4; Ubuntu-22.04, Git 2.34.1; repository in a temporary folder under `/tmp`): the WSL workspace gets *New agent task* (it has no sidebar Git status); the dialog offers only `wsl:Ubuntu-22.04` and shows the task folder as `\\wsl.localhost\…\app.worktrees\fix-parser`; Linux Git makes the worktree (its `.git` names a Linux path) and `git status` works in the task's WSL terminal; Review lists a file written from Windows; Finish commits, says it can't check for conflicts first (Git 2.34), merges into main and deletes folder and branch.
+- **Real WSL** (`tests/wsl/task-service-wsl.test.ts`, 5): create with Linux Git; review, commit all, clean merge, cleanup; a conflicting merge undone with main unchanged and no `MERGE_HEAD`; bringing in main with the conflict found through Linux `--git-path` output, markers refused, resolved and merged; remove refuses uncommitted work, discard deletes it; other distributions and `..` paths refused.
+- **Unit:** WSL path mapping (`parseWslUnc`, `wslUnc`) and which shells a task offers (`taskShells`: the repository's distribution inside WSL, PowerShell for a Windows drive).
+- **Regressions:** unit 525 / 525; WSL 11 / 11; `run-tasks.mjs` 19 / 19; `run-e2e.mjs` 36 / 36. Type check and lint are clean.
+
 ## Agent tasks, M4: finish (2026-11-14)
 
 - **E2E** (`run-tasks.mjs`, now 19 / 19):

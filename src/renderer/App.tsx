@@ -39,6 +39,7 @@ import { WorkspaceView } from './features/workspaces/WorkspaceView';
 import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
 import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialog';
 import { ReviewDialog } from './features/tasks/ReviewDialog';
+import { taskShells } from './features/tasks/task-text';
 import { FinishTaskDialog, type FinishOutcome } from './features/tasks/FinishTaskDialog';
 import type { TaskError, TaskProgress } from '../shared/tasks';
 import { canAddPane, canAddTab, initialState, reducer } from './features/workspaces/workspace-state';
@@ -1446,7 +1447,8 @@ export function App() {
         open={!!taskFor}
         workspace={state.workspaces.find((w) => w.id === taskFor) ?? null}
         gitStatus={(taskFor && gitStatuses.get(taskFor)) || null}
-        profiles={(discovery?.profiles ?? []).filter((p) => p.kind !== 'wsl')}
+        profiles={taskShells(discovery?.profiles ?? [], state.workspaces.find((w) => w.id === taskFor)?.rootPath ?? '')}
+        wslAvailable={(discovery?.profiles ?? []).some((p) => p.kind === 'wsl')}
         defaultProfileId={state.settings.defaultProfileId ?? discovery?.fallbackProfileId ?? null}
         onCreate={(choice) => (taskFor ? createTask(taskFor, choice) : Promise.resolve(null))}
         onClose={() => setTaskFor(null)}

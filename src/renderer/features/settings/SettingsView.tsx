@@ -495,7 +495,8 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
                   'Adds New agent task to workspaces in a Git repository: SplitNest creates a Git worktree (a folder next to the repository) on a ' +
                   'new branch splitnest/<name>, opens it as a workspace under the one it came from, and can start Claude Code, Codex or Gemini CLI ' +
                   'there, so several agents work on one repository without editing the same files. Review shows what a task changed; Finish ' +
-                  'commits, merges it into the branch it came from and deletes its folder and branch. PowerShell only for now. The folder and ' +
+                  'commits, merges it into the branch it came from and deletes its folder and branch. Tasks run in PowerShell, or in WSL for a ' +
+                  'repository stored inside WSL (with that distribution’s Git). The folder and ' +
                   'branch are ordinary Git ones, so Git works on them as usual.'
                 }
                 control={<Switch label="Agent tasks (preview)" checked={settings.agentTasks} onChange={(v) => onChange({ agentTasks: v })} />}

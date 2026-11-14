@@ -9,6 +9,8 @@ import {
   parseNumstat,
   parsePaths,
   isSafeRelative,
+  parseWslUnc,
+  wslUnc,
   removeRefusal,
   samePath,
   suffixed,
@@ -158,6 +160,19 @@ describe('Git output', () => {
     expect(parseLeftRight('2\t5\n')).toEqual([2, 5]);
     expect(parseLeftRight('0 0')).toEqual([0, 0]);
     expect(parseLeftRight('x')).toBeNull();
+  });
+});
+
+describe('WSL paths', () => {
+  it('a folder inside WSL as a Linux path, and back', () => {
+    expect(parseWslUnc('\\\\wsl.localhost\\Ubuntu-22.04\\home\\me\\my app')).toEqual({ host: 'wsl.localhost', distro: 'Ubuntu-22.04', linuxPath: '/home/me/my app' });
+    expect(parseWslUnc('\\\\wsl$\\Debian\\')).toEqual({ host: 'wsl$', distro: 'Debian', linuxPath: '/' });
+    expect(parseWslUnc('\\\\WSL.LOCALHOST\\Ubuntu\\tmp\\x\\')).toMatchObject({ host: 'wsl.localhost', linuxPath: '/tmp/x' });
+    expect(wslUnc('wsl.localhost', 'Ubuntu-22.04', '/home/me/app.worktrees/fix')).toBe('\\\\wsl.localhost\\Ubuntu-22.04\\home\\me\\app.worktrees\\fix');
+    expect(wslUnc('wsl$', 'Debian', '/')).toBe('\\\\wsl$\\Debian\\');
+  });
+  it('anything else, or a path that climbs out, is not a WSL folder', () => {
+    for (const p of ['C:\\code', '\\\\server\\share\\x', '\\\\wsl.localhost\\Ubuntu\\tmp\\..\\etc', '\\\\wsl.localhost\\Bad Name\\x', '\\\\wsl.localhost\\']) expect(parseWslUnc(p)).toBeNull();
   });
 });
 

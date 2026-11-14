@@ -10,7 +10,8 @@
 // they would for the same command typed in a terminal.
 import type { Runner } from './exec';
 import { gitEnv, withCeiling } from './git-status';
-import { parseGitVersion } from './git-worktree';
+import { fromGitPath, parseGitVersion, parseWslUnc, wslUnc } from './git-worktree';
+import { decodeWslOutput } from './wsl';
 
 export interface GitResult {
   code: number | null;
@@ -22,10 +23,14 @@ export interface GitResult {
 }
 
 export interface GitRunner {
-  /** Which Git this is; paths passed and returned are in that side's form. */
-  readonly side: 'windows';
-  /** Runs `git -C <cwd> <args>`. Null when Git isn't installed. */
+  /** Which Git this is: Windows' git.exe, or a WSL distribution's own Git. */
+  readonly side: 'windows' | 'wsl';
+  /** Runs `git -C <cwd> <args>`; `cwd` is a Windows path (a WSL one is mapped). Null when Git isn't installed. */
   run(cwd: string, args: string[], options?: { timeoutMs?: number }): Promise<GitResult | null>;
+  /** A Windows path as this Git takes it in an argument. */
+  toGit(windowsPath: string): string;
+  /** A path as this Git prints it, in Windows form. */
+  toWindows(gitPath: string): string;
   /** The installed version, e.g. [2, 39, 0] (null: unknown). Read once. */
   version(): Promise<[number, number, number] | null>;
 }
@@ -59,6 +64,8 @@ export function createWindowsGitRunner(deps: WindowsGitDeps): GitRunner {
   return {
     side: 'windows',
     run,
+    toGit: (p) => p,
+    toWindows: fromGitPath,
     version: () =>
       (version ??= (async () => {
         const file = await exe();
@@ -66,5 +73,51 @@ export function createWindowsGitRunner(deps: WindowsGitDeps): GitRunner {
         const r = await deps.run(file, ['--version'], { timeoutMs: GIT_TIMEOUT_MS, env: base });
         return r.code === 0 ? parseGitVersion(r.stdout.toString('utf8')) : null;
       })()),
+  };
+}
+
+export interface WslGitDeps {
+  run: Runner;
+  wslExe: string;
+  distro: string;
+  /** `wsl.localhost` or `wsl$`: how the workspace folder spells it (paths read back use the same). */
+  host: string;
+}
+
+/**
+ * A WSL distribution's own Git, for repositories stored inside it: `wsl.exe --distribution <d>
+ * --exec env LC_ALL=C … git -C <linux path> …`, structured arguments only (no shell). Windows
+ * variables aren't passed into Linux (WSLENV is not extended), so nothing can point Git elsewhere;
+ * English messages and no prompts are set with `env`. A worktree made here holds Linux paths, so
+ * Windows Git never works on these tasks (and the other way round).
+ */
+export function createWslGitRunner(deps: WslGitDeps): GitRunner {
+  let version: Promise<[number, number, number] | null> | null = null;
+  const toGit = (p: string): string => {
+    const loc = parseWslUnc(p);
+    // Only folders of this distribution; anything else becomes a path Git can't find.
+    return loc && loc.distro.toLowerCase() === deps.distro.toLowerCase() ? loc.linuxPath : '/nonexistent/splitnest';
+  };
+  const exec = async (args: string[], timeoutMs: number): Promise<GitResult> => {
+    const r = await deps.run(
+      deps.wslExe,
+      ['--distribution', deps.distro, '--exec', 'env', 'LC_ALL=C', 'LANGUAGE=C', 'GIT_TERMINAL_PROMPT=0', 'GIT_OPTIONAL_LOCKS=0', 'git', ...args],
+      { timeoutMs, env: { ...process.env, WSL_UTF8: '1' } },
+    );
+    // Git's own output is UTF-8; wsl.exe's messages (no such distribution…) may be UTF-16.
+    return { code: r.code, stdout: r.stdout.toString('utf8'), stderr: decodeWslOutput(r.stderr), timedOut: r.timedOut, ...(r.overflow ? { overflow: true } : {}) };
+  };
+  return {
+    side: 'wsl',
+    toGit,
+    toWindows: (p) => (p.startsWith('/') ? wslUnc(deps.host, deps.distro, p) : fromGitPath(p)),
+    run: async (cwd, args, options) => {
+      const r = await exec(['-c', 'core.fsmonitor=false', '-c', 'core.quotepath=off', '-C', toGit(cwd), ...args], options?.timeoutMs ?? GIT_TIMEOUT_MS);
+      // Git isn't installed in the distribution (`env` can't run it: 126/127), or there is no such distribution.
+      if (((r.code === 126 || r.code === 127) && /^env: .git/m.test(r.stderr)) || /WSL_E_DISTRO_NOT_FOUND/.test(r.stderr)) return null;
+      return r;
+    },
+    version: () =>
+      (version ??= exec(['--version'], GIT_TIMEOUT_MS).then((r) => (r.code === 0 ? parseGitVersion(r.stdout) : null))),
   };
 }
