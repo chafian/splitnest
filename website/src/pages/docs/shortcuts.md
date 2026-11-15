@@ -22,7 +22,7 @@ Also listed in the app (**Ctrl+Shift+/**). Plain Ctrl+letter keys always go to t
 | Next / previous workspace | Ctrl+Shift+PgDn / Ctrl+Shift+PgUp |
 | Collapse / expand workspace sidebar | Ctrl+Shift+B |
 | Show / hide file explorer | Ctrl+Shift+E |
-| Show / hide a task's Changes panel | Ctrl+Shift+G |
+| Show / hide the Changes panel (a task) or Source Control (any repository) | Ctrl+Shift+G |
 | Focus terminals (hide / restore both sidebars) | Ctrl+Shift+Enter |
 | Maximise pane / restore layout | Ctrl+Shift+M |
 | Font size bigger / smaller / reset | Ctrl+= / Ctrl+− / Ctrl+0 |
@@ -30,7 +30,7 @@ Also listed in the app (**Ctrl+Shift+/**). Plain Ctrl+letter keys always go to t
 | Settings | Ctrl+, |
 | Keyboard shortcut list | Ctrl+Shift+/ |
 | Copy | Ctrl+C **when text is selected** (otherwise Ctrl+C interrupts), or Ctrl+Shift+C |
-| Paste | Ctrl+V or Ctrl+Shift+V; right-click pastes when nothing is selected, copies otherwise |
+| Paste | Ctrl+V or Ctrl+Shift+V; right-click pastes when nothing is selected, copies otherwise. An image (a screenshot) pastes as the path of a saved PNG, copied files as their paths |
 
 ## Shortcut scope
 

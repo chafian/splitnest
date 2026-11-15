@@ -8,7 +8,7 @@ Open your project folders as workspaces, run real **PowerShell** and **WSL** she
 
 **[⬇ Download for Windows (installer)](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-Setup.exe)** · [Portable ZIP](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-portable.zip) · [All releases](https://github.com/chafian/splitnest/releases) · [splitnest.dev](https://splitnest.dev)
 
-> **Early release (v0.3).** Windows 11 x64. Free and open source (MIT). The installer is **not code signed yet**, so Windows SmartScreen may warn the first time you run it; see [Getting started](#getting-started) and the [code signing policy](CODE_SIGNING.md). Known limitations are listed in [Status and limitations](#status-and-limitations).
+> **Early release (v0.4).** Windows 11 x64. Free and open source (MIT). The installer is **not code signed yet**, so Windows SmartScreen may warn the first time you run it; see [Getting started](#getting-started) and the [code signing policy](CODE_SIGNING.md). Known limitations are listed in [Status and limitations](#status-and-limitations).
 
 ![SplitNest demo: a Claude Code tab turns to "Needs you", an in-app notice opens the tab where Codex finished, and the agent inbox lists every waiting agent](docs/readme/demo.gif)
 
@@ -24,6 +24,9 @@ Open your project folders as workspaces, run real **PowerShell** and **WSL** she
 - **One inbox for every agent.** A bell in the title bar lists every waiting agent across all workspaces; one shortcut jumps to the next.
 - **Pick up where you left off.** After a restart, terminals that ran Claude Code, Codex or Gemini CLI offer a **Resume** button for that conversation.
 - **Projects, not windows.** Each folder is a workspace with its own layout. Background sessions keep running, and layouts and folders come back after a restart.
+- **Source Control built in.** Stage, commit, push and pull from a panel next to the terminal, with each file's diff as a tab.
+- **Dev servers one click away.** Ports your terminals listen on show on the workspace; click to open them in the browser.
+- **Screenshots straight into agents.** Paste an image into the terminal and Claude Code, Codex or Gemini CLI gets its path.
 - **Everything beside the terminal.** File explorer, a built-in CodeMirror editor, per-workspace Git status, five themes and a command palette.
 - **Private by design.** No telemetry, no terminal output or credentials saved, and agent text stays out of notifications unless you opt in.
 
@@ -70,9 +73,24 @@ Each project folder is a workspace in the sidebar with its running-shell count. 
 
 A file explorer with Material Icon Theme icons sits beside the terminals, with compact folders for deep trees. Click a file to open it in the built-in editor (CodeMirror 6): syntax highlighting for about two dozen languages, find/replace, explicit **Ctrl+S** saving, detection of changes made on disk, and a SHA-256 check before every save so nothing is overwritten silently.
 
-## Git status
+## Git status and Source Control
 
-Each workspace in a Git repository shows its branch and the lines added and removed since the last commit. SplitNest only reads the repository; it never changes it. Needs Git for Windows on PATH.
+Each workspace in a Git repository shows its branch and the lines added and removed since the last commit in the sidebar. Needs Git for Windows on PATH (repositories inside WSL use their own Git).
+
+**Source Control** (**Ctrl+Shift+G**) is a panel next to the terminals: the branch with what is ahead and behind its upstream, the staged changes and the other changes, and each file's diff as a tab.
+- **Stage, unstage and discard** per file or all at once. Discard asks first and is refused if the file changed since.
+- **Commit** what is staged with **Ctrl+Enter** (or *Stage all and commit*). Your hooks run as in a terminal; a refusal shows Git's own message.
+- **Push** to the upstream; a new branch asks where first and is then tracked. Never forced. **Pull** is fast-forward only: when both sides moved, it says so and never creates a merge.
+- Sign-in is Git's own credential helper; SplitNest never reads or stores credentials.
+
+## Ports
+
+When a program in a workspace's terminals listens on a port (a dev server on 5173, an API on 3000), a chip such as `:5173` appears under the workspace in the sidebar: click it to open `http://localhost:5173` in your browser. Ports are found from the processes each terminal started, in PowerShell and WSL; the agent CLI's own ports are left out, and SplitNest never connects to them. *Settings → Workspaces → Show listening ports* turns it off.
+
+## Screenshots and program notifications
+
+- **Paste a screenshot into an agent:** with an image on the clipboard (Win+Shift+S), **Ctrl+V** in a terminal saves it as a PNG and types its path, so Claude Code, Codex or Gemini CLI attaches it. Files copied in Explorer, or dragged onto a terminal, paste as their paths (Linux paths in WSL). Pasted images stay on this PC and are deleted after a day and when SplitNest quits.
+- **`splitnest notify "Tests passed"`** in a SplitNest terminal (PowerShell or WSL) raises a SplitNest notification for that tab, for example `npm test; splitnest notify "Tests done"`. Programs can do the same with the escape codes other terminals use (OSC 9, 777, 99), which Codex and Claude Code can send.
 
 ## Themes and command palette
 
@@ -129,7 +147,7 @@ Also listed in the app (**Ctrl+Shift+/**). Plain Ctrl+letter keys always go to t
 | Next / previous workspace | Ctrl+Shift+PgDn / Ctrl+Shift+PgUp |
 | Collapse / expand workspace sidebar | Ctrl+Shift+B |
 | Show / hide file explorer | Ctrl+Shift+E |
-| Show / hide a task's Changes panel | Ctrl+Shift+G |
+| Show / hide the Changes panel (a task) or Source Control (any repository) | Ctrl+Shift+G |
 | Focus terminals (hide / restore both sidebars) | Ctrl+Shift+Enter |
 | Maximise pane / restore layout | Ctrl+Shift+M |
 | Font size bigger / smaller / reset | Ctrl+= / Ctrl+− / Ctrl+0 |
@@ -137,7 +155,7 @@ Also listed in the app (**Ctrl+Shift+/**). Plain Ctrl+letter keys always go to t
 | Settings | Ctrl+, |
 | Keyboard shortcut list | Ctrl+Shift+/ |
 | Copy | Ctrl+C **when text is selected** (otherwise Ctrl+C interrupts), or Ctrl+Shift+C |
-| Paste | Ctrl+V or Ctrl+Shift+V; right-click pastes when nothing is selected, copies otherwise |
+| Paste | Ctrl+V or Ctrl+Shift+V; right-click pastes when nothing is selected, copies otherwise. An image (a screenshot) pastes as the path of a saved PNG, copied files as their paths |
 
 App shortcuts are a fixed table (no user configuration yet). Notes on Ctrl+Shift+M and shortcut scope are in the [user guide](docs/USER_GUIDE.md#keyboard-shortcuts).
 
@@ -155,7 +173,7 @@ Details on restoring, cleanup and troubleshooting are in the [user guide](docs/U
 
 ## Status and limitations
 
-SplitNest is an **early release (v0.3)**. It works for daily use, but it has been tested on few machines so far; please [report problems](https://github.com/chafian/splitnest/issues/new/choose).
+SplitNest is an **early release (v0.4)**. It works for daily use, but it has been tested on few machines so far; please [report problems](https://github.com/chafian/splitnest/issues/new/choose).
 
 - Windows 11 x64 only; builds are **unsigned** (Windows SmartScreen may warn; see the [code signing policy](CODE_SIGNING.md)). Since version 0.2.0 there is an installer with automatic updates; see [CHANGELOG.md](CHANGELOG.md).
 - The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.

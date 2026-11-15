@@ -34,6 +34,17 @@ Settings → Notifications, on by default. When an agent *needs you* (permission
 - **Spoofing:** only agents SplitNest found running in the tab can raise a Windows notification (PowerShell tabs); a program that merely prints a status report naming an agent can't. WSL tabs can't be checked that way, so there the agent's report is enough.
 - **Start menu:** Windows needs a Start menu entry to show an app's notifications, so the first notification adds *SplitNest* to the Start menu (it opens the copy of SplitNest that last showed a notification). Windows doesn't display the very notification that registers an app, so SplitNest shows that first one a second time 3 seconds later; you see it once, slightly late. *Send a test notification* in Settings shows whether Windows accepts them; if no banner appears, check Do Not Disturb and SplitNest's entry in Windows Settings → System → Notifications.
 
+## Notifications from programs
+
+Settings → Notifications → *Notifications sent by programs*, on by default. A program in a terminal can raise the same notifications with the escape codes other terminals use: OSC 9 (iTerm2: Codex, Claude Code's `iterm2` channel), OSC 777 (Ghostty, WezTerm) and OSC 99 (kitty). Windows Terminal's progress and folder codes (`9;4`, `9;9`) don't notify.
+
+- **`splitnest notify`:** in SplitNest's PowerShell and WSL terminals, `splitnest notify "Tests passed"` (`--title` for a title) does the same, for example `npm test; splitnest notify "Tests done"`. It only writes the escape code to its own terminal: no socket, no network. Elsewhere (over SSH), `printf '\e]777;notify;Title;Body\a'` works too.
+- **What it says:** *PowerShell sent a notification* (or the agent's name, if SplitNest confirmed it runs there), the workspace and the tab; the program's text only with *Include what the agent wrote*. One notification per tab per event, at most six a minute per tab.
+
+## Paste screenshots
+
+With an image on the clipboard (Win+Shift+S, *Copy image* in a browser), **Ctrl+V** or right-click in a terminal saves it as a PNG in SplitNest's own temp folder and types its path at the prompt (never Enter), so Claude Code, Codex or Gemini CLI attaches it. Files copied in Explorer paste as their paths, and files dragged onto a terminal type their paths. In WSL tabs the paths are Linux paths. Pasted images stay on this PC and are deleted after a day and when SplitNest quits. Text paste is unchanged.
+
 ## Agent inbox
 
 The bell in the title bar, **Ctrl+Shift+A**. Every agent that is waiting for you, in all workspaces. The bell shows how many (amber when one needs you).

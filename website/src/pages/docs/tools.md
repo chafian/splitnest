@@ -52,6 +52,27 @@ Shown in the sidebar (Settings → Workspaces, on by default). Each workspace fo
 - **WSL:** what counts is the workspace folder, not the terminal. A folder on a Windows drive (`C:\…`) shows Git status also when its terminals run WSL. Workspaces whose folder is inside WSL (`\\wsl$\…` or `\\wsl.localhost\…`) show none in this version.
 - Needs Git for Windows (`git.exe` on PATH); without it nothing is shown.
 
+## Source Control
+
+**Ctrl+Shift+G** (or the title-bar button) on a workspace in a Git repository opens Source Control next to the terminals. On an agent task the same panel shows the task's changes and Finish instead.
+
+- **Header:** the branch, `↑ahead ↓behind` against its upstream (as of the last fetch), or *not pushed yet*; a merge or rebase in progress is flagged.
+- **Staged** and **Changes** (changed, new and conflicted files), with *Stage all* / *Unstage all*. Hover a file for **Stage**, **Unstage** or **Discard**. Choosing a file opens its staged or unstaged diff as a tab beside the terminal (Ctrl: in the current pane).
+- **Commit:** what is staged, with **Ctrl+Enter**; with nothing staged the button is *Stage all and commit*. Your Git name, email and hooks apply as in a terminal; if a hook refuses, its message is shown and nothing is lost.
+- **Push:** to the branch's upstream. A branch without one asks first (*Push “feature” to “origin” and track it?*), then pushes with `-u`. Never forced.
+- **Pull:** fast-forward only (`--ff-only`). When your branch and its upstream both have new commits, it stops and says so: merge or rebase in a terminal. It never creates a merge on its own.
+- **Discard:** asks first and names the file; a new file is deleted (the dialog says so). Refused if the file changed after you were asked.
+- **Sign-in:** Git's own credential helper (Git Credential Manager may show its window). SplitNest never reads or stores credentials, and Git never waits on a hidden terminal prompt.
+- **Updates by itself:** after each Git status check of the workspace, and while the panel is shown, when files in the folder change. Repositories inside WSL use their own Git. Repositories whose Git settings name filter programs (e.g. Git LFS) aren't compared.
+
+## Ports
+
+Settings → Workspaces → *Show listening ports*, on by default. When a program in a workspace's terminals listens on a TCP port that localhost reaches, a chip such as `:5173` appears under the workspace in the sidebar (up to three, then *+N*). Click it to open `http://localhost:5173` in your browser; the command palette can open or copy each one, and the terminal's tooltip lists its ports.
+
+- **Which ports:** those of the terminal's shell and everything it started, found by the same process checks that recognise agents (PowerShell: Windows' listening sockets; WSL: `/proc/net/tcp` for the terminal's own Linux processes, which WSL forwards to Windows). The agent CLI's own ports (such as Claude Code's IDE connection) are left out; a dev server it starts counts.
+- **When:** pressing Enter or Ctrl+C in a terminal checks soon after; otherwise every few seconds while terminals are busy and less often when quiet.
+- **Private:** SplitNest never connects to the ports; only their numbers leave the process check.
+
 ## Links
 
 Links in terminal output open in your browser only on **Ctrl+click**, and only for `http`/`https`.

@@ -319,6 +319,55 @@ export const features: Feature[] = [
     ],
   },
   {
+    slug: 'source-control',
+    name: 'Source Control',
+    summary: 'Stage, commit, push and pull from a panel next to your terminals, with each file’s diff as a tab.',
+    title: 'Git Source Control panel beside your terminals on Windows',
+    description:
+      'SplitNest’s Source Control panel stages, commits, pushes and pulls (fast-forward only) for any workspace in a Git repository, with diffs as tabs, your hooks and Git’s own sign-in.',
+    intro:
+      'Ctrl+Shift+G opens Source Control next to the terminals: the branch with what is ahead and behind, the staged changes and the other changes, and each file’s diff as a tab.',
+    shots: [],
+    related: ['git-status', 'agent-tasks', 'workspaces-splits-tabs'],
+    docs: { label: 'Source Control in the user guide', href: '/docs/tools/' },
+    blocks: [
+      {
+        h: 'Stage, commit, push',
+        html: `<p>Stage or unstage each file or all of them, then commit with ${k('Ctrl+Enter')}. Your hooks run as in a terminal, and a refusal shows Git’s own message. <strong>Push</strong> goes to the upstream; a new branch asks where first and is then tracked. Nothing is ever forced.</p>`,
+      },
+      {
+        h: 'Safe by default',
+        html: `<p><strong>Pull</strong> is fast-forward only: when both sides moved it stops and says so, and never creates a merge. <em>Discard</em> asks first and is refused if the file changed since. Sign-in is Git’s own credential helper; SplitNest never reads or stores credentials.</p>`,
+      },
+      {
+        h: 'PowerShell and WSL',
+        html: `<p>Repositories on a Windows drive use Git for Windows; repositories inside WSL use that distribution’s own Git.</p>`,
+      },
+    ],
+  },
+  {
+    slug: 'ports',
+    name: 'Ports',
+    summary: 'The ports your dev servers listen on, on each workspace; one click opens them in the browser.',
+    title: 'Dev server ports per workspace, one click to open',
+    description: 'SplitNest shows the localhost ports that programs in each workspace’s terminals listen on, in PowerShell and WSL, and opens them in your browser with one click.',
+    intro:
+      'When a program in a workspace’s terminals listens on a port, a chip such as :5173 appears under the workspace in the sidebar. Click it to open http://localhost:5173.',
+    shots: [],
+    related: ['workspaces-splits-tabs', 'agent-aware-tabs'],
+    docs: { label: 'Ports in the user guide', href: '/docs/tools/' },
+    blocks: [
+      {
+        h: 'Found, not configured',
+        html: `<p>Ports come from the processes each terminal started, in PowerShell and in WSL (which forwards them to Windows). The agent CLI’s own ports are left out; a dev server it starts counts.</p>`,
+      },
+      {
+        h: 'Private',
+        html: `<p>SplitNest never connects to the ports. Only their numbers leave the process check, and <em>Show listening ports</em> in Settings turns it off.</p>`,
+      },
+    ],
+  },
+  {
     slug: 'git-status',
     name: 'Git status',
     summary: 'Branch and changed-line counts for every workspace in a repository. Read-only.',
