@@ -26,6 +26,7 @@ import { TaskService } from './task-service';
 import { TaskSummaries } from './task-summaries';
 import { TaskFolderWatcher } from './task-watch';
 import { installCommandScripts, type CommandDirs } from './command-scripts';
+import { SourceControlService } from './source-control';
 import { createPasteService, MAX_PASTE_IMAGE_BYTES, PASTE_MAX_AGE_MS } from './paste';
 import { NotificationService, notifyIdPrefix, showAgainOnceRegistered, type NativeNotification } from './notifications';
 import { githubFeedUrl, Updater, type AutoUpdaterLike } from './updater';
@@ -246,7 +247,10 @@ const gitStatus = new GitStatusService({
     if (contents && !contents.isDestroyed()) contents.send(IPC.gitStatus, { workspaceId, status });
   },
   // Task workspaces: their summary follows each check (its own queue; see task-summaries.ts).
-  afterCheck: (workspaceId) => taskSummaries.request(workspaceId),
+  afterCheck: (workspaceId) => {
+    taskSummaries.request(workspaceId);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.gitChecked, workspaceId);
+  },
 });
 // Agent tasks: a Git worktree and branch per task (see task-service.ts).
 const tasks = new TaskService({
@@ -254,6 +258,11 @@ const tasks = new TaskService({
   // Repositories stored inside WSL: that distribution's own Git (Windows Git can't share their worktrees).
   wslGit: (distro, host) => createWslGitRunner({ run: runFile, wslExe: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe'), distro, host }),
   isDirectory,
+});
+// The Source Control panel of normal workspaces: the same Gits (see source-control.ts).
+const sourceControl = new SourceControlService({
+  git: createWindowsGitRunner({ run: runFile, findGit: () => findOnPath('git.exe', process.env, fileExists), env: process.env, home: os.homedir() }),
+  wslGit: (distro, host) => createWslGitRunner({ run: runFile, wslExe: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe'), distro, host }),
 });
 // Sidebar numbers of agent tasks, computed after each Git status check of a task's workspace.
 const taskSummaries = new TaskSummaries({
@@ -655,6 +664,7 @@ void app.whenReady().then(async () => {
     taskWatcher,
     notifications,
     paste,
+    sourceControl,
     updates: {
       status: () => updater.status(),
       setPrefs: (prefs) => {

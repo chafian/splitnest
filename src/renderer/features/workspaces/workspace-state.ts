@@ -53,11 +53,13 @@ export type Action =
       filePath?: string;
       /** When set, the pane shows a task's changes to this file (path as Git lists it in the task). */
       diffPath?: string;
+      /** With diffPath on a normal workspace: its staged (true) or unstaged (false) changes. */
+      diffStaged?: boolean;
       direction?: SplitDirection;
       targetPaneId?: string;
     }
   | { type: 'removePane'; workspaceId: string; paneId: string }
-  | { type: 'addTab'; workspaceId: string; paneId: string; tabId: string; profileId: string; filePath?: string; diffPath?: string }
+  | { type: 'addTab'; workspaceId: string; paneId: string; tabId: string; profileId: string; filePath?: string; diffPath?: string; diffStaged?: boolean }
   | { type: 'closeTab'; workspaceId: string; tabId: string }
   | { type: 'activateTab'; workspaceId: string; tabId: string }
   | { type: 'moveTab'; workspaceId: string; tabId: string; toPaneId: string; toIndex: number }
@@ -156,7 +158,7 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
         if (!canAddPane(w)) return w;
         const tabId = action.tabId ?? action.paneId;
         const pane = action.diffPath
-          ? createFilePane(action.paneId, { id: tabId, kind: 'diff', path: action.diffPath })
+          ? createFilePane(action.paneId, { id: tabId, kind: 'diff', path: action.diffPath, ...(action.diffStaged !== undefined ? { staged: action.diffStaged } : {}) })
           : action.filePath
             ? createFilePane(action.paneId, { id: tabId, kind: 'file', path: action.filePath })
             : createPane(action.paneId, action.profileId, tabId);
@@ -180,7 +182,7 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
       return mapWorkspace(state, action.workspaceId, (w) => {
         if (!w.layout || !canAddTab(w, action.paneId)) return w;
         const tab: PaneTab = action.diffPath
-          ? { id: action.tabId, kind: 'diff', path: action.diffPath }
+          ? { id: action.tabId, kind: 'diff', path: action.diffPath, ...(action.diffStaged !== undefined ? { staged: action.diffStaged } : {}) }
           : action.filePath
             ? { id: action.tabId, kind: 'file', path: action.filePath }
             : { id: action.tabId, profileId: action.profileId };
@@ -256,7 +258,7 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
     case 'setChangesPanel': {
       const width = Math.round(Math.min(LIMITS.changesWidth.max, Math.max(LIMITS.changesWidth.min, action.panel.width)));
       return mapWorkspace(state, action.workspaceId, (w) =>
-        !w.task || (w.changesPanel?.open === action.panel.open && w.changesPanel.width === width) ? w : { ...w, changesPanel: { open: action.panel.open, width } },
+        w.changesPanel?.open === action.panel.open && w.changesPanel.width === width ? w : { ...w, changesPanel: { open: action.panel.open, width } },
       );
     }
     case 'updateSettings': {

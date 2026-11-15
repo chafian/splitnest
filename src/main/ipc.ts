@@ -25,6 +25,7 @@ import type { TaskFolderWatcher } from './task-watch';
 import { taskRecordKey } from '../shared/tasks';
 import type { NotificationService } from './notifications';
 import type { PasteService } from './paste';
+import type { SourceControlService } from './source-control';
 import { parseUpdatePrefs, type UpdatePrefs, type UpdateStatus } from '../shared/updates';
 import { isAbsoluteWindowsPath, isAllowedExternalUrl, isId, parsePersistedState, parseWindowTheme } from '../shared/validation';
 import type { ShellCache } from './launch-resolver';
@@ -56,6 +57,7 @@ export interface IpcContext {
   taskWatcher: TaskFolderWatcher;
   notifications: NotificationService;
   paste: PasteService;
+  sourceControl: SourceControlService;
   updates: {
     status(): UpdateStatus;
     setPrefs(prefs: UpdatePrefs): void;
@@ -307,6 +309,31 @@ export function registerIpc(ctx: IpcContext): void {
     return p.workspace.task ? ctx.tasks.diff(p.workspace.task, file) : taskFailure('NOT_A_TASK');
   });
 
+  // Source Control: main's own folder for the workspace (a task's: its worktree), never a path from the page.
+  const scRoot = (workspaceId: unknown): string | null => {
+    const w = isId(workspaceId) ? ctx.store.getWorkspace(workspaceId) : undefined;
+    return w ? (w.task?.worktreePath ?? w.rootPath) : null;
+  };
+  const NO_WORKSPACE = { ok: false as const, error: { code: 'NOT_A_REPOSITORY' as const, message: 'This workspace isn’t known.' } };
+  const sc = <T>(workspaceId: unknown, fn: (root: string) => Promise<T>) => {
+    const root = scRoot(workspaceId);
+    return root ? fn(root) : Promise.resolve(NO_WORKSPACE);
+  };
+  const pathsArg = (v: unknown) => (v === 'all' ? 'all' : Array.isArray(v) ? v.slice(0, 1001) : null);
+  handle(IPC.scStatus, (_e, id) => sc(id, (root) => ctx.sourceControl.status(root)));
+  handle(IPC.scDiff, (_e, id, file, staged) => sc(id, (root) => ctx.sourceControl.diff(root, file, staged === true)));
+  handle(IPC.scStage, (_e, id, paths) => sc(id, (root) => ctx.sourceControl.stage(root, pathsArg(paths))));
+  handle(IPC.scUnstage, (_e, id, paths) => sc(id, (root) => ctx.sourceControl.unstage(root, pathsArg(paths))));
+  handle(IPC.scDiscardPreview, (_e, id, file) => sc(id, (root) => ctx.sourceControl.discardPreview(root, file)));
+  handle(IPC.scDiscard, (_e, id, file, key) => sc(id, (root) => ctx.sourceControl.discard(root, file, key)));
+  handle(IPC.scCommit, (_e, id, message, all) => sc(id, (root) => ctx.sourceControl.commit(root, message, all === true)));
+  handle(IPC.scPushTarget, (_e, id) => sc(id, (root) => ctx.sourceControl.pushTarget(root)));
+  handle(IPC.scPush, (_e, id, target) => {
+    const t = target && typeof target === 'object' ? { remote: (target as { remote?: unknown }).remote, branch: (target as { branch?: unknown }).branch } : undefined;
+    return sc(id, (root) => ctx.sourceControl.push(root, t));
+  });
+  handle(IPC.scPull, (_e, id) => sc(id, (root) => ctx.sourceControl.pull(root)));
+
   // Finishing a task: each one acts on main's own copy of the task, never on paths from the page.
   const taskOf = (workspaceId: unknown) => {
     const p = taskParent(workspaceId);
@@ -314,9 +341,10 @@ export function registerIpc(ctx: IpcContext): void {
     return p.workspace.task ? { ok: true as const, id: p.workspace.id, task: p.workspace.task } : taskFailure('NOT_A_TASK');
   };
   on(IPC.taskWatch, (_event, workspaceId) => {
-    // Only a task main knows, with agent tasks on; anything else stops the watch.
-    const w = ctx.store.state.settings.agentTasks && isId(workspaceId) ? ctx.store.getWorkspace(workspaceId) : undefined;
-    ctx.taskWatcher.set(w?.task ? { workspaceId: w.id, folder: w.task.worktreePath } : null);
+    // A workspace main knows (a task only with agent tasks on): its folder, while its panel is shown.
+    const w = isId(workspaceId) ? ctx.store.getWorkspace(workspaceId) : undefined;
+    const folder = w?.task ? (ctx.store.state.settings.agentTasks ? w.task.worktreePath : null) : (w?.rootPath ?? null);
+    ctx.taskWatcher.set(w && folder ? { workspaceId: w.id, folder } : null);
   });
   handle(IPC.taskSummaries, () => (ctx.store.state.settings.agentTasks ? ctx.taskSummaries.all() : {}));
   handle(IPC.taskFinishCheck, async (_event, workspaceId) => {

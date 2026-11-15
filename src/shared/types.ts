@@ -75,8 +75,10 @@ export interface FileTab {
 export interface DiffTab {
   id: string;
   kind: 'diff';
-  /** Relative to the task folder's top, `/`-separated (as Git lists it). */
+  /** Relative to the task folder's (or repository's) top, `/`-separated (as Git lists it). */
   path: string;
+  /** Source Control of a normal workspace: its staged (true) or unstaged (false) changes. Absent: a task's changes. */
+  staged?: boolean;
 }
 
 export type PaneTab = TerminalTab | FileTab | DiffTab;

@@ -3850,8 +3850,136 @@ dialog::backdrop {
   color: var(--warning);
 }
 
-.changes__fact--info {
+.changes__fact--info,
+.changes__fact--muted {
   color: var(--text-muted);
+}
+
+/* Source Control (a normal workspace's panel): commit box, then the staged and unstaged groups. */
+.sc__sync {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.sc__commit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sc__message {
+  width: 100%;
+  min-height: 44px;
+  max-height: 160px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  padding: 6px 8px;
+}
+
+.sc__buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.sc__commit-button {
+  flex: 1;
+  justify-content: center;
+}
+
+.sc__buttons .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sc__feedback p {
+  margin: 0;
+}
+
+.sc__detail {
+  margin: 4px 0 0;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.sc__lists {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 6px;
+}
+
+.sc__lists .changes__list {
+  flex: none;
+  overflow: visible;
+  padding: 0;
+}
+
+.sc__group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px 4px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sc__group-action {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.sc__group-action:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.sc__row {
+  position: relative;
+}
+
+.sc__row .changes__file {
+  padding-right: 64px;
+}
+
+.sc__row-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  gap: 2px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+}
+
+.sc__row:hover .sc__row-actions,
+.sc__row:focus-within .sc__row-actions {
+  display: flex;
+}
+
+.review__kind--conflicted {
+  color: var(--danger);
 }
 
 .changes__note {

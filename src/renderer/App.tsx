@@ -38,9 +38,10 @@ import { Sidebar } from './features/workspaces/Sidebar';
 import { WorkspaceView } from './features/workspaces/WorkspaceView';
 import { WelcomeGuide } from './features/workspaces/WelcomeGuide';
 import { NewTaskDialog, type NewTaskChoice } from './features/tasks/NewTaskDialog';
-import { TaskSummaryContext } from './features/tasks/DiffTab';
+import { ScVersionContext, TaskSummaryContext } from './features/tasks/DiffTab';
 import { ChangesPanel } from './features/tasks/ChangesPanel';
-import { taskShells } from './features/tasks/task-text';
+import { SourceControlPanel } from './features/tasks/SourceControlPanel';
+import { taskShells, wslDistroOf } from './features/tasks/task-text';
 import { FinishTaskDialog, type BranchResult, type FinishOutcome } from './features/tasks/FinishTaskDialog';
 import type { TaskError, TaskSummary } from '../shared/tasks';
 import { canAddPane, canAddTab, initialState, reducer } from './features/workspaces/workspace-state';
@@ -291,11 +292,24 @@ export function App() {
   const agentsNeedingYou = [...agentCounts.values()].reduce((n, c) => n + c.needs, 0);
 
   const activeWorkspace = state.workspaces.find((w) => w.id === state.activeWorkspaceId) ?? null;
-  // The task on screen and its Changes panel (as saved, or as for a new task).
-  const activePanel = activeWorkspace?.task && state.settings.agentTasks ? (activeWorkspace.changesPanel ?? newChangesPanel(windowWidth)) : null;
+  /** A normal workspace in a Git repository (the sidebar shows its branch), or a folder inside WSL. */
+  const hasSourceControl = (w: Workspace) => !w.task && (gitStatuses.has(w.id) || !!wslDistroOf(w.rootPath));
+  // Source Control: bumped when a workspace's repository may have changed (diff tabs read again).
+  const [scVersions, setScVersions] = useState<ReadonlyMap<string, number>>(new Map());
+  const bumpScVersion = useCallback((id: string) => setScVersions((m) => new Map(m).set(id, (m.get(id) ?? 0) + 1)), []);
+  useEffect(() => api.onGitChecked(bumpScVersion), [bumpScVersion]);
+  // The task on screen and its Changes panel (as saved, or as for a new task); for a normal workspace in
+  // a Git repository, its Source Control panel (closed until shown).
+  const activePanel = activeWorkspace?.task
+    ? state.settings.agentTasks
+      ? (activeWorkspace.changesPanel ?? newChangesPanel(windowWidth))
+      : null
+    : activeWorkspace && hasSourceControl(activeWorkspace)
+      ? (activeWorkspace.changesPanel ?? { open: false, width: newChangesPanel(windowWidth).width })
+      : null;
   const chrome = computeChrome(state.settings, windowWidth, !!activeWorkspace, view === 'workspace' ? activePanel : null);
-  // Watch the folder of the task whose panel is on screen (changes there trigger a Git status check).
-  const watchedTask = chrome.changes && activeWorkspace?.task ? activeWorkspace.id : null;
+  // Watch the folder of the workspace whose panel is on screen (changes there trigger a Git status check).
+  const watchedTask = chrome.changes && activeWorkspace ? activeWorkspace.id : null;
   useEffect(() => {
     api.watchTask(watchedTask);
   }, [watchedTask]);
@@ -639,7 +653,7 @@ export function App() {
   /** Shows a task with its Changes panel open and takes the keyboard there (sidebar button, palette). */
   const showChanges = (workspaceId: string) => {
     const ws = stateRef.current.workspaces.find((w) => w.id === workspaceId);
-    if (!ws?.task) return;
+    if (!ws) return;
     setView('workspace');
     dispatch({ type: 'activateWorkspace', workspaceId });
     if (stateRef.current.settings.focusMode) dispatch({ type: 'updateSettings', patch: { focusMode: false } });
@@ -652,10 +666,10 @@ export function App() {
    * opens next to the terminals: in the pane that already holds this task's changes, or a new pane to
    * the right, so the agent's terminal stays in view; with `here` (Ctrl), as a tab in the active pane.
    */
-  const openDiff = (workspaceId: string, path: string, here = false) => {
+  const openDiff = (workspaceId: string, path: string, here = false, staged?: boolean) => {
     const ws = stateRef.current.workspaces.find((w) => w.id === workspaceId);
-    if (!ws?.task) return;
-    const existing = listTabs(ws.layout).find((t) => isDiffTab(t) && t.path === path);
+    if (!ws) return;
+    const existing = listTabs(ws.layout).find((t) => isDiffTab(t) && t.path === path && t.staged === staged);
     if (existing) {
       dispatch({ type: 'activateTab', workspaceId, tabId: existing.id });
       requestAnimationFrame(() => focusTab(existing.id));
@@ -666,9 +680,20 @@ export function App() {
     const changesPane = listPanes(ws.layout).find((p) => p.tabs.some(isDiffTab)) ?? null;
     const target = here ? active : changesPane;
     if (target && canAddTab(ws, target.id)) {
-      dispatch({ type: 'addTab', workspaceId, paneId: target.id, tabId, profileId: '', diffPath: path });
+      dispatch({ type: 'addTab', workspaceId, paneId: target.id, tabId, profileId: '', diffPath: path, ...(staged !== undefined ? { diffStaged: staged } : {}) });
     } else if (canAddPane(ws)) {
-      dispatch({ type: 'addPane', workspaceId, paneId: uid(), tabId, splitId: uid(), profileId: '', diffPath: path, direction: 'row', ...(active ? { targetPaneId: active.id } : {}) });
+      dispatch({
+        type: 'addPane',
+        workspaceId,
+        paneId: uid(),
+        tabId,
+        splitId: uid(),
+        profileId: '',
+        diffPath: path,
+        ...(staged !== undefined ? { diffStaged: staged } : {}),
+        direction: 'row',
+        ...(active ? { targetPaneId: active.id } : {}),
+      });
     } else {
       pushToast('warning', `A workspace can have at most ${LIMITS.maxPanesPerWorkspace} panes and ${LIMITS.maxTabsPerPane} tabs per pane.`);
       return;
@@ -1072,8 +1097,8 @@ export function App() {
         dispatch({ type: 'updateSettings', patch: toggleSidebar(stateRef.current.settings) });
         return true;
       case 'toggleChanges': {
-        if (!ws?.task || !stateRef.current.settings.agentTasks) return false;
-        const panel = ws.changesPanel ?? newChangesPanel(window.innerWidth);
+        if (!ws || (ws.task ? !stateRef.current.settings.agentTasks : !hasSourceControl(ws))) return false;
+        const panel = ws.changesPanel ?? (ws.task ? newChangesPanel(window.innerWidth) : { open: false, width: newChangesPanel(window.innerWidth).width });
         // In focus mode it leaves focus mode and shows the panel, like the explorer's shortcut.
         if (stateRef.current.settings.focusMode) {
           dispatch({ type: 'updateSettings', patch: { focusMode: false } });
@@ -1252,6 +1277,7 @@ export function App() {
         ? [
             cmd('ws-task', 'Workspace', 'New agent task…', () => ws && newTask(ws.id), undefined, !ws),
             cmd('ws-task-review', 'Workspace', 'Review task changes (changes panel)', () => ws?.task && showChanges(ws.id), 'toggleChanges', !ws?.task),
+            cmd('ws-source-control', 'Workspace', 'Source control: stage, commit, push', () => ws && showChanges(ws.id), ws?.task ? undefined : 'toggleChanges', !ws || !hasSourceControl(ws)),
             cmd('ws-task-finish', 'Workspace', 'Finish task (commit, merge, clean up)…', () => ws?.task && setFinishFor(ws.id), undefined, !ws?.task),
           ]
         : []),
@@ -1414,6 +1440,7 @@ export function App() {
         <UpdateNotices status={updateStatus} onChoose={(updateCheck) => chooseUpdates(updateCheck)} />
         {whatsNew && <WhatsNewNotice version={whatsNew} onDone={whatsNewDone} />}
         <TaskSummaryContext.Provider value={taskSummaries}>
+        <ScVersionContext.Provider value={scVersions}>
         <div className="main__views">
         {settingsShown && (
           <SettingsView
@@ -1513,7 +1540,24 @@ export function App() {
             onOpenFile={(rel) => openFile(w.id, rel)}
             notify={pushToast}
             rightPanel={
-              w.id === state.activeWorkspaceId && w.task && chrome.changes && activePanel ? (
+              w.id === state.activeWorkspaceId && !w.task && chrome.changes && activePanel ? (
+                <SourceControlPanel
+                  workspace={w}
+                  width={chrome.changesWidth}
+                  maxWidth={chrome.changesMax}
+                  focusToken={changesFocus}
+                  onWidthChange={(width) => dispatch({ type: 'setChangesPanel', workspaceId: w.id, panel: { open: true, width } })}
+                  onClose={() => dispatch({ type: 'setChangesPanel', workspaceId: w.id, panel: { open: false, width: activePanel.width } })}
+                  onOpenDiff={(path, staged, here) => openDiff(w.id, path, here, staged)}
+                  onChanged={() => {
+                    bumpScVersion(w.id);
+                    api.refreshGit(w.id); // the sidebar's branch and line counts follow
+                  }}
+                  onRefresh={() => api.refreshGit(w.id)}
+                  confirm={setConfirm}
+                  onEscape={() => activeTabId && focusTab(activeTabId)}
+                />
+              ) : w.id === state.activeWorkspaceId && w.task && chrome.changes && activePanel ? (
                 <ChangesPanel
                   workspace={w}
                   summary={taskSummaries.get(w.id)}
@@ -1532,6 +1576,7 @@ export function App() {
           />
         ))}
         </div>
+        </ScVersionContext.Provider>
         </TaskSummaryContext.Provider>
       </main>
       </div>

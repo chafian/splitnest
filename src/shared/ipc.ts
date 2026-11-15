@@ -3,6 +3,7 @@ import type { AgentId } from './agents';
 import type { UpdatePrefs, UpdateStatus } from './updates';
 import type { BranchOutcome, TaskSummary, TaskChanges, TaskDiff, TaskFinishCheck, TaskMergeResult, TaskPreview, TaskProgress, TaskRecord, TaskResult, TaskUpdateResult } from './tasks';
 import type { AgentNotice, NoticeDelivery, NoticeTarget } from './notifications';
+import type { ScDiscardPreview, ScPushTarget, ScResult, ScStatus } from './source-control';
 import type {
   AppInfo,
   CreateSessionRequest,
@@ -75,6 +76,17 @@ export const IPC = {
   taskCreate: 'tw:task:create',
   taskProgress: 'tw:task:progress',
   taskChanges: 'tw:task:changes',
+  scStatus: 'tw:sc:status',
+  scDiff: 'tw:sc:diff',
+  scStage: 'tw:sc:stage',
+  scUnstage: 'tw:sc:unstage',
+  scDiscardPreview: 'tw:sc:discard-preview',
+  scDiscard: 'tw:sc:discard',
+  scCommit: 'tw:sc:commit',
+  scPushTarget: 'tw:sc:push-target',
+  scPush: 'tw:sc:push',
+  scPull: 'tw:sc:pull',
+  gitChecked: 'tw:git:checked',
   taskDiff: 'tw:task:diff',
   taskFinishCheck: 'tw:task:finish-check',
   taskCommit: 'tw:task:commit',
@@ -193,6 +205,19 @@ export interface AppApi {
   taskProgress(workspaceId: string): Promise<TaskResult<{ progress: TaskProgress }>>;
   /** Review: the files a task changed against where it left its base branch (read-only Git). */
   taskChanges(workspaceId: string): Promise<TaskResult<{ changes: TaskChanges }>>;
+  /** Source Control of a workspace's repository (main/source-control.ts). Paths as listed by scStatus. */
+  scStatus(workspaceId: string): Promise<ScResult<{ status: ScStatus }>>;
+  scDiff(workspaceId: string, path: string, staged: boolean): Promise<ScResult<{ diff: TaskDiff }>>;
+  scStage(workspaceId: string, paths: string[] | 'all'): Promise<ScResult<{ status: ScStatus }>>;
+  scUnstage(workspaceId: string, paths: string[] | 'all'): Promise<ScResult<{ status: ScStatus }>>;
+  scDiscardPreview(workspaceId: string, path: string): Promise<ScResult<{ preview: ScDiscardPreview }>>;
+  scDiscard(workspaceId: string, path: string, key: string): Promise<ScResult<{ status: ScStatus }>>;
+  scCommit(workspaceId: string, message: string, all: boolean): Promise<ScResult<{ commit: string; status: ScStatus }>>;
+  scPushTarget(workspaceId: string): Promise<ScResult<{ target: ScPushTarget }>>;
+  scPush(workspaceId: string, setUpstream?: ScPushTarget): Promise<ScResult<{ status: ScStatus }>>;
+  scPull(workspaceId: string): Promise<ScResult<{ status: ScStatus }>>;
+  /** A Git status check of this workspace finished (the Source Control panel reads again). */
+  onGitChecked(listener: (workspaceId: string) => void): () => void;
   /** Review: one of those files' diff (`path` as listed by taskChanges; anything else is refused). */
   taskDiff(workspaceId: string, path: string): Promise<TaskResult<{ diff: TaskDiff }>>;
   /** Finish: what merging and cleaning up would involve (read-only Git, plus main's count of running terminals). */

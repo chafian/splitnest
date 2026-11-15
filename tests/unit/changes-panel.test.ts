@@ -56,19 +56,21 @@ describe('layout', () => {
 describe('saved per workspace', () => {
   const ws = (extra: Partial<Workspace>): Workspace => ({ id: 't', name: 'T', rootPath: task.taskRoot, layout: null, activePaneId: null, ...extra });
 
-  it('kept for tasks, width clamped; anything odd or on a non-task is dropped (older builds drop it too)', () => {
+  it('kept for tasks and (Source Control) normal workspaces, width clamped; anything odd is dropped', () => {
     expect(validateWorkspace(ws({ task, changesPanel: { open: true, width: 5000 } })).changesPanel).toEqual({ open: true, width: LIMITS.changesWidth.max });
     expect(validateWorkspace(ws({ task, changesPanel: { open: false, width: 1 } })).changesPanel).toEqual({ open: false, width: LIMITS.changesWidth.min });
-    expect(validateWorkspace(ws({ changesPanel: { open: true, width: 300 } })).changesPanel).toBeUndefined();
+    expect(validateWorkspace(ws({ changesPanel: { open: true, width: 300 } })).changesPanel).toEqual({ open: true, width: 300 });
+    expect(validateWorkspace(ws({})).changesPanel).toBeUndefined();
     for (const bad of [null, 'open', { open: 'yes', width: 300 }, { open: true, width: Number.NaN }, []]) expect(parseChangesPanel(bad)).toBeNull();
   });
 
-  it('the reducer changes it only for tasks, clamped, and returns the same state when nothing changes', () => {
+  it('the reducer changes it for tasks and normal workspaces, clamped, and returns the same state when nothing changes', () => {
     const state: PersistedState = { schemaVersion: 3, workspaces: [ws({ task }), { id: 'n', name: 'N', rootPath: 'C:\\n', layout: null, activePaneId: null }], activeWorkspaceId: 't', settings: DEFAULT_SETTINGS };
     const a = reducer(state, { type: 'setChangesPanel', workspaceId: 't', panel: { open: true, width: 9999 } });
     expect(a.workspaces[0]!.changesPanel).toEqual({ open: true, width: LIMITS.changesWidth.max });
     expect(reducer(a, { type: 'setChangesPanel', workspaceId: 't', panel: { open: true, width: 9999 } })).toBe(a);
-    expect(reducer(state, { type: 'setChangesPanel', workspaceId: 'n', panel: { open: true, width: 300 } })).toBe(state);
+    expect(reducer(state, { type: 'setChangesPanel', workspaceId: 'n', panel: { open: true, width: 300 } }).workspaces[1]!.changesPanel).toEqual({ open: true, width: 300 });
+    expect(reducer(state, { type: 'setChangesPanel', workspaceId: 'missing', panel: { open: true, width: 300 } }).workspaces).toEqual(state.workspaces);
   });
 });
 

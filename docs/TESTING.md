@@ -2,6 +2,12 @@
 
 **Test machine:** Windows 11 Home build 26300 (x64), Intel Core i7-10700K, 64 GB RAM, AMD Radeon RX 9060 XT, Node.js 20.19.5, WSL 2.6.3 with Ubuntu-22.04 (plus Docker Desktop’s internal distributions, which are hidden). Windows PowerShell 5.1 only; **PowerShell 7 is not installed**, so the `pwsh` profile was exercised only by unit tests with simulated discovery. Date: 2026-11-02.
 
+## Source Control panel (2026-11-15)
+
+- **Unit, real Git** (`source-control-real.test.ts`, 8 / 8): porcelain v2 parsing (staged, unstaged, renamed, conflicted, untracked; branch, upstream, ahead/behind; a repository without commits); Git's error lines with credentials in URLs hidden; from a subfolder everything is relative to the repository's top; stage and unstage (nothing in the folder is lost), Stage all / Unstage all; staged and unstaged diffs; commit staged or everything, an empty message and nothing staged refused; a pre-commit hook that refuses is reported with its text and nothing is lost; push refused without an upstream, then only to the confirmed remote, then to the upstream; pull fast-forwards and refuses (no merge commit) when both sides moved; discard refused when the file changed after the confirmation, restores a change, deletes a new file; a first commit in a new repository.
+- **E2E** (`run-git-panel.mjs`, 9 / 9), a temporary repository with a local bare repository as its remote and a second clone for someone else: Ctrl+Shift+G shows it with the branch and "not pushed yet"; changes appear by themselves (folder watch) and open as diff tabs; stage, unstage, Stage all and the staged diff tab; Ctrl+Enter commits only what is staged; a refusing hook's message; push asks where first, then tracks `origin/main` (↑0 ↓0); pull fast-forwards, and refuses when both moved; discard asks first, restores a change and deletes a new file; a repository inside WSL lists, stages and commits with its own Git.
+- **Regressions:** unit 625 / 625; `run-e2e.mjs` 39 / 39; `run-tasks.mjs` 22 / 22; `run-tasks-wsl.mjs` 4 / 4. Type check and lint are clean.
+
 ## Changes panel, R3: diff tabs (2026-11-14)
 
 - **E2E** (`run-tasks.mjs`, now 22 / 22):

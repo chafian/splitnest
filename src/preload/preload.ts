@@ -32,6 +32,11 @@ ipcRenderer.on(IPC.sessionAgent, (_event, payload: { sessionId: string; agent: A
   for (const listener of agentListeners) listener(payload);
 });
 
+const gitCheckedListeners = new Set<(workspaceId: string) => void>();
+ipcRenderer.on(IPC.gitChecked, (_event, workspaceId: string) => {
+  for (const listener of gitCheckedListeners) listener(workspaceId);
+});
+
 const portListeners = new Set<(event: { sessionId: string; ports: number[] }) => void>();
 ipcRenderer.on(IPC.sessionPorts, (_event, payload: { sessionId: string; ports: number[] }) => {
   for (const listener of portListeners) listener(payload);
@@ -151,6 +156,22 @@ const api: AppApi = {
   createTask: (workspaceId, name) => ipcRenderer.invoke(IPC.taskCreate, workspaceId, name),
   taskProgress: (workspaceId) => ipcRenderer.invoke(IPC.taskProgress, workspaceId),
   taskChanges: (workspaceId) => ipcRenderer.invoke(IPC.taskChanges, workspaceId),
+  scStatus: (workspaceId) => ipcRenderer.invoke(IPC.scStatus, workspaceId),
+  scDiff: (workspaceId, path, staged) => ipcRenderer.invoke(IPC.scDiff, workspaceId, path, staged),
+  scStage: (workspaceId, paths) => ipcRenderer.invoke(IPC.scStage, workspaceId, paths),
+  scUnstage: (workspaceId, paths) => ipcRenderer.invoke(IPC.scUnstage, workspaceId, paths),
+  scDiscardPreview: (workspaceId, path) => ipcRenderer.invoke(IPC.scDiscardPreview, workspaceId, path),
+  scDiscard: (workspaceId, path, key) => ipcRenderer.invoke(IPC.scDiscard, workspaceId, path, key),
+  scCommit: (workspaceId, message, all) => ipcRenderer.invoke(IPC.scCommit, workspaceId, message, all),
+  scPushTarget: (workspaceId) => ipcRenderer.invoke(IPC.scPushTarget, workspaceId),
+  scPush: (workspaceId, setUpstream) => ipcRenderer.invoke(IPC.scPush, workspaceId, setUpstream),
+  scPull: (workspaceId) => ipcRenderer.invoke(IPC.scPull, workspaceId),
+  onGitChecked: (listener) => {
+    gitCheckedListeners.add(listener);
+    return () => {
+      gitCheckedListeners.delete(listener);
+    };
+  },
   taskDiff: (workspaceId, path) => ipcRenderer.invoke(IPC.taskDiff, workspaceId, path),
   taskFinishCheck: (workspaceId) => ipcRenderer.invoke(IPC.taskFinishCheck, workspaceId),
   taskCommit: (workspaceId, message) => ipcRenderer.invoke(IPC.taskCommit, workspaceId, message),

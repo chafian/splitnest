@@ -6,12 +6,18 @@ import { createContext, useContext, useEffect, useMemo, useState, type KeyboardE
 import { api } from '../../api';
 import { Icon } from '../../components/Icon';
 import type { TaskDiff, TaskError, TaskSummary } from '../../../shared/tasks';
+import type { ScError } from '../../../shared/source-control';
 import type { DiffTab, Workspace } from '../../../shared/types';
 import { iconUrl } from '../explorer/icon-urls';
 import { diffRows } from './diff-lines';
 
 /** Each task's summary, from App: diff tabs read their file again when its version changes. */
 export const TaskSummaryContext = createContext<ReadonlyMap<string, TaskSummary>>(new Map());
+/** Source Control: per workspace, bumped when its repository may have changed (a check, an action). */
+export const ScVersionContext = createContext<ReadonlyMap<string, number>>(new Map());
+
+/** What a diff tab compares, in words. */
+const diffWhat = (tab: DiffTab) => (tab.staged === undefined ? 'changes in this task' : tab.staged ? 'staged changes' : 'changes not staged');
 
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
@@ -35,11 +41,11 @@ export function DiffTabButton(props: {
       data-tab-id={tab.id}
       data-diff-path={tab.path}
       aria-selected={props.selected}
-      aria-label={`${name}, changes in this task`}
+      aria-label={`${name}, ${diffWhat(tab)}`}
       tabIndex={props.selected ? 0 : -1}
       draggable
       className={`tab tab--file tab--diff${props.selected ? ' tab--selected' : ''}${props.selected && props.paneActive ? ' tab--focused' : ''}${props.dropBefore ? ' tab--drop-before' : ''}${props.dropAfter ? ' tab--drop-after' : ''}`}
-      title={`${tab.path.replace(/\//g, '\\')}\nChanges in this task (not saved with the layout). Right-click for more.`}
+      title={`${tab.path.replace(/\//g, '\\')}\n${diffWhat(tab).replace(/^./, (c) => c.toUpperCase())} (not saved with the layout). Right-click for more.`}
       onMouseDown={(e) => {
         if (e.button === 1) {
           e.preventDefault();
@@ -54,7 +60,7 @@ export function DiffTabButton(props: {
       <img className="tab__file-icon" src={iconUrl('file', name)} alt="" width={16} height={16} draggable={false} />
       <span className="tab__label">
         <span className="tab__name">{name}</span>
-        <span className="tab__shell">changes</span>
+        <span className="tab__shell">{tab.staged ? 'staged' : 'changes'}</span>
       </span>
       <button
         type="button"
@@ -77,21 +83,23 @@ export function DiffTabButton(props: {
 export function DiffTabView(props: { tab: DiffTab; workspace: Workspace; visible: boolean }) {
   const { tab, workspace } = props;
   const summaries = useContext(TaskSummaryContext);
-  const version = summaries.get(workspace.id)?.version ?? null;
-  const [state, setState] = useState<{ diff: TaskDiff } | { error: TaskError } | null>(null);
+  const scVersions = useContext(ScVersionContext);
+  const version = tab.staged === undefined ? (summaries.get(workspace.id)?.version ?? null) : (scVersions.get(workspace.id) ?? 0);
+  const [state, setState] = useState<{ diff: TaskDiff } | { error: TaskError | ScError } | null>(null);
 
   // Read when first shown, then again when the task's changes moved on (only while shown: a
   // background tab catches up when it is selected).
   useEffect(() => {
     if (!props.visible) return;
     let alive = true;
-    void api.taskDiff(workspace.id, tab.path).then((r) => {
+    const read = tab.staged === undefined ? api.taskDiff(workspace.id, tab.path) : api.scDiff(workspace.id, tab.path, tab.staged);
+    void read.then((r) => {
       if (alive) setState(r.ok ? { diff: r.diff } : { error: r.error });
     });
     return () => {
       alive = false;
     };
-  }, [workspace.id, tab.path, version, props.visible]);
+  }, [workspace.id, tab.path, tab.staged, version, props.visible]);
 
   const rows = useMemo(() => (state && 'diff' in state ? diffRows(state.diff.text) : null), [state]);
   const counts = useMemo(() => {
@@ -116,7 +124,8 @@ export function DiffTabView(props: { tab: DiffTab; workspace: Workspace; visible
             <span className="ws-item__git-added">+{counts.added}</span> <span className="ws-item__git-removed">−{counts.removed}</span>
           </span>
         )}
-        {workspace.task && (
+        {tab.staged !== undefined && <span className="diffview__base">{tab.staged ? 'staged, against the last commit' : 'not staged, against what is staged'}</span>}
+        {tab.staged === undefined && workspace.task && (
           <span className="diffview__base">
             against where the task left <code>{workspace.task.baseBranch}</code>
           </span>
@@ -127,7 +136,11 @@ export function DiffTabView(props: { tab: DiffTab; workspace: Workspace; visible
           <p className="settings__hint review__pad">Loading…</p>
         ) : 'error' in state ? (
           <p className={`review__pad ${state.error.code === 'NOT_CHANGED' ? 'settings__hint' : 'task-dialog__error'}`} data-testid="diff-note">
-            {state.error.code === 'NOT_CHANGED' ? 'This file has no changes in the task anymore (they were undone, or the file is back as it was).' : state.error.message}
+            {state.error.code === 'NOT_CHANGED'
+              ? tab.staged === undefined
+                ? 'This file has no changes in the task anymore (they were undone, or the file is back as it was).'
+                : `This file has no ${tab.staged ? 'staged' : 'unstaged'} changes anymore (they were committed, staged, unstaged or undone).`
+              : state.error.message}
           </p>
         ) : state.diff.binary ? (
           <p className="settings__hint review__pad" data-testid="diff-note">

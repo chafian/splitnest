@@ -46,6 +46,10 @@ const MAP = {
   more: 'dots',
   bell: 'bell',
   gitBranch: 'git-branch',
+  minus: 'minus',
+  discard: 'arrow-back-up',
+  push: 'arrow-up',
+  pull: 'arrow-down',
   changes: 'layout-sidebar-right',
 };
 

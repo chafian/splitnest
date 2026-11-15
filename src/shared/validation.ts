@@ -164,7 +164,8 @@ export function validateWorkspace(value: unknown): Workspace {
   // A task record that doesn't check out is dropped; the workspace itself still loads.
   const task = w.task === undefined ? null : parseWorkspaceTask(w.task, w.rootPath);
   // Only for tasks; anything odd is dropped (the panel then opens as for a new task).
-  const panel = task ? parseChangesPanel(w.changesPanel) : null;
+  // A task's Changes panel, or a normal workspace's Source Control panel.
+  const panel = w.changesPanel !== undefined ? parseChangesPanel(w.changesPanel) : null;
   return { id: w.id, name: name(w.name, 'workspace name'), rootPath: w.rootPath, layout, activePaneId, ...(task ? { task } : {}), ...(panel ? { changesPanel: panel } : {}) };
 }
 
