@@ -216,6 +216,8 @@ details.faq[open] summary { margin-bottom: 0.6rem; }
 .site-footer li { margin: 0; }
 .site-footer a { color: var(--text); }
 .site-footer .legal { margin-top: 1.5rem; font-size: 0.88rem; }
+.site-footer .badges { margin: 1.5rem 0 0; }
+.site-footer .badges img { display: block; max-width: 100%; height: auto; }
 
 .release { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 1.3rem 1.5rem; margin-bottom: 1.2rem; }
 .release h2 { margin-top: 0; font-size: 1.5rem; }
