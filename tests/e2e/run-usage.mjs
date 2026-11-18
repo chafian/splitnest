@@ -164,15 +164,15 @@ try {
     writeFileSync(claudeFile(A), JSON.stringify({ type: 'queue-operation', operation: 'enqueue', timestamp: iso() }) + '\n' + claudeReply('msg_1', claudeUsage(1000, 99_000, 2000)));
     const text = await until(async () => {
       const t = await chipText(page);
-      return t === '10% · $0.06' && t;
-    }, 'usage chip 10% · $0.06');
+      return t === 'ctx 10% · 102K tokens · $0.06' && t;
+    }, 'usage chip ctx 10% · 102K tokens · $0.06');
     return { chip: text };
   });
 
   await step('a new reply updates it (only appended lines are read)', async () => {
     // + 200,000 cache reads and 10,000 output: $0.24 more; context 210K.
     appendFileSync(claudeFile(A), claudeReply('msg_2', claudeUsage(0, 200_000, 10_000)));
-    await until(async () => (await chipText(page)) === '21% · $0.30', 'usage chip 21% · $0.30');
+    await until(async () => (await chipText(page)) === 'ctx 21% · 312K tokens · $0.30', 'usage chip 21%');
   });
 
   await step('details: per-model tokens, API-equivalent cost and what it is', async () => {
@@ -198,7 +198,7 @@ try {
     await new Promise((r) => setTimeout(r, 1500));
     codexRollout(C);
     // 10,000 input + 40,000 cached + 1,000 output on gpt-6.1-sol: $0.034; context 51K of 258.4K.
-    await until(async () => (await chipText(page)) === '20% · $0.03', 'codex chip 20% · $0.03');
+    await until(async () => (await chipText(page)) === 'ctx 20% · 51K tokens · $0.03', 'codex chip 20%');
     const tip = await page.getAttribute(`[role="tab"][data-tab-id="${codexTab}"]`, 'title');
     if (!tip.includes('Usage: ctx 20% · 51K tokens · 1m · ≈ $0.03')) throw new Error(tip);
   });
@@ -209,7 +209,7 @@ try {
     await new Promise((r) => setTimeout(r, 1500));
     geminiSession(G);
     // 20,000 input + 1,000 output (thinking included) on gemini-3.1-pro-preview: $0.052; 21K of 1,048,576.
-    await until(async () => (await chipText(page)) === '2% · $0.05', 'gemini chip 2% · $0.05');
+    await until(async () => (await chipText(page)) === 'ctx 2% · 21K tokens · $0.05', 'gemini chip 2%');
     if (shots) await page.screenshot({ path: path.join(shots, 'usage-chip.png') });
     const ws = await page.getAttribute('.ws-item__main', 'title');
     if (!ws.includes('3 agent sessions: 384K tokens, ≈ $0.39 API-equivalent')) throw new Error(ws);
@@ -217,20 +217,20 @@ try {
 
   await step('Settings: cost off hides the dollars; usage off hides the readout', async () => {
     await setSetting(page, 'Show API-equivalent cost', false);
-    await until(async () => (await chipText(page)) === '2%', 'chip without cost', 10_000);
+    await until(async () => (await chipText(page)) === 'ctx 2% · 21K tokens', 'chip without cost', 10_000);
     await setSetting(page, 'Show agent session usage', false);
     await until(async () => !(await page.$('[data-testid="usage-chip"]')), 'chip hidden', 10_000);
     await setSetting(page, 'Show agent session usage', true);
     await setSetting(page, 'Show API-equivalent cost', true);
-    await until(async () => (await chipText(page)) === '2% · $0.05', 'chip back', 45_000);
+    await until(async () => (await chipText(page)) === 'ctx 2% · 21K tokens · $0.05', 'chip back', 45_000);
   });
 
   await step('the agent exiting keeps its last numbers, marked as ended', async () => {
     await page.click(`[role="tab"][data-tab-id="${claudeTab}"]`);
-    await until(async () => (await chipText(page)) === '21% · $0.30', 'claude chip', 45_000);
+    await until(async () => (await chipText(page)) === 'ctx 21% · 312K tokens · $0.30', 'claude chip', 45_000);
     ps(`Stop-Process -Id ${claudePid} -Force`);
     await until(() => page.$('[data-testid="usage-chip"].usage-chip--ended'), 'chip marked ended');
-    if ((await chipText(page)) !== '21% · $0.30') throw new Error(await chipText(page));
+    if ((await chipText(page)) !== 'ctx 21% · 312K tokens · $0.30') throw new Error(await chipText(page));
   });
 
   await step('privacy: the conversation’s text is in no page, state file or log', async () => {

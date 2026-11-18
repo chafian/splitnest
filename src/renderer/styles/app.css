@@ -4095,20 +4095,31 @@ dialog::backdrop {
   height: 22px;
   margin-right: 4px;
   padding: 0 6px;
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   white-space: nowrap;
   cursor: pointer;
 }
 
+.usage-chip__ctx,
+.usage-chip__tokens,
+.usage-chip__cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.usage-chip__sep {
+  color: var(--text-faint);
+}
+
 .usage-chip:hover,
 .usage-chip[aria-expanded='true'] {
-  color: var(--text);
-  border-color: var(--border);
+  border-color: var(--text-faint);
 }
 
 .usage-chip:focus-visible {
@@ -4132,14 +4143,21 @@ dialog::backdrop {
 .usage-chip__meter > span {
   position: absolute;
   inset: 0 auto 0 0;
-  background: var(--text-muted);
+  background: var(--accent);
 }
 
 .usage-chip--full .usage-chip__meter > span {
   background: var(--warning);
 }
 
-@container (max-width: 520px) {
+/* Narrower panes keep the context and cost, then the context only. */
+@container (max-width: 640px) {
+  .usage-chip__tokens {
+    display: none;
+  }
+}
+
+@container (max-width: 480px) {
   .usage-chip__cost {
     display: none;
   }

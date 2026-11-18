@@ -2,6 +2,7 @@
 // details in a panel (see main/agent-usage.ts for where the numbers come from).
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { AgentIcon } from '../../components/AgentIcon';
 import { PRICES_AS_OF } from '../../../shared/agent-prices';
 import { RESUME_LABEL } from '../../../shared/agent-resume';
 import { contextPercent, formatCost, formatDuration, formatTokens, USAGE_COST_NOTE, usageSummary, type AgentUsage } from '../../../shared/agent-usage';
@@ -31,15 +32,28 @@ export function UsageReadout({ usage, withCost }: { usage: AgentUsage; withCost:
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => setOpen((v) => !v)}
       >
-        {pct !== null && (
-          <span className="usage-chip__meter" aria-hidden="true">
-            <span style={{ width: `${Math.max(4, pct)}%` }} />
+        <AgentIcon agent={usage.agent} state="idle" size={13} />
+        {usage.context && (
+          <span className="usage-chip__ctx">
+            ctx {pct !== null ? `${pct}%` : formatTokens(usage.context.used)}
+            {pct !== null && (
+              <span className="usage-chip__meter" aria-hidden="true">
+                <span style={{ width: `${Math.max(4, pct)}%` }} />
+              </span>
+            )}
           </span>
         )}
-        <span className="usage-chip__text">
-          {pct !== null ? `${pct}%` : `${formatTokens(usage.tokens)}`}
-          {withCost && usage.costUsd !== null && <span className="usage-chip__cost"> · {formatCost(usage.costUsd)}</span>}
+        <span className="usage-chip__tokens">
+          {usage.context && <span className="usage-chip__sep"> · </span>}
+          {formatTokens(usage.tokens)} tokens
         </span>
+        {withCost && usage.costUsd !== null && (
+          <span className="usage-chip__cost">
+            <span className="usage-chip__sep"> · </span>
+            {formatCost(usage.costUsd)}
+            {usage.costPartial ? '+' : ''}
+          </span>
+        )}
       </button>
       {open && <UsagePanel usage={usage} withCost={withCost} anchor={ref.current} onClose={() => setOpen(false)} />}
     </>

@@ -138,8 +138,8 @@ try {
     const chip = await until(async () => {
       const el = await page.$('[data-testid="usage-chip"]');
       const t = el && (await el.textContent())?.trim();
-      return t === '10% · $0.06' && t;
-    }, 'usage chip 10% · $0.06', 45_000);
+      return t === 'ctx 10% · 102K tokens · $0.06' && t;
+    }, 'usage chip ctx 10%', 45_000);
     return { chip };
   });
 
