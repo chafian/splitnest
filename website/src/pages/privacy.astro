@@ -71,6 +71,9 @@ import { LINKS } from '../config/site';
       <h2>Windows notifications</h2>
       <p>Agent notifications use SplitNest's own words (for example "Claude Code needs permission", plus the workspace and tab name). <strong>Agent text is off by default</strong> in notifications and in the agent inbox, because an agent's session title or message can contain your prompt. It is shown only if you turn on <em>Include what the agent wrote</em>. The notifications are shown by Windows on your computer; SplitNest removes them from Notification Center when it quits.</p>
 
+      <h2>Agent session usage</h2>
+      <p>To show an agent session’s context, tokens and API-equivalent cost, SplitNest reads that agent’s own session file on your computer (Claude Code, Codex, Gemini CLI). It takes only numbers, model names and times from it; conversation text is never kept, saved, logged or sent. Prices ship with the app, so nothing is requested. Turn it off in Settings → Workspaces → <em>Show agent session usage</em>.</p>
+
       <h2>Resume titles</h2>
       <p>The conversation title shown above the Resume button can contain words from your prompt. It is <strong>on by default</strong>. Turn it off in Settings → Workspaces → <em>Show conversation titles for Resume</em> and the saved titles are removed. Conversation text is never saved either way.</p>
 

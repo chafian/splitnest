@@ -8,7 +8,7 @@ Open your project folders as workspaces, run real **PowerShell** and **WSL** she
 
 **[⬇ Download for Windows (installer)](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-Setup.exe)** · [Portable ZIP](https://github.com/chafian/splitnest/releases/latest/download/SplitNest-win32-x64-portable.zip) · [All releases](https://github.com/chafian/splitnest/releases) · [splitnest.dev](https://splitnest.dev)
 
-> **Early release (v0.4).** Windows 11 x64. Free and open source (MIT). The installer is **not code signed yet**, so Windows SmartScreen may warn the first time you run it; see [Getting started](#getting-started) and the [code signing policy](CODE_SIGNING.md). Known limitations are listed in [Status and limitations](#status-and-limitations).
+> **Early release (v0.5).** Windows 11 x64. Free and open source (MIT). The installer is **not code signed yet**, so Windows SmartScreen may warn the first time you run it; see [Getting started](#getting-started) and the [code signing policy](CODE_SIGNING.md). Known limitations are listed in [Status and limitations](#status-and-limitations).
 
 ![SplitNest demo: a Claude Code tab turns to "Needs you", an in-app notice opens the tab where Codex finished, and the agent inbox lists every waiting agent](docs/readme/demo.gif)
 
@@ -22,6 +22,7 @@ Open your project folders as workspaces, run real **PowerShell** and **WSL** she
 - **Agent-aware tabs.** Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor Agent, Aider, OpenCode, Qwen Code and Amp get their logo and a live state on the tab: *Working*, *Needs you*, *Done* or *Error*.
 - **Never miss a prompt.** In-app notices, Windows notifications and a taskbar flash tell you when an agent needs a permission, asks a question, finishes or fails.
 - **One inbox for every agent.** A bell in the title bar lists every waiting agent across all workspaces; one shortcut jumps to the next.
+- **See what each session costs.** Context use, tokens and the API-equivalent cost of every Claude Code, Codex and Gemini CLI session, right in the pane.
 - **Pick up where you left off.** After a restart, terminals that ran Claude Code, Codex or Gemini CLI offer a **Resume** button for that conversation.
 - **Projects, not windows.** Each folder is a workspace with its own layout. Background sessions keep running, and layouts and folders come back after a restart.
 - **Source Control built in.** Stage, commit, push and pull from a panel next to the terminal, with each file's diff as a tab.
@@ -53,6 +54,10 @@ The bell in the title bar (**Ctrl+Shift+A**) lists every agent waiting for you i
 ![A restored terminal: "Claude Code was running here" with a Resume Claude Code button](docs/readme/resume.png)
 
 If Claude Code, Codex or Gemini CLI was running when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex, or Gemini CLI). The text above the button states exactly what will run, and nothing runs until you click. Only the conversation id, folder and an optional title are saved, never conversation text.
+
+## Session usage and cost
+
+A tab running Claude Code, Codex or Gemini CLI shows its session at the top right of the pane, for example `ctx 21% · 312K tokens · $0.30`: how full the model's context is, the tokens used so far, and what they would cost at the provider's public API prices. Click it for each model's tokens (input, cache reads and writes, output), the agent's working time and when the session started; the tab's and workspace's tooltips carry the totals. The cost is **API-equivalent**: it is not what a subscription (Claude Pro or Max, ChatGPT, Gemini) charges you. The numbers come from the agent's own session file on your PC; SplitNest keeps only numbers, model names and times from it and sends nothing anywhere. *Settings → Workspaces → Show agent session usage* and *Show API-equivalent cost* turn it off.
 
 ## Agent tasks
 
@@ -168,12 +173,13 @@ App shortcuts are a fixed table (no user configuration yet). Notes on Ctrl+Shift
 - **Agent text is off by default in notifications and the inbox.** A session title or message can contain your prompt, so it is shown only if you turn on *Include what the agent wrote*.
 - **Resume titles are on by default.** The conversation title shown above the Resume button can contain words from your prompt; turn it off in Settings → Workspaces → *Show conversation titles for Resume* and the saved ones are removed.
 - Agent process detection runs in the main process; command lines never leave it and are not logged.
+- **Session usage** is read from the agents' own session files on your PC (the conversation Resume reopens). Only numbers, model names and times are taken from them; conversation text is never kept, saved, logged or sent, and prices ship with the app (no request).
 
 Details on restoring, cleanup and troubleshooting are in the [user guide](docs/USER_GUIDE.md#saved-state-and-restoration).
 
 ## Status and limitations
 
-SplitNest is an **early release (v0.4)**. It works for daily use, but it has been tested on few machines so far; please [report problems](https://github.com/chafian/splitnest/issues/new/choose).
+SplitNest is an **early release (v0.5)**. It works for daily use, but it has been tested on few machines so far; please [report problems](https://github.com/chafian/splitnest/issues/new/choose).
 
 - Windows 11 x64 only; builds are **unsigned** (Windows SmartScreen may warn; see the [code signing policy](CODE_SIGNING.md)). Since version 0.2.0 there is an installer with automatic updates; see [CHANGELOG.md](CHANGELOG.md).
 - The displayed directory is where the shell **started**; there is no shell integration that tracks `cd`.

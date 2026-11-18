@@ -164,6 +164,33 @@ export const features: Feature[] = [
     ],
   },
   {
+    slug: 'session-usage',
+    name: 'Session usage and cost',
+    summary: 'Context, tokens, working time and API-equivalent cost of every Claude Code, Codex and Gemini CLI session, right in the pane.',
+    title: 'Claude Code, Codex and Gemini CLI token usage and cost on Windows',
+    description:
+      'SplitNest shows each agent session’s context use, tokens, working time and API-equivalent cost in the terminal pane, read locally from the agent’s own session file. Nothing is sent anywhere.',
+    intro:
+      'A tab running Claude Code, Codex or Gemini CLI shows its session at the top right of the pane: how full the context is, the tokens used and what they would cost on the API. Click it for every model’s numbers.',
+    shots: [],
+    related: ['agent-aware-tabs', 'resume-conversations', 'agent-tasks'],
+    docs: { label: 'Session usage in the user guide', href: '/docs/agents/' },
+    blocks: [
+      {
+        h: 'Context, tokens, time',
+        html: `<p>The readout shows the last request against the model’s context window, all tokens, and the cost. Its details list each model’s input, cache reads and writes and output, Claude Code’s subagents included, and the agent’s working time as it records it.</p>`,
+      },
+      {
+        h: 'API-equivalent cost',
+        html: `<p>The tokens at Anthropic’s, OpenAI’s and Google’s public API prices, shipped with SplitNest. It is not what a subscription charges you; a model without a known price shows <em>unknown</em> instead of a guess.</p>`,
+      },
+      {
+        h: 'Read locally',
+        html: `<p>The numbers come from the agent’s own session file on your PC, for the conversation Resume would reopen, in PowerShell and WSL. SplitNest keeps only numbers, model names and times, and sends nothing anywhere.</p>`,
+      },
+    ],
+  },
+  {
     slug: 'resume-conversations',
     name: 'Resume conversations',
     summary: 'After a restart, a Resume button brings back the Claude Code, Codex or Gemini CLI conversation that was running.',

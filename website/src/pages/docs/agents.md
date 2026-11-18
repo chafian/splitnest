@@ -66,6 +66,17 @@ The bell in the title bar, **Ctrl+Shift+A**. Every agent that is waiting for you
 - **WSL:** a repository stored inside WSL gets tasks made and finished by that distribution's own Git, in WSL terminals. A repository on a Windows drive gets PowerShell tasks (Git before 2.48 can't share a worktree between Windows and Linux Git).
 - On by default; *Settings → Workspaces → Agent tasks* turns them off.
 
+## Session usage and cost
+
+Settings → Workspaces → *Show agent session usage* and *Show API-equivalent cost*, both on by default. A tab running Claude Code, Codex or Gemini CLI shows its session at the top right of the pane, for example `ctx 21% · 312K tokens · $0.30`.
+
+- **Context:** the last request's size against the model's context window (the bar turns amber above 80%).
+- **Tokens:** everything the session used. Click the readout for each model's input, cache reads, cache writes and output, and the replies counted; Claude Code's subagents are included.
+- **Time:** when the session started, its last activity, and the agent's working time as it records it (Claude Code's turn times, Codex's task times; Gemini CLI records none).
+- **API-equivalent cost:** the tokens at the provider's public API prices (Anthropic, OpenAI, Google), shipped with SplitNest and updated with releases, including long-prompt rates and dated price changes. It is **not** what a subscription such as Claude Pro or Max, ChatGPT or Gemini charges. A model without a known price shows *unknown*. Requests the agent doesn't save in its session file (such as summaries when it compacts) aren't counted.
+- **Where it comes from:** the agent's own session file on your PC, for the conversation SplitNest finds for Resume (in WSL, from your Linux home through `\\wsl.localhost`). Only numbers, model names and times are taken from it; conversation text is never kept, saved, logged or sent. Only appended lines are read, so a long session costs nothing extra.
+- **Also:** the tab's tooltip has the summary and the workspace's tooltip the total. When the agent exits, the last numbers stay, marked as ended, until a new shell starts in the tab.
+
 ## Resume agent conversations
 
 Available for Claude Code, Codex and Gemini CLI. If an agent was running in a terminal when SplitNest closed, that terminal says so after a restart and offers **Resume Claude Code** (or Codex, or Gemini CLI) next to *Start PowerShell only*. The restore notice offers **Resume agents (N)**.
