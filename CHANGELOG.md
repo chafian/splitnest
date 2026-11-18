@@ -2,7 +2,9 @@
 
 All notable changes to SplitNest. Release notes on GitHub are taken from the section for each version.
 
-## Unreleased
+## 0.5.0 (2026-11-18)
+
+See what each agent session costs: context, tokens, working time and API-equivalent cost for Claude Code, Codex and Gemini CLI, right in the pane.
 
 - **Agent session usage**: a tab where Claude Code, Codex or Gemini CLI runs shows its session in the pane header with the agent's icon: context use, tokens and API-equivalent cost (`ctx 21% · 312K tokens · $0.30`); click it for each model's tokens (input, cache reads and writes, output), the context against the model's window, when the session started, the agent's working time (Claude Code, Codex), and what the cost means. The tab's and the workspace's tooltips carry the totals. The numbers come from the agent's own session file on this PC, for the conversation SplitNest already finds for Resume; SplitNest keeps only numbers, model names and times from it, never the conversation, and sends nothing anywhere. The cost uses the providers' public API prices shipped with SplitNest (Anthropic, OpenAI, Google; as of 2026-11-18): it is what the tokens would cost on the API, not what a subscription charges, and a model without a known price shows "unknown". When the agent exits, its last numbers stay, marked as ended. *Settings → Workspaces → Show agent session usage* and *Show API-equivalent cost* (both on by default) turn them off.
 
