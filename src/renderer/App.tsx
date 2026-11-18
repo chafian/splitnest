@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { cleanTitle, RESUME_LABEL, type AgentResume } from '../shared/agent-resume';
+import { formatCost, formatTokens } from '../shared/agent-usage';
 import { activeTab, findPane, findPaneOfTab, listFileTabs, listPanes, listTabs, listTerminalTabs, neighborPane, type FocusDirection } from '../shared/layout';
 import { PRODUCT } from '../shared/product';
 import { isDiffTab, isFileTab, isTerminalTab, LIMITS, type GitStatus, type LoadStateResult, type ShellDiscovery, type SplitDirection, type Workspace } from '../shared/types';
@@ -55,6 +56,7 @@ const loadOnce = () => (boot ??= Promise.all([api.loadState(), api.listShells()]
 
 const NO_GIT: ReadonlyMap<string, GitStatus> = new Map();
 const NO_PORTS: ReadonlyMap<string, PortEntry[]> = new Map();
+const NO_USAGE: ReadonlyMap<string, string> = new Map();
 const NO_SUMMARIES: ReadonlyMap<string, TaskSummary> = new Map();
 
 export function App() {
@@ -284,6 +286,21 @@ export function App() {
     return new Map(state.workspaces.map((w) => [w.id, registry.portsOf(listTerminalTabs(w.layout))]));
   }, [state.workspaces, state.settings.showPorts, registryVersion]);
   const openPort = (port: number) => void api.openExternal(`http://localhost:${port}`);
+
+  const usageDisplay = useMemo(() => ({ show: state.settings.showUsage, cost: state.settings.showUsage && state.settings.showUsageCost }), [state.settings.showUsage, state.settings.showUsageCost]);
+  // Sidebar tooltips: the agent sessions' tokens and API-equivalent cost per workspace.
+  const usageByWorkspace = useMemo(() => {
+    void registryVersion;
+    if (!usageDisplay.show) return NO_USAGE;
+    const out = new Map<string, string>();
+    for (const w of state.workspaces) {
+      const u = registry.usageOf(listTerminalTabs(w.layout));
+      if (!u) continue;
+      const sessions = `${u.sessions} agent ${u.sessions === 1 ? 'session' : 'sessions'}`;
+      out.set(w.id, usageDisplay.cost ? `${sessions}: ${formatTokens(u.tokens)} tokens, ≈ ${formatCost(u.costUsd)}${u.partial ? '+' : ''} API-equivalent` : `${sessions}: ${formatTokens(u.tokens)} tokens`);
+    }
+    return out;
+  }, [state.workspaces, usageDisplay, registryVersion]);
 
   const agentCounts = useMemo(() => {
     void registryVersion;
@@ -1414,6 +1431,7 @@ export function App() {
         agentCounts={agentCounts}
         gitStatuses={state.settings.showGitStatus ? gitStatuses : NO_GIT}
         ports={portsByWorkspace}
+        usage={usageByWorkspace}
         onOpenPort={openPort}
         missing={missing}
         onSelect={(id) => {
@@ -1498,6 +1516,7 @@ export function App() {
             active={w.id === state.activeWorkspaceId && view === 'workspace'}
             discovery={discovery}
             defaultProfileId={effectiveDefault}
+            usageDisplay={usageDisplay}
             folderMissing={missing.has(w.id)}
             freshTabs={freshTabs}
             startOnRestore={startOnRestore}

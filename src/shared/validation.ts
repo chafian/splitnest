@@ -200,6 +200,8 @@ export function validateSettings(value: unknown): AppSettings {
     darkTheme: (DARK_THEME_IDS as readonly unknown[]).includes(s.darkTheme) ? (s.darkTheme as DarkThemeId) : DEFAULT_SETTINGS.darkTheme,
     showGitStatus: s.showGitStatus !== false,
     showPorts: s.showPorts !== false,
+    showUsage: s.showUsage !== false,
+    showUsageCost: s.showUsageCost !== false,
     resumeTitles: s.resumeTitles !== false,
     resumeAutomatically: s.resumeAutomatically === true,
     updateCheck: s.updateCheck !== false,

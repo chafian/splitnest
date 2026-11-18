@@ -3,6 +3,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { IPC, type AppApi } from '../shared/ipc';
 import type { AgentResume } from '../shared/agent-resume';
+import type { AgentUsage } from '../shared/agent-usage';
 import type { AgentId } from '../shared/agents';
 import type { UpdateStatus } from '../shared/updates';
 import type { NoticeTarget } from '../shared/notifications';
@@ -45,6 +46,11 @@ ipcRenderer.on(IPC.sessionPorts, (_event, payload: { sessionId: string; ports: n
 const resumeListeners = new Set<(event: { sessionId: string; resume: AgentResume | null }) => void>();
 ipcRenderer.on(IPC.sessionResume, (_event, payload: { sessionId: string; resume: AgentResume | null }) => {
   for (const listener of resumeListeners) listener(payload);
+});
+
+const usageListeners = new Set<(event: { sessionId: string; usage: AgentUsage | null }) => void>();
+ipcRenderer.on(IPC.sessionUsage, (_event, payload: { sessionId: string; usage: AgentUsage | null }) => {
+  for (const listener of usageListeners) listener(payload);
 });
 
 const updateListeners = new Set<(status: UpdateStatus) => void>();
@@ -146,6 +152,12 @@ const api: AppApi = {
     portListeners.add(listener);
     return () => {
       portListeners.delete(listener);
+    };
+  },
+  onSessionUsage: (listener) => {
+    usageListeners.add(listener);
+    return () => {
+      usageListeners.delete(listener);
     };
   },
   pokeAgentScan: (sessionId) => ipcRenderer.send(IPC.agentPoke, sessionId),

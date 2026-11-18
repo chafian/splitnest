@@ -21,6 +21,8 @@ import { AgentIcon } from '../../components/AgentIcon';
 import { AGENT_STATE_TEXT, agentStateText } from './agent-status';
 import { tabLabel } from './tab-label';
 import { registry } from './terminal-registry';
+import { UsageReadout } from './UsageReadout';
+import { usageSummary } from '../../../shared/agent-usage';
 import type { ControllerSnapshot, TerminalController } from './terminal-controller';
 
 const NO_TERMINAL = { subscribe: () => () => undefined, getSnapshot: (): ControllerSnapshot | null => null };
@@ -33,6 +35,8 @@ interface Props {
   active: boolean;
   discovery: ShellDiscovery | null;
   defaultProfileId: string | null;
+  /** Agent session usage: shown, and with its API-equivalent cost. */
+  usageDisplay: { show: boolean; cost: boolean };
   searchOpen: boolean;
   /** Tab whose name is being edited (anywhere in the app), if any. */
   renamingTabId: string | null;
@@ -339,6 +343,7 @@ export function TerminalPane(props: Props) {
               selected={tab.id === activeTab.id}
               paneActive={active}
               isFresh={props.isFresh(tab.id)}
+              usageDisplay={props.usageDisplay}
               editing={props.renamingTabId === tab.id}
               dropBefore={drop === index}
               dropAfter={drop === pane.tabs.length && index === pane.tabs.length - 1}
@@ -376,6 +381,7 @@ export function TerminalPane(props: Props) {
           className="pane__newtab"
         />
         <span className="pane__actions">
+          {props.usageDisplay.show && activeSnap?.usage && <UsageReadout usage={activeSnap.usage} withCost={props.usageDisplay.cost} />}
           <IconButton
             className="pane__optional"
             icon="splitRight"
@@ -471,6 +477,7 @@ function TabButton(props: {
   selected: boolean;
   paneActive: boolean;
   isFresh: boolean;
+  usageDisplay: { show: boolean; cost: boolean };
   editing: boolean;
   dropBefore: boolean;
   dropAfter: boolean;
@@ -517,6 +524,7 @@ function TabButton(props: {
     agent?.message ? agent.message : null,
     `Starting directory: ${cwd} (does not follow later cd commands)`,
     snap.ports.length ? `Listening on ${snap.ports.map((p) => `localhost:${p}`).join(', ')}` : null,
+    props.usageDisplay.show && snap.usage ? `Usage${snap.usage.live ? '' : ' (session ended)'}: ${usageSummary(snap.usage, props.usageDisplay.cost)}` : null,
     label.titleLine && !agent ? `Title set by the shell: ${label.titleLine}` : null,
     'Double-click or F2 to rename. Right-click for more.',
   ]

@@ -476,6 +476,25 @@ export function SettingsView({ active, section, onSection, settings, systemDark,
                 control={<Switch label="Show Git status in the sidebar" checked={settings.showGitStatus} onChange={(v) => onChange({ showGitStatus: v })} />}
               />
               <Row
+                title="Show agent session usage"
+                hint={
+                  'On by default. A tab where Claude Code, Codex or Gemini CLI runs shows its session’s context use, tokens and working time in the pane ' +
+                  'header; click it for each model’s tokens. The numbers are read from the agent’s own session file on this PC (the conversation ' +
+                  'Resume reopens): SplitNest keeps only numbers, model names and times from it, never the conversation, and sends nothing anywhere. ' +
+                  'Shown when SplitNest knows which conversation runs in the tab.'
+                }
+                control={<Switch label="Show agent session usage" checked={settings.showUsage} onChange={(v) => onChange({ showUsage: v })} />}
+              />
+              <Row
+                title="Show API-equivalent cost"
+                hint={
+                  'With session usage on: what the session’s tokens would cost at the provider’s public API prices (shipped with SplitNest, ' +
+                  'updated with releases). It is not what a subscription such as Claude Pro or Max, ChatGPT or Gemini charges you. Models without a ' +
+                  'known price show “unknown”.'
+                }
+                control={<Switch label="Show API-equivalent cost" checked={settings.showUsageCost} disabled={!settings.showUsage} onChange={(v) => onChange({ showUsageCost: v })} />}
+              />
+              <Row
                 title="Show conversation titles for Resume"
                 hint={
                   'A terminal where Claude Code, Codex or Gemini CLI was running offers Resume after a restart. With this on, it also shows the ' +

@@ -20,6 +20,7 @@ import { runSelfTest } from './self-test';
 import { OpenFileWatcher } from './file-watch';
 import { AgentMonitor } from './agent-monitor';
 import { AgentSessionTracker } from './agent-sessions';
+import { AgentUsageService } from './agent-usage';
 import { GitStatusService } from './git-status';
 import { createWindowsGitRunner, createWslGitRunner } from './git-runner';
 import { TaskService } from './task-service';
@@ -203,6 +204,37 @@ const agentFiles = {
   now: () => Date.now(),
 };
 
+// Tokens, context, time and cost of each terminal's agent conversation, from the agents' own files.
+const agentUsage = new AgentUsageService({
+  list: agentFiles.list,
+  readText: agentFiles.readText,
+  now: agentFiles.now,
+  stat: (file) =>
+    fsp.stat(file).then(
+      (st) => (st.isFile() ? { size: st.size, ino: Number(st.ino) } : null),
+      () => null,
+    ),
+  read: async (file, position, length) => {
+    try {
+      const handle = await fsp.open(file, 'r');
+      try {
+        const buf = Buffer.alloc(length);
+        const { bytesRead } = await handle.read(buf, 0, length, position);
+        return buf.subarray(0, bytesRead);
+      } finally {
+        await handle.close();
+      }
+    } catch {
+      return null;
+    }
+  },
+  enabled: () => store.state.settings.showUsage !== false,
+  report: (ownerId, sessionId, usage) => {
+    const contents = webContents.fromId(ownerId);
+    if (contents && !contents.isDestroyed()) contents.send(IPC.sessionUsage, { sessionId, usage });
+  },
+});
+
 const agentMonitor = new AgentMonitor({
   sessions: () => broker.runningProcesses(),
   report: (ownerId, sessionId, agent) => {
@@ -219,6 +251,7 @@ const agentMonitor = new AgentMonitor({
   powershellPath: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
   wslPath: path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe'),
   log: (message) => log.warn(message),
+  usage: agentUsage,
   resume: {
     tracker: new AgentSessionTracker({
       // Development E2E runs point this at a temporary folder (never in packaged builds).
@@ -585,11 +618,13 @@ async function shutdown(): Promise<void> {
   log.info('shutting down');
   // Before the shells end: an agent ending because SplitNest quits must not clear what Resume reopens.
   agentMonitor.stop();
+  agentUsage.stop();
   await broker.shutdown(3000);
   await store.flush();
   host.stop();
   fileWatcher.dispose();
   agentMonitor.stop();
+  agentUsage.stop();
   gitStatus.dispose();
   taskSummaries.dispose();
   taskWatcher.dispose();

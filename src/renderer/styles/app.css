@@ -4086,3 +4086,182 @@ dialog::backdrop {
   min-height: 0;
   overflow: auto;
 }
+
+/* Agent session usage in a pane's header (UsageReadout.tsx). */
+.usage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  margin-right: 4px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.usage-chip:hover,
+.usage-chip[aria-expanded='true'] {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.usage-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.usage-chip--ended {
+  color: var(--text-faint);
+}
+
+.usage-chip__meter {
+  position: relative;
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.usage-chip__meter > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--text-muted);
+}
+
+.usage-chip--full .usage-chip__meter > span {
+  background: var(--warning);
+}
+
+@container (max-width: 520px) {
+  .usage-chip__cost {
+    display: none;
+  }
+}
+
+@container (max-width: 340px) {
+  .usage-chip {
+    display: none;
+  }
+}
+
+.usage-panel {
+  position: fixed;
+  z-index: 40;
+  width: min(460px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 10px 12px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.usage-panel:focus {
+  outline: none;
+}
+
+.usage-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.usage-panel__state {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.usage-panel__section {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.usage-panel__section h3 {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.usage-panel__section p {
+  margin: 4px 0 0;
+}
+
+.usage-panel__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.usage-panel__bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+}
+
+.usage-panel__bar--full > span {
+  background: var(--warning);
+}
+
+.usage-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-panel__table th,
+.usage-panel__table td {
+  padding: 2px 4px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.usage-panel__table th:first-child {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.usage-panel__table thead th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.usage-panel__table tbody th {
+  font-weight: 400;
+}
+
+.usage-panel__cost {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.usage-panel__note {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.usage-panel__privacy {
+  margin: 4px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}

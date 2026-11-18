@@ -128,6 +128,21 @@ try {
     return { pid, cwd: r.cwd };
   });
 
+  await step('WSL tab: the session’s usage is read from the Linux home (Claude Code’s folder named after the Linux path)', async () => {
+    const dir = `${linuxTmp}/home/.claude/projects/${linuxProj.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    wsl('mkdir', '-p', dir);
+    const usage = { input_tokens: 1000, cache_read_input_tokens: 99_000, cache_creation_input_tokens: 0, output_tokens: 2000 };
+    const line = JSON.stringify({ type: 'assistant', isSidechain: false, message: { id: 'msg_w1', model: 'claude-opus-5-5', role: 'assistant', content: [{ type: 'text', text: 'hello' }], usage }, timestamp: new Date().toISOString() });
+    writeFileSync(unc(`${dir}/${W}.jsonl`), line + '\n');
+    await page.click(`[role="tab"][data-tab-id="${tab}"]`);
+    const chip = await until(async () => {
+      const el = await page.$('[data-testid="usage-chip"]');
+      const t = el && (await el.textContent())?.trim();
+      return t === '10% · $0.06' && t;
+    }, 'usage chip 10% · $0.06', 45_000);
+    return { chip };
+  });
+
   await step('quitting keeps it', async () => {
     await quit(app);
     app = null;

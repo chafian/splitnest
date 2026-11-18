@@ -26,6 +26,8 @@ interface Props {
   gitStatuses: ReadonlyMap<string, GitStatus>;
   /** Localhost ports each workspace's terminals listen on (empty when the setting is off). */
   ports: ReadonlyMap<string, PortEntry[]>;
+  /** Agent sessions' usage per workspace, as tooltip text (empty when the setting is off). */
+  usage: ReadonlyMap<string, string>;
   onOpenPort(port: number): void;
   onSelect(id: string): void;
   onAdd(): void;
@@ -121,6 +123,7 @@ export function Sidebar(props: Props) {
           const gitStatus = props.gitStatuses.get(w.id);
           const git = gitStatus ? gitLabel(gitStatus) : null;
           const ports = props.ports.get(w.id) ?? [];
+          const usage = props.usage.get(w.id);
           const summary = w.task ? props.taskSummaries.get(w.id) : undefined;
           const counts = w.task ? taskCounts(summary) : null;
           const description =
@@ -128,6 +131,7 @@ export function Sidebar(props: Props) {
             (agentText ? `, ${agentText}` : '') +
             (w.task ? `, agent task: ${taskTooltip(w.task, summary).join(', ')}` : git ? `, ${git.summary}` : '') +
             (ports.length ? `, listening on ${ports.map((p) => `localhost:${p.port}`).join(', ')}` : '') +
+            (usage ? `, ${usage}` : '') +
             (missing ? ', folder missing' : '');
           return (
             <li
@@ -143,7 +147,7 @@ export function Sidebar(props: Props) {
                 aria-description={collapsed ? undefined : description}
                 title={
                   w.task
-                    ? [`${w.name}${active ? ' (current workspace)' : ''}`, w.rootPath, ...taskTooltip(w.task, summary), shellsRunningLabel(live)].join('\n')
+                    ? [`${w.name}${active ? ' (current workspace)' : ''}`, w.rootPath, ...taskTooltip(w.task, summary), shellsRunningLabel(live), ...(usage ? [usage] : [])].join('\n')
                     : `${w.name}${active ? ' (current workspace)' : ''}\n${w.rootPath}\n${description}`
                 }
                 onClick={() => props.onSelect(w.id)}

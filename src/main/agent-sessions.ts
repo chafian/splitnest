@@ -165,6 +165,16 @@ export class AgentSessionTracker {
     this.tracked.delete(sessionId);
   }
 
+  /** The conversation last found for a terminal while its agent runs (null: none, or not known). */
+  current(sessionId: string): AgentResume | null {
+    return this.tracked.get(sessionId)?.last ?? null;
+  }
+
+  /** The home folder whose agent files this tracker reads. */
+  get home(): string {
+    return this.deps.home;
+  }
+
   private async resolve(t: Tracked, cmd: string): Promise<AgentResume> {
     const at = this.deps.now();
     if (t.agent === 'claude') {

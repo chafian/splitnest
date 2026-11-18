@@ -1,6 +1,7 @@
 // One controller per pane. Owns the xterm.js instance and the backend
 // session, both outside React so output never triggers React renders and
 // sessions survive layout changes and workspace switches.
+import type { AgentUsage } from '../../../shared/agent-usage';
 import { Terminal, type IMarker } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -53,6 +54,11 @@ export interface ControllerSnapshot {
   resuming: { agent: ResumableAgent; phase: 'waiting' | 'not-started' } | null;
   /** Localhost ports this terminal's programs listen on (sorted; see main/ports.ts). */
   ports: number[];
+  /**
+   * Tokens, context, time and cost of the agent conversation here (main/agent-usage.ts). Kept,
+   * with `live: false`, after the agent or the shell ends, until a new shell starts here.
+   */
+  usage: AgentUsage | null;
 }
 
 export interface ControllerHooks {
@@ -300,6 +306,7 @@ export class TerminalController {
       agent: null,
       resuming: null,
       ports: [],
+      usage: null,
     };
     this.decorations = searchDecorations(options.theme);
     this.element = document.createElement('div');
@@ -1008,7 +1015,7 @@ export class TerminalController {
   }
 
   private async startSession(profileId: string, startIn: StartLocation, startPath?: string): Promise<StartOutcome> {
-    this.update({ status: 'starting', error: null, exitCode: null, exitReason: null, startIn });
+    this.update({ status: 'starting', error: null, exitCode: null, exitReason: null, startIn, usage: null });
     this.isWsl = profileId.startsWith('wsl:');
     this.profileId = profileId;
     this.wslResumeAgent = null;
@@ -1094,7 +1101,8 @@ export class TerminalController {
     this.out(`\r\n\x1b[2m[${label}]\x1b[0m\r\n`);
     if (this.resumeTimer) clearTimeout(this.resumeTimer);
     this.resumeTimer = null;
-    this.update({ status: 'exited', exitCode: code, exitReason: event.reason ?? null, sessionId: null, agent: null, resuming: null, ports: [] });
+    const usage = this.snapshot.usage ? { ...this.snapshot.usage, live: false } : null;
+    this.update({ status: 'exited', exitCode: code, exitReason: event.reason ?? null, sessionId: null, agent: null, resuming: null, ports: [], usage });
     const again = this.restartPending;
     this.restartPending = null;
     if (again) void this.start(again.profileId, again.startIn);
@@ -1106,6 +1114,12 @@ export class TerminalController {
   setPorts(ports: number[]): void {
     const clean = ports.filter((p) => Number.isInteger(p) && p > 0 && p < 65536).slice(0, 32);
     if (clean.join() !== this.snapshot.ports.join()) this.update({ ports: clean });
+  }
+
+  /** Main read new numbers for the agent conversation here (null: none to show). */
+  setUsage(usage: AgentUsage | null): void {
+    if (usage === null && this.snapshot.usage === null) return;
+    this.update({ usage });
   }
 
   setProcessAgent(agent: AgentId | null): void {

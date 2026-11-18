@@ -3,6 +3,7 @@
 import type { TaskAgent } from '../../../shared/tasks';
 import type { SessionEvent } from '../../../shared/types';
 import type { AgentResume } from '../../../shared/agent-resume';
+import { parseAgentUsage, type AgentUsage } from '../../../shared/agent-usage';
 import type { AgentId } from '../../../shared/agents';
 import { DEFAULT_THEME_ID, themeById, type Theme } from '../appearance/themes';
 import { api } from '../../api';
@@ -51,6 +52,7 @@ export class TerminalRegistry {
     api.onSessionEvent((event) => this.route(event));
     api.onSessionAgent(({ sessionId, agent }) => this.bySession.get(sessionId)?.setProcessAgent(agent));
     api.onSessionPorts(({ sessionId, ports }) => this.bySession.get(sessionId)?.setPorts(Array.isArray(ports) ? ports : []));
+    api.onSessionUsage(({ sessionId, usage }) => this.bySession.get(sessionId)?.setUsage(usage === null ? null : parseAgentUsage(usage)));
     api.onSessionResume(({ sessionId, resume }) => {
       const c = this.bySession.get(sessionId);
       if (c) this.resumeHandler(c.paneId, resume);
@@ -60,6 +62,23 @@ export class TerminalRegistry {
   /** The agent conversation in a terminal changed (see TerminalTab.resume). */
   setResumeHandler(handler: (tabId: string, resume: AgentResume | null) => void): void {
     this.resumeHandler = handler;
+  }
+
+  /** The agent sessions' cost in these terminals: sum and whether any number is missing or partial. */
+  usageOf(tabs: readonly { id: string }[]): { costUsd: number; tokens: number; sessions: number; partial: boolean } | null {
+    let costUsd = 0;
+    let tokens = 0;
+    let sessions = 0;
+    let partial = false;
+    for (const tab of tabs) {
+      const u: AgentUsage | null | undefined = this.controllers.get(tab.id)?.getSnapshot().usage;
+      if (!u) continue;
+      sessions++;
+      tokens += u.tokens;
+      if (u.costUsd === null || u.costPartial) partial = true;
+      costUsd += u.costUsd ?? 0;
+    }
+    return sessions ? { costUsd, tokens, sessions, partial } : null;
   }
 
   /** The ports these terminals listen on, sorted, each with the first tab that has it. */

@@ -1,4 +1,5 @@
 import type { AgentResume } from './agent-resume';
+import type { AgentUsage } from './agent-usage';
 import type { AgentId } from './agents';
 import type { UpdatePrefs, UpdateStatus } from './updates';
 import type { BranchOutcome, TaskSummary, TaskChanges, TaskDiff, TaskFinishCheck, TaskMergeResult, TaskPreview, TaskProgress, TaskRecord, TaskResult, TaskUpdateResult } from './tasks';
@@ -57,6 +58,7 @@ export const IPC = {
   sessionAgent: 'tw:session:agent',
   sessionPorts: 'tw:session:ports',
   sessionResume: 'tw:session:resume',
+  sessionUsage: 'tw:session:usage',
   agentPoke: 'tw:session:agent-poke',
   windowTheme: 'tw:window:theme',
   gitRefresh: 'tw:git:refresh',
@@ -157,6 +159,8 @@ export interface AppApi {
   onSessionPorts(listener: (event: { sessionId: string; ports: number[] }) => void): () => void;
   /** The conversation the agent in a session runs (null: the agent exited), for resuming after a restart. */
   onSessionResume(listener: (event: { sessionId: string; resume: AgentResume | null }) => void): () => void;
+  /** Tokens, context, time and cost of the agent conversation in a session (null: none to show). Validate before use. */
+  onSessionUsage(listener: (event: { sessionId: string; usage: AgentUsage | null }) => void): () => void;
   /** Something changed in a session (e.g. its title); main looks for agent processes sooner. */
   pokeAgentScan(sessionId: string): void;
   /** Appearance: window background and title bar (native caption buttons) colours, `#rrggbb`. */

@@ -14,6 +14,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentResume } from '../shared/agent-resume';
 import { findAgent, type AgentId, type ProcessInfo } from '../shared/agents';
 import type { AgentSessionTracker } from './agent-sessions';
+import type { UsageSource } from './agent-usage';
 import type { SessionProcess } from './session-broker';
 import { parseWindowsListeners, parseWslListeners, samePorts, terminalPorts, treeOf, type Listener } from './ports';
 import { findWslAgent, linuxToWindowsPath, parseWslHome, parseWslSnapshot, wslHomeForWindows, WslScanHelper } from './wsl-processes';
@@ -43,6 +44,17 @@ export interface AgentMonitorDeps {
     /** A tracker reading a distribution's Linux home (given as a Windows path). */
     wslTracker?(homeForWindows: string): AgentSessionTracker;
   };
+  /** Tokens, context, time and cost of each terminal's conversation (agent-usage.ts), told after each scan. */
+  usage?: {
+    observe(ownerId: number, sessionId: string, src: UsageSource | null): void;
+    forget(sessionId: string): void;
+  };
+}
+
+/** The conversation a tracker knows for a terminal, as a usage source. */
+function usageSource(tracker: AgentSessionTracker, sessionId: string): UsageSource | null {
+  const r = tracker.current(sessionId);
+  return r?.sessionId ? { agent: r.agent, sessionId: r.sessionId, cwd: r.cwd, home: tracker.home } : null;
 }
 
 /** How often to look while something is happening, and when quiet. */
@@ -124,6 +136,7 @@ export class AgentMonitor {
     this.lastPorts.delete(sessionId);
     this.deps.resume?.tracker.forget(sessionId);
     for (const t of this.wslTrackers.values()) t.tracker.forget(sessionId);
+    this.deps.usage?.forget(sessionId);
   }
 
   private schedule(ms: number): void {
@@ -143,6 +156,7 @@ export class AgentMonitor {
       this.last.delete(id);
       this.deps.resume?.tracker.forget(id);
       for (const t of this.wslTrackers.values()) t.tracker.forget(id);
+      this.deps.usage?.forget(id);
     }
     if (wslSessions.length > 0 || this.wslHelpers.size > 0) await this.scanWsl(wslSessions, wantPorts);
     if (sessions.length > 0) {
@@ -161,6 +175,7 @@ export class AgentMonitor {
           if (this.deps.resume && processes.length && !this.stopped) {
             const resume = await this.deps.resume.tracker.update(s.sessionId, s.cwd, found).catch(() => undefined);
             if (resume !== undefined && !this.stopped) this.deps.resume.report(s.ownerId, s.sessionId, resume);
+            if (!this.stopped) this.deps.usage?.observe(s.ownerId, s.sessionId, usageSource(this.deps.resume.tracker, s.sessionId));
           }
         }
       } catch {
@@ -206,6 +221,7 @@ export class AgentMonitor {
         // Which conversation: only for terminals started in a folder (not in the Linux home).
         if (tracker && s.linuxCwd && this.deps.resume && !this.stopped) {
           const r = await tracker.update(s.sessionId, s.linuxCwd, found).catch(() => undefined);
+          if (!this.stopped) this.deps.usage?.observe(s.ownerId, s.sessionId, usageSource(tracker, s.sessionId));
           if (r === undefined || this.stopped) continue;
           if (r === null) {
             this.deps.resume.report(s.ownerId, s.sessionId, null);

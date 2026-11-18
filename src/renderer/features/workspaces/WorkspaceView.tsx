@@ -12,6 +12,8 @@ interface Props {
   workspace: Workspace;
   active: boolean;
   discovery: ShellDiscovery | null;
+  /** Agent session usage in pane headers: shown, and with its API-equivalent cost. */
+  usageDisplay: { show: boolean; cost: boolean };
   defaultProfileId: string | null;
   folderMissing: boolean;
   /** Tabs created in this session (start immediately). */
@@ -73,6 +75,7 @@ export function WorkspaceView(props: Props) {
       isFresh={(tabId) => props.freshTabs.has(tabId) || (props.startOnRestore && !props.restoredTabIds.has(tabId))}
       discovery={discovery}
       defaultProfileId={props.defaultProfileId}
+      usageDisplay={props.usageDisplay}
       searchOpen={props.searchPaneId === pane.id}
       renamingTabId={props.renamingTabId}
       maximized={props.maximizedPaneId === pane.id}

@@ -162,6 +162,13 @@ export interface AppSettings {
   /** Sidebar: the localhost ports programs in each workspace's terminals listen on (main/ports.ts). */
   showPorts: boolean;
   /**
+   * Tabs running Claude Code, Codex or Gemini CLI show the session's tokens, context use and time,
+   * read from the agent's own session files (main/agent-usage.ts; numbers only, nothing is sent).
+   */
+  showUsage: boolean;
+  /** With showUsage: also the API-equivalent cost (public API prices; not what a subscription charges). */
+  showUsageCost: boolean;
+  /**
    * Save the agent conversation's title with a terminal (shown with Resume after a restart). On by
    * default; a title can contain words from the prompt, and it is written to the state file.
    */
@@ -292,6 +299,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   darkTheme: 'graphite',
   showGitStatus: true,
   showPorts: true,
+  showUsage: true,
+  showUsageCost: true,
   resumeTitles: true,
   resumeAutomatically: false,
   updateCheck: true,
